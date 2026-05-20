@@ -1,0 +1,25 @@
+# HMI_MICROMOUSE_V4 - Qt/qmake build outputs
+/HMI_MICROMOUSE_V4/build/
+/HMI_MICROMOUSE_V4/build-*/
+
+/HMI_MICROMOUSE_V4/**/*.o
+/HMI_MICROMOUSE_V4/**/*.obj
+/HMI_MICROMOUSE_V4/**/*.exe
+/HMI_MICROMOUSE_V4/**/*.dll
+
+/HMI_MICROMOUSE_V4/**/Makefile
+/HMI_MICROMOUSE_V4/**/Makefile.*
+/HMI_MICROMOUSE_V4/**/.qmake.stash
+/HMI_MICROMOUSE_V4/**/moc_*.cpp
+/HMI_MICROMOUSE_V4/**/moc_*.o
+/HMI_MICROMOUSE_V4/**/ui_*.h
+/HMI_MICROMOUSE_V4/**/qrc_*.cpp
+
+# Qt Creator / IDE local state
+/HMI_MICROMOUSE_V4/.qtcreator/
+/HMI_MICROMOUSE_V4/*.pro.user*
+/HMI_MICROMOUSE_V4/**/*.pro.user*
+
+# clangd / Qt Creator code model cache
+/HMI_MICROMOUSE_V4/**/.qtc_clangd/
+/HMI_MICROMOUSE_V4/**/.cache/
