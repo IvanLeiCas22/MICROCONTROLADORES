@@ -2588,42 +2588,40 @@ static void Modes_State_Machine(void)
         switch (menu_mode)
         {
         case MENU_MODE_FIND_CELLS:
-        	Motion_ExecuteAction(&navigation_motion);
-        	Navigation_DecideMovement(&navigation_motion);
-//            // Ejecutar la lógica de resolución de laberintos
-//            switch (robot_state)
-//            {
-//            case STATE_NAVIGATING:
-//                Handle_Navigating();
-//                break;
-//            case STATE_BRAKING:
-//                Handle_Braking();
-//                break;
-//            case STATE_DECIDING:
-//                Handle_Deciding();
-//                break;
-//            case STATE_LEFT_WALL_FADE:
-//            case STATE_RIGHT_WALL_FADE:
-//            case STATE_STRAIGHT_DRIVE:
-//                Handle_Straight_Drive(false);
-//                break;
-//            case STATE_STRAIGHT_DRIVE_DESIDING:
-//                Handle_Straight_Drive(true);
-//                break;
-//            case STATE_TURNING_LEFT:
-//            case STATE_TURNING_RIGHT:
-//            case STATE_TURN_AROUND_LEFT:
-//            case STATE_TURN_AROUND_RIGHT:
-//                Manage_Turn();
-//                break;
-//            case STATE_SMOOTH_TURN_LEFT:
-//            case STATE_SMOOTH_TURN_RIGHT:
-//                Handle_Smooth_Turn();
-//                break;
-//            default:
-//                Handle_Idle();
-//                break;
-//            }
+            // Ejecutar la lógica de resolución de laberintos
+            switch (robot_state)
+            {
+            case STATE_NAVIGATING:
+                Handle_Navigating();
+                break;
+            case STATE_BRAKING:
+                Handle_Braking();
+                break;
+            case STATE_DECIDING:
+                Handle_Deciding();
+                break;
+            case STATE_LEFT_WALL_FADE:
+            case STATE_RIGHT_WALL_FADE:
+            case STATE_STRAIGHT_DRIVE:
+                Handle_Straight_Drive(false);
+                break;
+            case STATE_STRAIGHT_DRIVE_DESIDING:
+                Handle_Straight_Drive(true);
+                break;
+            case STATE_TURNING_LEFT:
+            case STATE_TURNING_RIGHT:
+            case STATE_TURN_AROUND_LEFT:
+            case STATE_TURN_AROUND_RIGHT:
+                Manage_Turn();
+                break;
+            case STATE_SMOOTH_TURN_LEFT:
+            case STATE_SMOOTH_TURN_RIGHT:
+                Handle_Smooth_Turn();
+                break;
+            default:
+                Handle_Idle();
+                break;
+            }
         	break;
         case MENU_MODE_MANUAL_CONTROL:
             // En modo manual, solo gestionamos los giros.
