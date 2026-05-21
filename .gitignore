@@ -23,3 +23,6 @@
 # clangd / Qt Creator code model cache
 /HMI_MICROMOUSE_V4/**/.qtc_clangd/
 /HMI_MICROMOUSE_V4/**/.cache/
+
+# Repomix generated output
+/repomix-output*
