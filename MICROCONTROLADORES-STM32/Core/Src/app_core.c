@@ -270,6 +270,8 @@ static void Set_Motor_Speeds(int16_t right_speed, int16_t left_speed);
 static void Handle_Idle(void);
 static void Reset_Robot_Position(void);
 static void Reset_Maze_State(void);
+static void Start_FindCells_Legacy_Mode(void);
+static void Seed_FindCells_Initial_Cell_IfPending(void);
 static void Current_Cell_Mapping(void);
 static void Send_Maze_Cell_Update(void);
 static void Update_Robot_Heading(int8_t turn_direction);
@@ -944,29 +946,29 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
             // Transición de MENU a RUNNING
             app_state = APP_STATE_RUNNING;
             // Resetear PIDs y Yaw para un inicio limpio
-            PID_Reset(&centering_pid);
-            PID_Reset(&turn_pid);
-            Reset_Yaw_Tracking();
-            // Iniciar la máquina de estados del robot si el modo es activo.
-            // Esto replica el comportamiento del botón físico.
-            if (menu_mode == MENU_MODE_FIND_CELLS || menu_mode == MENU_MODE_GO_TO_B)
+            if (menu_mode == MENU_MODE_FIND_CELLS)
             {
-                Set_Robot_State(STATE_NAVIGATING); // Aquí se inicia el movimiento
-                kick_start_active = true;
-                motion_confirm_counter = 0;
-
-                if (menu_mode == MENU_MODE_FIND_CELLS)
-                {
-                    Reset_Maze_State();
-                }
-                else if (menu_mode == MENU_MODE_GO_TO_B)
-                {
-                    Reset_Robot_Position();
-                }
+                Start_FindCells_Legacy_Mode();
             }
             else
             {
-                Set_Robot_State(STATE_IDLE); // Para modos que no inician movimiento
+                PID_Reset(&centering_pid);
+                PID_Reset(&turn_pid);
+                Reset_Yaw_Tracking();
+
+                // Iniciar la máquina de estados del robot si el modo es activo.
+                // Esto replica el comportamiento del botón físico.
+                if (menu_mode == MENU_MODE_GO_TO_B)
+                {
+                    Set_Robot_State(STATE_NAVIGATING); // Aquí se inicia el movimiento
+                    kick_start_active = true;
+                    motion_confirm_counter = 0;
+                    Reset_Robot_Position();
+                }
+                else
+                {
+                    Set_Robot_State(STATE_IDLE); // Para modos que no inician movimiento
+                }
             }
         }
         else if (new_state == APP_STATE_MENU && app_state == APP_STATE_RUNNING)
@@ -1480,33 +1482,26 @@ static void ManageButtonEvents(void)
                 app_state = APP_STATE_RUNNING;
                 temporary_heartbeat = HEARTBEAT_BTN_LONG_PRESS;
                 temporary_heartbeat_ticks = 10; // Duración del feedback (10 * 100ms = 1s)
-                // Resetear PIDs y estados al iniciar un modo
-                PID_Reset(&centering_pid);
-                PID_Reset(&turn_pid);
-                PID_Reset(&braking_pid);
-                Reset_Yaw_Tracking();
-                Set_Robot_State((menu_mode == MENU_MODE_FIND_CELLS) ? STATE_NAVIGATING : STATE_IDLE);
-                if (robot_state == STATE_NAVIGATING)
+
+                if (menu_mode == MENU_MODE_FIND_CELLS)
                 {
-                    kick_start_active = true;
-                    motion_confirm_counter = 0;
-
-                    if (menu_mode == MENU_MODE_FIND_CELLS)
-                    {
-                        Reset_Maze_State();
-                    }
-                    else if (menu_mode == MENU_MODE_GO_TO_B)
-                    {
-                        Reset_Robot_Position();
-                    }
-
-                    pending_initial_cell_seed = true;
+                    Start_FindCells_Legacy_Mode();
                 }
-                if (menu_mode == MENU_MODE_DRIVE_STRAIGHT)
+                else
                 {
-                    Set_Robot_State(STATE_STRAIGHT_DRIVE);
+                    // Resetear PIDs y estados al iniciar un modo
                     PID_Reset(&centering_pid);
-                    PID_Set_Setpoint(&centering_pid, FIXED_TO_INT(current_yaw_fixed));
+                    PID_Reset(&turn_pid);
+                    PID_Reset(&braking_pid);
+                    Reset_Yaw_Tracking();
+                    Set_Robot_State(STATE_IDLE);
+
+                    if (menu_mode == MENU_MODE_DRIVE_STRAIGHT)
+                    {
+                        Set_Robot_State(STATE_STRAIGHT_DRIVE);
+                        PID_Reset(&centering_pid);
+                        PID_Set_Setpoint(&centering_pid, FIXED_TO_INT(current_yaw_fixed));
+                    }
                 }
                 break;
             default:
@@ -1977,6 +1972,35 @@ static void Reset_Robot_Position(void)
 static void Reset_Maze_State(void)
 {
     App_Maze_ResetState();
+}
+
+static void Start_FindCells_Legacy_Mode(void)
+{
+    PID_Reset(&centering_pid);
+    PID_Reset(&turn_pid);
+    PID_Reset(&braking_pid);
+    Reset_Yaw_Tracking();
+
+    Reset_Maze_State();
+    pending_initial_cell_seed = true;
+
+    rear_tape_detected = false;
+    was_rear_tape_detected = false;
+
+    Set_Robot_State(STATE_NAVIGATING);
+    kick_start_active = true;
+    motion_confirm_counter = 0;
+}
+
+static void Seed_FindCells_Initial_Cell_IfPending(void)
+{
+    if (!pending_initial_cell_seed)
+    {
+        return;
+    }
+
+    Commit_Maze_State(false, true, true);
+    pending_initial_cell_seed = false;
 }
 
 static void Handle_Navigating(void)
@@ -2588,6 +2612,8 @@ static void Modes_State_Machine(void)
         switch (menu_mode)
         {
         case MENU_MODE_FIND_CELLS:
+            Seed_FindCells_Initial_Cell_IfPending();
+
             // Ejecutar la lógica de resolución de laberintos
             switch (robot_state)
             {
