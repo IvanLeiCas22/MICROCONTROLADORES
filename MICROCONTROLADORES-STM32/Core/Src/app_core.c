@@ -181,6 +181,67 @@ typedef struct
 static MotionContext navigation_motion;
 static bool navigation_first_execution = true;
 
+typedef enum
+{
+    NAV_DBG_TRANSITION_NONE = 0,
+    NAV_DBG_TRANSITION_START_FIND_CELLS = 1,
+    NAV_DBG_TRANSITION_STOP_TO_MENU = 2,
+    NAV_DBG_TRANSITION_FRONT_WALL_BRAKING = 10,
+    NAV_DBG_TRANSITION_DIAGONALS_LOST_DECISION = 11,
+    NAV_DBG_TRANSITION_STRAIGHT_REAR_TAPE_NAVIGATING = 12,
+    NAV_DBG_TRANSITION_STRAIGHT_REAR_TAPE_DECIDING = 13,
+    NAV_DBG_TRANSITION_DECIDE_DEAD_END = 20,
+    NAV_DBG_TRANSITION_DECIDE_SMOOTH_LEFT = 21,
+    NAV_DBG_TRANSITION_DECIDE_SMOOTH_RIGHT = 22,
+    NAV_DBG_TRANSITION_DECIDE_FRONT_NAVIGATING = 23,
+    NAV_DBG_TRANSITION_DECIDE_FRONT_STRAIGHT = 24,
+    NAV_DBG_TRANSITION_BRAKING_DONE = 30,
+    NAV_DBG_TRANSITION_SMOOTH_DONE = 40,
+    NAV_DBG_TRANSITION_PIVOT_DONE = 50,
+    NAV_DBG_TRANSITION_TURN_START = 60
+} NavDebugTransitionReason;
+
+typedef enum
+{
+    NAV_DBG_SMOOTH_DIR_NONE = 0,
+    NAV_DBG_SMOOTH_DIR_LEFT = 1,
+    NAV_DBG_SMOOTH_DIR_RIGHT = 2
+} NavDebugSmoothDirection;
+
+typedef enum
+{
+    NAV_DBG_SMOOTH_FINISH_NONE = 0,
+    NAV_DBG_SMOOTH_FINISH_REAR_TAPE = 1,
+    NAV_DBG_SMOOTH_FINISH_YAW_TARGET = 2,
+    NAV_DBG_SMOOTH_FINISH_WALL = 3
+} NavDebugSmoothFinishReason;
+
+typedef struct
+{
+    RobotStateTypeDef previous_robot_state;
+    uint8_t last_transition_reason;
+    uint8_t pending_transition_reason;
+    uint8_t smooth_direction;
+    uint8_t smooth_finish_reason;
+    int16_t yaw_target_deg;
+    int16_t pwm_right_cmd;
+    int16_t pwm_left_cmd;
+    uint16_t transition_sequence;
+} NavDebugTelemetryTypeDef;
+
+#define NAV_DEBUG_YAW_TARGET_UNAVAILABLE ((int16_t)32767)
+
+static NavDebugTelemetryTypeDef nav_debug = {
+    .previous_robot_state = STATE_IDLE,
+    .last_transition_reason = NAV_DBG_TRANSITION_NONE,
+    .pending_transition_reason = NAV_DBG_TRANSITION_NONE,
+    .smooth_direction = NAV_DBG_SMOOTH_DIR_NONE,
+    .smooth_finish_reason = NAV_DBG_SMOOTH_FINISH_NONE,
+    .yaw_target_deg = NAV_DEBUG_YAW_TARGET_UNAVAILABLE,
+    .pwm_right_cmd = 0,
+    .pwm_left_cmd = 0,
+    .transition_sequence = 0};
+
 uint16_t right_motor_base_speed = 3575;         // Velocidad base motor derecho
 uint16_t left_motor_base_speed = 4550;          // Velocidad base motor izquierdo
 uint16_t faster_motor_smooth_turn_speed = 6000; // Velocidad del motor más rápido en giro suave
@@ -297,6 +358,12 @@ static void Init_Pid_Configs(void);
 static void Apply_Pid_Config(PID_Role_t role, bool reset_state);
 static void Set_Pid_Gains_From_U16(PID_Role_t role, uint16_t kp_x100, uint16_t ki_x100, uint16_t kd_x100, bool reset_state);
 static void Write_Pid_Gains_To_Buffer(PID_Role_t role, uint8_t *buffer);
+static void Write_Nav_Debug_Status_To_Buffer(uint8_t *buffer);
+static void Nav_Debug_SetTransitionReason(NavDebugTransitionReason reason);
+static void Nav_Debug_SetSmoothDirection(NavDebugSmoothDirection direction);
+static void Nav_Debug_SetSmoothFinishReason(NavDebugSmoothFinishReason reason);
+static void Nav_Debug_SetYawTargetDeg(int16_t target_deg);
+static void Nav_Debug_ClearYawTarget(void);
 static int32_t Gain_Hundredths_To_Fixed(uint16_t gain_x100);
 static uint16_t Fixed_To_Gain_Hundredths(int32_t gain_fixed);
 
@@ -522,6 +589,83 @@ static void Write_Pid_Gains_To_Buffer(PID_Role_t role, uint8_t *buffer)
     buffer[3] = (uint8_t)((ki_x100 >> 8) & 0xFF);
     buffer[4] = (uint8_t)(kd_x100 & 0xFF);
     buffer[5] = (uint8_t)((kd_x100 >> 8) & 0xFF);
+}
+
+static void Write_Nav_Debug_Status_To_Buffer(uint8_t *buffer)
+{
+    uint8_t idx = 0;
+    uint8_t nav_flags = 0;
+    int16_t yaw_deg = (int16_t)FIXED_TO_INT(current_yaw_fixed);
+
+    if (rear_tape_detected)
+        nav_flags |= 0x01U;
+    if (front_tape_detected)
+        nav_flags |= 0x02U;
+    if (front_wall_detected)
+        nav_flags |= 0x04U;
+
+    buffer[idx++] = (uint8_t)robot_state;
+    buffer[idx++] = (uint8_t)nav_debug.previous_robot_state;
+    buffer[idx++] = nav_debug.last_transition_reason;
+    buffer[idx++] = nav_debug.smooth_direction;
+    buffer[idx++] = nav_debug.smooth_finish_reason;
+    buffer[idx++] = nav_flags;
+
+    buffer[idx++] = (uint8_t)(sensor_snapshot.dist_front_left_mm & 0xFFU);
+    buffer[idx++] = (uint8_t)((sensor_snapshot.dist_front_left_mm >> 8) & 0xFFU);
+    buffer[idx++] = (uint8_t)(sensor_snapshot.dist_front_right_mm & 0xFFU);
+    buffer[idx++] = (uint8_t)((sensor_snapshot.dist_front_right_mm >> 8) & 0xFFU);
+
+    buffer[idx++] = (uint8_t)(yaw_deg & 0xFF);
+    buffer[idx++] = (uint8_t)(((uint16_t)yaw_deg >> 8) & 0xFFU);
+    buffer[idx++] = (uint8_t)(nav_debug.yaw_target_deg & 0xFF);
+    buffer[idx++] = (uint8_t)(((uint16_t)nav_debug.yaw_target_deg >> 8) & 0xFFU);
+
+    buffer[idx++] = (uint8_t)(nav_debug.pwm_right_cmd & 0xFF);
+    buffer[idx++] = (uint8_t)(((uint16_t)nav_debug.pwm_right_cmd >> 8) & 0xFFU);
+    buffer[idx++] = (uint8_t)(nav_debug.pwm_left_cmd & 0xFF);
+    buffer[idx++] = (uint8_t)(((uint16_t)nav_debug.pwm_left_cmd >> 8) & 0xFFU);
+
+    buffer[idx++] = (uint8_t)(sensor_snapshot.adc_filtered[SENSOR_FLOOR_REAR_CH] & 0xFFU);
+    buffer[idx++] = (uint8_t)((sensor_snapshot.adc_filtered[SENSOR_FLOOR_REAR_CH] >> 8) & 0xFFU);
+    buffer[idx++] = (uint8_t)(sensor_snapshot.adc_filtered[SENSOR_FLOOR_FRONT_CH] & 0xFFU);
+    buffer[idx++] = (uint8_t)((sensor_snapshot.adc_filtered[SENSOR_FLOOR_FRONT_CH] >> 8) & 0xFFU);
+
+    buffer[idx++] = (uint8_t)app_state;
+    buffer[idx++] = (uint8_t)menu_mode;
+    buffer[idx++] = sensor_snapshot.detection_flags;
+    buffer[idx++] = 0U;
+
+    buffer[idx++] = (uint8_t)(nav_debug.transition_sequence & 0xFFU);
+    buffer[idx++] = (uint8_t)((nav_debug.transition_sequence >> 8) & 0xFFU);
+}
+
+static void Nav_Debug_SetTransitionReason(NavDebugTransitionReason reason)
+{
+    if (nav_debug.pending_transition_reason == NAV_DBG_TRANSITION_NONE)
+    {
+        nav_debug.pending_transition_reason = (uint8_t)reason;
+    }
+}
+
+static void Nav_Debug_SetSmoothDirection(NavDebugSmoothDirection direction)
+{
+    nav_debug.smooth_direction = (uint8_t)direction;
+}
+
+static void Nav_Debug_SetSmoothFinishReason(NavDebugSmoothFinishReason reason)
+{
+    nav_debug.smooth_finish_reason = (uint8_t)reason;
+}
+
+static void Nav_Debug_SetYawTargetDeg(int16_t target_deg)
+{
+    nav_debug.yaw_target_deg = target_deg;
+}
+
+static void Nav_Debug_ClearYawTarget(void)
+{
+    nav_debug.yaw_target_deg = NAV_DEBUG_YAW_TARGET_UNAVAILABLE;
 }
 
 static void Init_Pid_Configs(void)
@@ -976,6 +1120,8 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
             // Transición de RUNNING a MENU
             app_state = APP_STATE_MENU;
             Set_Motor_Speeds(0, 0); // Detener motores por seguridad
+            Nav_Debug_ClearYawTarget();
+            Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_STOP_TO_MENU);
             Set_Robot_State(STATE_IDLE);
         }
         Update_Display_Content();
@@ -1161,6 +1307,14 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
             UNERBUS_Write(aBus, col_buffer, payload_len);
             length = UNERBUS_CMD_ID_SIZE + payload_len;
         }
+        break;
+    }
+    case CMD_GET_NAV_DEBUG_STATUS:
+    {
+        uint8_t nav_debug_buffer[UNERBUS_NAV_DEBUG_STATUS_SIZE];
+        Write_Nav_Debug_Status_To_Buffer(nav_debug_buffer);
+        UNERBUS_Write(aBus, nav_debug_buffer, UNERBUS_NAV_DEBUG_STATUS_SIZE);
+        length = UNERBUS_CMD_ID_SIZE + UNERBUS_NAV_DEBUG_STATUS_SIZE;
         break;
     }
     default:
@@ -1514,6 +1668,8 @@ static void ManageButtonEvents(void)
             if (button_event == EVENT_LONG_PRESS_RELEASED)
             {
                 app_state = APP_STATE_MENU;
+                Nav_Debug_ClearYawTarget();
+                Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_STOP_TO_MENU);
                 Set_Robot_State(STATE_IDLE);
                 Set_Motor_Speeds(0, 0); // Detener motores
                 temporary_heartbeat = HEARTBEAT_BTN_LONG_PRESS;
@@ -1742,18 +1898,26 @@ void Turn_Start(int16_t angle_degrees)
         // Asignar el estado de giro correcto
         if (angle_degrees == 90)
         {
+            Nav_Debug_SetYawTargetDeg(90);
+            Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_TURN_START);
             Set_Robot_State(STATE_TURNING_RIGHT);
         }
         else if (angle_degrees == -90)
         {
+            Nav_Debug_SetYawTargetDeg(-90);
+            Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_TURN_START);
             Set_Robot_State(STATE_TURNING_LEFT);
         }
         else if (angle_degrees == 180)
         {
+            Nav_Debug_SetYawTargetDeg(180);
+            Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_TURN_START);
             Set_Robot_State(STATE_TURN_AROUND_RIGHT);
         }
         else if (angle_degrees == -180)
         {
+            Nav_Debug_SetYawTargetDeg(-180);
+            Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_TURN_START);
             Set_Robot_State(STATE_TURN_AROUND_LEFT);
         }
     }
@@ -1802,6 +1966,8 @@ static void Manage_Turn(void)
         return;
     }
 
+    Nav_Debug_SetYawTargetDeg(target_yaw_degrees);
+
     target_dps = ((int32_t)target_dps * (int32_t)((((abs(target_yaw_degrees) - abs(current_yaw_degrees)) * (int16_t)100) / abs(target_yaw_degrees)) + (int16_t)40)) / 100;
 
     // 2. Comprobar si el giro ha terminado (condición de parada basada en el ángulo total girado).
@@ -1815,11 +1981,14 @@ static void Manage_Turn(void)
 
         if (menu_mode == MENU_MODE_MANUAL_CONTROL)
         {
+            Nav_Debug_ClearYawTarget();
+            Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_PIVOT_DONE);
             Set_Robot_State(STATE_IDLE);
         }
         else
         {
             // Después de un giro, volvemos a navegar.
+            Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_PIVOT_DONE);
             Set_Robot_State(STATE_NAVIGATING);
             PID_Reset(&centering_pid);
             PID_Reset(&braking_pid);
@@ -1877,6 +2046,9 @@ static void Set_Motor_Speeds(int16_t right_speed, int16_t left_speed)
     {
         left_rev = (-left_speed > (pwm_max_value - 1)) ? (pwm_max_value - 1) : -left_speed;
     }
+
+    nav_debug.pwm_right_cmd = (right_fwd != 0U) ? (int16_t)right_fwd : (int16_t)(-((int16_t)right_rev));
+    nav_debug.pwm_left_cmd = (left_fwd != 0U) ? (int16_t)left_fwd : (int16_t)(-((int16_t)left_rev));
 
     // Motor derecho: ch2 adelante (TIM4_CH2), ch1 atrás (TIM4_CH1)
     __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, right_fwd);
@@ -1986,7 +2158,11 @@ static void Start_FindCells_Legacy_Mode(void)
 
     rear_tape_detected = false;
     was_rear_tape_detected = false;
+    Nav_Debug_SetSmoothDirection(NAV_DBG_SMOOTH_DIR_NONE);
+    Nav_Debug_SetSmoothFinishReason(NAV_DBG_SMOOTH_FINISH_NONE);
+    Nav_Debug_ClearYawTarget();
 
+    Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_START_FIND_CELLS);
     Set_Robot_State(STATE_NAVIGATING);
     kick_start_active = true;
     motion_confirm_counter = 0;
@@ -2024,6 +2200,7 @@ static void Handle_Navigating(void)
     {
         Set_Motor_Speeds(0, 0);
         PID_Reset(&braking_pid);
+        Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_FRONT_WALL_BRAKING);
         Set_Robot_State(STATE_BRAKING);
         return;
     }
@@ -2035,6 +2212,7 @@ static void Handle_Navigating(void)
         if (!left_diagonal_wall_detected && !right_diagonal_wall_detected)
         {
             wall_diagonal_faded = NO_WALL_FADED;
+            Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_DIAGONALS_LOST_DECISION);
             Set_Robot_State(STATE_STRAIGHT_DRIVE_DESIDING);
             PID_Reset(&centering_pid);
             PID_Set_Setpoint(&centering_pid, FIXED_TO_INT(current_yaw_fixed));
@@ -2176,6 +2354,7 @@ static void Handle_Straight_Drive(bool have_to_decide)
             }
             else
             {
+                Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_STRAIGHT_REAR_TAPE_NAVIGATING);
                 Set_Robot_State(STATE_NAVIGATING);
                 PID_Reset(&centering_pid);
                 kick_start_active = true;
@@ -2223,6 +2402,7 @@ static void Handle_Deciding(void)
     // Si solo está disponible el camino hacia atrás
     if (available_Options == 1)
     {
+        Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_DECIDE_DEAD_END);
         Turn_Start(180); // Callejón sin salida
         return;
     }
@@ -2242,6 +2422,10 @@ static void Handle_Deciding(void)
 
     if (choice == IZQUIERDA)
     {
+        Nav_Debug_SetSmoothDirection(NAV_DBG_SMOOTH_DIR_LEFT);
+        Nav_Debug_SetSmoothFinishReason(NAV_DBG_SMOOTH_FINISH_NONE);
+        Nav_Debug_SetYawTargetDeg(90);
+        Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_DECIDE_SMOOTH_LEFT);
         Set_Robot_State(STATE_SMOOTH_TURN_LEFT); // Prioridad a la izquierda
         Reset_Yaw_Tracking();
         PID_Reset(&turn_velocity_pid);
@@ -2249,6 +2433,10 @@ static void Handle_Deciding(void)
     }
     else if (choice == DERECHA)
     {
+        Nav_Debug_SetSmoothDirection(NAV_DBG_SMOOTH_DIR_RIGHT);
+        Nav_Debug_SetSmoothFinishReason(NAV_DBG_SMOOTH_FINISH_NONE);
+        Nav_Debug_SetYawTargetDeg(90);
+        Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_DECIDE_SMOOTH_RIGHT);
         Set_Robot_State(STATE_SMOOTH_TURN_RIGHT);
         Reset_Yaw_Tracking();
         PID_Reset(&turn_velocity_pid);
@@ -2258,6 +2446,8 @@ static void Handle_Deciding(void)
     {
         if (left_wall_detected || right_wall_detected)
         {
+            Nav_Debug_ClearYawTarget();
+            Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_DECIDE_FRONT_NAVIGATING);
             Set_Robot_State(STATE_NAVIGATING);
             PID_Reset(&centering_pid);
             /*             kick_start_active = true;
@@ -2265,6 +2455,8 @@ static void Handle_Deciding(void)
         }
         else
         {
+            Nav_Debug_SetYawTargetDeg((int16_t)FIXED_TO_INT(current_yaw_fixed));
+            Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_DECIDE_FRONT_STRAIGHT);
             Set_Robot_State(STATE_STRAIGHT_DRIVE);
             PID_Reset(&centering_pid);
             PID_Set_Setpoint(&centering_pid, FIXED_TO_INT(current_yaw_fixed));
@@ -2286,6 +2478,7 @@ static void Handle_Braking(void)
     if (abs(dist_front_avg_mm - wall_braking_target_mm) < braking_dead_zone && abs(ax) < braking_accel_stop_threshold)
     {
         Set_Motor_Speeds(0, 0);
+        Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_BRAKING_DONE);
         Set_Robot_State(STATE_DECIDING);
         return;
     }
@@ -2317,9 +2510,14 @@ static void Set_Robot_State(RobotStateTypeDef new_state)
 {
     if (robot_state != new_state)
     {
+        nav_debug.previous_robot_state = robot_state;
+        nav_debug.last_transition_reason = nav_debug.pending_transition_reason;
+        nav_debug.transition_sequence++;
         robot_state = new_state;
         // SSD_UPDATE_REQUEST = true;
     }
+
+    nav_debug.pending_transition_reason = NAV_DBG_TRANSITION_NONE;
 }
 
 /**
@@ -2461,6 +2659,13 @@ static void Handle_Smooth_Turn(void)
     {
         RobotStateTypeDef completed_turn_state = robot_state;
 
+        if (rear_tape_detected)
+            Nav_Debug_SetSmoothFinishReason(NAV_DBG_SMOOTH_FINISH_REAR_TAPE);
+        else if (wall_detected)
+            Nav_Debug_SetSmoothFinishReason(NAV_DBG_SMOOTH_FINISH_WALL);
+        else
+            Nav_Debug_SetSmoothFinishReason(NAV_DBG_SMOOTH_FINISH_YAW_TARGET);
+
         int8_t heading_update = 0;
 
         if (completed_turn_state == STATE_SMOOTH_TURN_LEFT)
@@ -2483,6 +2688,7 @@ static void Handle_Smooth_Turn(void)
 
 
         Set_Motor_Speeds(right_motor_base_speed, left_motor_base_speed);
+        Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_SMOOTH_DONE);
         Set_Robot_State(STATE_NAVIGATING);
         PID_Reset(&centering_pid);
         kick_start_active = true;

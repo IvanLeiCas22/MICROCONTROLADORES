@@ -133,6 +133,7 @@ typedef enum
     CMD_SET_DELAY_TICKS = 0X91,             // Configurar el número de ticks de retardo
     CMD_UPDATE_MAZE_CELL = 0x92,            // (STM32 -> Qt) Enviar actualización de info de celda
     CMD_SYNC_MAZE_COLUMN = 0x93,            // Sincronizar 1 columna entera del laberinto
+    CMD_GET_NAV_DEBUG_STATUS = 0x94,        // Leer telemetría mínima de navegación legacy
     CMD_OTHERS
 
 } CommandIdTypeDef;
@@ -281,6 +282,7 @@ extern uint16_t pwm_max_value;
 #define UNERBUS_TURN_TARGET_DPS_SIZE (sizeof(uint16_t))
 #define UNERBUS_DELAY_TICKS_SIZE (sizeof(uint8_t))          // Número de ticks de retardo como uint8_t
 #define UNERBUS_MAZE_CELL_UPDATE_SIZE (sizeof(uint8_t) * 4) // x, y, walls, heading
+#define UNERBUS_NAV_DEBUG_STATUS_SIZE 28U
 
 /* USB CDC Buffer Sizes */
 #define USB_CDC_RX_BUFFER_SIZE 128
@@ -314,9 +316,9 @@ extern uint16_t pwm_max_value;
 #define HEARTBEAT_RUNNING_MANUAL_CONTROL 0xF0F0F0F0 // <--- AÑADIR ESTA LÍNEA (Blink constante y rápido)
 
 /* Wifi Settings */
-#define WIFI_SSID "InternetPlus_8e2fbb"//"FCAL"
-#define WIFI_PASSWORD "Akhantos2340"//"fcalconcordia.06-2019"
-#define WIFI_UDP_REMOTE_IP "192.168.1.120"//"172.23.225.120"
+#define WIFI_SSID "FCAL"//"FCAL" "InternetPlus_8e2fbb"
+#define WIFI_PASSWORD "fcalconcordia.06-2019"//"fcalconcordia.06-2019" "Akhantos2340"
+#define WIFI_UDP_REMOTE_IP "172.23.225.120"//"172.23.225.120" "192.168.1.120"
 #define WIFI_UDP_REMOTE_PORT 30010
 #define WIFI_UDP_LOCAL_PORT 30000
 
