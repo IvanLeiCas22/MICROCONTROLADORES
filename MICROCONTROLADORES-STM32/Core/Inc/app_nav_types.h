@@ -117,10 +117,12 @@ typedef struct
     uint16_t wall_threshold_mm_braking_start;
     uint16_t wall_threshold_mm_diagonal;
     uint16_t wall_threshold_mm_side;
+    uint16_t wall_hysteresis_mm;
     uint16_t after_turn_wall_threshold_mm;
     uint16_t wall_target_mm;
     uint16_t wall_braking_target_mm;
     uint16_t tape_detection_threshold_adc;
+    uint16_t tape_hysteresis_adc;
 
     uint16_t turn_target_dps;
     uint16_t pivot_turn_target_dps;
@@ -141,6 +143,23 @@ typedef struct
     int16_t pwm_right_cmd;
     int16_t pwm_left_cmd;
     uint16_t transition_sequence;
+
+    uint8_t floor_front_black;
+    uint8_t floor_rear_black;
+    uint8_t wall_front;
+    uint8_t wall_left;
+    uint8_t wall_right;
+    uint8_t wall_diag_left;
+    uint8_t wall_diag_right;
+
+    uint16_t floor_front_adc;
+    uint16_t floor_rear_adc;
+    uint16_t dist_front_left_mm;
+    uint16_t dist_front_right_mm;
+    uint16_t dist_left_lat_mm;
+    uint16_t dist_right_lat_mm;
+    uint16_t dist_diagonal_left_mm;
+    uint16_t dist_diagonal_right_mm;
 } AppNavDebug;
 
 #endif /* INC_APP_NAV_TYPES_H_ */
