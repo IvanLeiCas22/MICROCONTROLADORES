@@ -5,6 +5,7 @@
 #include "app_sensors.h"
 #include "app_timebase.h"
 #include "app_timing.h"
+#include "app_nav.h"
 
 #include <stdlib.h>
 #include <stdio.h>  // Para snprintf
@@ -1782,6 +1783,9 @@ void App_Core_Init(void)
     motor_kick_start_speed = MOTOR_KICK_START_SPEED_DEFAULT;
     accel_motion_threshold = ACCEL_MOTION_THRESHOLD_DEFAULT;
     accel_motion_confirm_ticks = ACCEL_MOTION_CONFIRM_TICKS_DEFAULT;
+
+    /* --- PORTABLE NAVIGATION BOUNDARY (stub, not active yet) --- */
+    App_Nav_Init(NULL);
 
     /* --- INICIALIZACIÓN DE PARÁMETROS DE NAVEGACIÓN --- */
     wall_threshold_mm_front = WALL_PRESENCE_THRESHOLD_MM_FRONT;
