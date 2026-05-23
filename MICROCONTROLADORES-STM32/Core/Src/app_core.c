@@ -386,6 +386,8 @@ static void Nav_Debug_SetYawTargetDeg(int16_t target_deg);
 static void Nav_Debug_ClearYawTarget(void);
 static int32_t Gain_Hundredths_To_Fixed(uint16_t gain_x100);
 static uint16_t Fixed_To_Gain_Hundredths(int32_t gain_fixed);
+static void Build_AppNavInput_From_SensorSnapshot(uint32_t dt_ms, AppNavInput *input);
+static void Run_Portable_Nav_Shadow_Tick(uint32_t dt_ms);
 
 // --- FUNCIONES DE REWORK DE NAVEGACIÓN ---
 static void Navigation_DecideMovement(MotionContext *motion);
@@ -1843,11 +1845,52 @@ void App_Core_Init(void)
     HAL_TIM_Base_Start_IT(&htim1);
 }
 
+static void Build_AppNavInput_From_SensorSnapshot(uint32_t dt_ms, AppNavInput *input)
+{
+    if (input == NULL)
+    {
+        return;
+    }
+
+    input->dt_ms = dt_ms;
+
+    for (uint8_t ch = 0U; (ch < APP_NAV_ADC_CHANNEL_COUNT) && (ch < ADC_CHANNELS); ch++)
+    {
+        input->adc_filtered[ch] = sensor_snapshot.adc_filtered[ch];
+    }
+
+    input->dist_right_lat_mm = sensor_snapshot.dist_right_lat_mm;
+    input->dist_diagonal_right_mm = sensor_snapshot.dist_diagonal_right_mm;
+    input->dist_front_right_mm = sensor_snapshot.dist_front_right_mm;
+    input->dist_front_left_mm = sensor_snapshot.dist_front_left_mm;
+    input->dist_diagonal_left_mm = sensor_snapshot.dist_diagonal_left_mm;
+    input->dist_left_lat_mm = sensor_snapshot.dist_left_lat_mm;
+
+    input->ax = sensor_snapshot.ax;
+    input->ay = sensor_snapshot.ay;
+    input->az = sensor_snapshot.az;
+    input->gx = sensor_snapshot.gx;
+    input->gy = sensor_snapshot.gy;
+    input->gz = sensor_snapshot.gz;
+
+    input->yaw_q16_deg = sensor_snapshot.yaw_fixed;
+}
+
+static void Run_Portable_Nav_Shadow_Tick(uint32_t dt_ms)
+{
+    AppNavInput input = {0};
+    AppNavOutput output = {0};
+
+    Build_AppNavInput_From_SensorSnapshot(dt_ms, &input);
+    App_Nav_Tick(&input, &output);
+}
+
 static void Run_Control_Step(uint32_t dt_ms)
 {
     control_step_dt_ms = dt_ms;
     ADC_Filter_Task();
     Update_Navigation_Perception();
+    Run_Portable_Nav_Shadow_Tick(dt_ms);
 
     Modes_State_Machine();
 }
