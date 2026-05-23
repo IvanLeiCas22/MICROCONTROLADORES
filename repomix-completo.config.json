@@ -1,7 +1,7 @@
 {
   "$schema": "https://repomix.com/schemas/latest/schema.json",
   "output": {
-    "filePath": "repomix-output-completo.xml",
+    "filePath": "repomix-output-completo-autitoReal.xml",
     "style": "xml",
     "parsableStyle": false,
     "compress": false,
