@@ -367,8 +367,6 @@ static int32_t Get_Filtered_ADC_Value(uint8_t channel);
 static void Set_Robot_State(RobotStateTypeDef new_state);
 static void Update_Display_Content(void);
 static int32_t ADC_To_Distance_mm(uint16_t adc_value);
-static bool Detect_Low_With_Hysteresis(uint16_t value, uint16_t threshold, uint16_t hysteresis, bool was_detected);
-static bool Detect_Front_Wall_With_Hysteresis(uint16_t left_value, uint16_t right_value, uint16_t threshold, uint16_t hysteresis, bool was_detected);
 static void Sync_Legacy_Perception_From_Snapshot(void);
 static void Handle_Straight_Drive(bool have_to_decide);
 static void Modes_State_Machine(void);
@@ -386,8 +384,12 @@ static void Nav_Debug_SetYawTargetDeg(int16_t target_deg);
 static void Nav_Debug_ClearYawTarget(void);
 static int32_t Gain_Hundredths_To_Fixed(uint16_t gain_x100);
 static uint16_t Fixed_To_Gain_Hundredths(int32_t gain_fixed);
+static AppNavConfig Build_AppNavConfig_From_LegacyRuntime(void);
+static void Sync_AppNavConfig_From_LegacyRuntime(void);
 static void Build_AppNavInput_From_SensorSnapshot(uint32_t dt_ms, AppNavInput *input);
-static void Run_Portable_Nav_Shadow_Tick(uint32_t dt_ms);
+static void Run_Portable_Nav_Tick(uint32_t dt_ms);
+static uint8_t Build_DetectionFlags_From_AppNavDebug(const AppNavDebug *debug);
+static void Apply_Portable_Nav_Perception_To_Snapshot(void);
 
 // --- FUNCIONES DE REWORK DE NAVEGACIÓN ---
 static void Navigation_DecideMovement(MotionContext *motion);
@@ -514,6 +516,37 @@ static int32_t Gain_Hundredths_To_Fixed(uint16_t gain_x100)
 static uint16_t Fixed_To_Gain_Hundredths(int32_t gain_fixed)
 {
     return (uint16_t)(((int64_t)gain_fixed * 100) >> FIXED_POINT_SHIFT);
+}
+
+static AppNavConfig Build_AppNavConfig_From_LegacyRuntime(void)
+{
+    AppNavConfig cfg = App_Nav_DefaultConfig();
+
+    cfg.right_motor_base_speed = right_motor_base_speed;
+    cfg.left_motor_base_speed = left_motor_base_speed;
+    cfg.faster_motor_smooth_turn_speed = faster_motor_smooth_turn_speed;
+    cfg.slower_motor_smooth_turn_speed = slower_motor_smooth_turn_speed;
+
+    cfg.wall_threshold_mm_front = wall_threshold_mm_front;
+    cfg.wall_threshold_mm_braking_start = wall_threshold_mm_braking_start;
+    cfg.wall_threshold_mm_diagonal = wall_threshold_mm_diagonal;
+    cfg.wall_threshold_mm_side = wall_threshold_mm_side;
+    cfg.after_turn_wall_threshold_mm = after_turn_wall_threshold_mm;
+    cfg.wall_target_mm = wall_target_mm;
+    cfg.wall_braking_target_mm = wall_braking_target_mm;
+    cfg.tape_detection_threshold_adc = tape_detection_threshold_adc;
+
+    cfg.turn_target_dps = turn_target_dps;
+    cfg.pivot_turn_target_dps = pivot_turn_target_dps;
+
+    return cfg;
+}
+
+static void Sync_AppNavConfig_From_LegacyRuntime(void)
+{
+    AppNavConfig cfg = Build_AppNavConfig_From_LegacyRuntime();
+
+    App_Nav_SetConfig(&cfg);
 }
 
 static int32_t GyroRaw_To_DpsX10(int16_t gyro_raw)
@@ -995,6 +1028,7 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
         // Se esperan 2 valores uint16_t: Right Motor Base Speed, Left Motor Base Speed
         right_motor_base_speed = UNERBUS_GetUInt16(aBus);
         left_motor_base_speed = UNERBUS_GetUInt16(aBus);
+        Sync_AppNavConfig_From_LegacyRuntime();
         break;
     case CMD_GET_MOTOR_BASE_SPEEDS: // Leer velocidades base independientes
         uint8_t motor_speeds_buffer[UNERBUS_MOTOR_BASE_SPEEDS_SIZE];
@@ -1065,6 +1099,7 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
         pivot_turn_target_dps = UNERBUS_GetUInt16(aBus);
         if (pivot_turn_target_dps > turn_max_pwm)
             pivot_turn_target_dps = turn_max_pwm; // No puede ser mayor que la máxima
+        Sync_AppNavConfig_From_LegacyRuntime();
         break;
     case CMD_GET_PIVOT_TURN_DPS:
         uint8_t min_speed_buffer[UNERBUS_TURN_MIN_SPEED_SIZE];
@@ -1078,6 +1113,7 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
         wall_threshold_mm_side = UNERBUS_GetUInt16(aBus);
         wall_threshold_mm_diagonal = UNERBUS_GetUInt16(aBus);
         after_turn_wall_threshold_mm = UNERBUS_GetUInt16(aBus);
+        Sync_AppNavConfig_From_LegacyRuntime();
         break;
     case CMD_GET_WALL_THRESHOLDS:
         uint8_t thresholds_buffer[UNERBUS_WALL_THRESHOLDS_SIZE];
@@ -1095,6 +1131,7 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
     case CMD_SET_WALL_TARGET_ADC:
         wall_target_mm = UNERBUS_GetUInt16(aBus);
         tape_detection_threshold_adc = UNERBUS_GetUInt16(aBus);
+        Sync_AppNavConfig_From_LegacyRuntime();
         break;
     case CMD_GET_WALL_TARGET_ADC:
         uint8_t target_buffer[UNERBUS_WALL_TARGET_ADC_SIZE];
@@ -1203,6 +1240,7 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
         wall_braking_target_mm = UNERBUS_GetUInt16(aBus);
         braking_accel_stop_threshold = UNERBUS_GetUInt16(aBus);
         PID_Set_Setpoint(&braking_pid, wall_braking_target_mm);
+        Sync_AppNavConfig_From_LegacyRuntime();
         break;
     case CMD_GET_BRAKING_PARAMS:
         uint8_t braking_params_buffer[UNERBUS_BRAKING_PARAMS_SIZE];
@@ -1276,6 +1314,7 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
 
         if (slower_motor_smooth_turn_speed > (pwm_max_value - 1))
             slower_motor_smooth_turn_speed = (pwm_max_value - 1); // Limitar al máximo global
+        Sync_AppNavConfig_From_LegacyRuntime();
         break;
     case CMD_SET_TURN_VELOCITY_PID_GAINS:
         vel_kp_int = UNERBUS_GetUInt16(aBus);
@@ -1300,6 +1339,7 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
         {
             PID_Set_Setpoint(&turn_velocity_pid, -turn_target_dps);
         }
+        Sync_AppNavConfig_From_LegacyRuntime();
         break;
     case CMD_GET_TURN_TARGET_DPS:
         uint8_t dps_buffer[UNERBUS_TURN_TARGET_DPS_SIZE];
@@ -1786,7 +1826,7 @@ void App_Core_Init(void)
     accel_motion_threshold = ACCEL_MOTION_THRESHOLD_DEFAULT;
     accel_motion_confirm_ticks = ACCEL_MOTION_CONFIRM_TICKS_DEFAULT;
 
-    /* --- PORTABLE NAVIGATION BOUNDARY (stub, not active yet) --- */
+    /* --- PORTABLE NAVIGATION BOUNDARY --- */
     App_Nav_Init(NULL);
 
     /* --- INICIALIZACIÓN DE PARÁMETROS DE NAVEGACIÓN --- */
@@ -1815,6 +1855,8 @@ void App_Core_Init(void)
     Apply_Pid_Config(PID_ROLE_SMOOTH_TURN, true);
     // La salida de este PID ES la potencia del motor, así que sus límites son los límites de PWM.
     PID_Set_Setpoint(&turn_velocity_pid, turn_target_dps);
+
+    Sync_AppNavConfig_From_LegacyRuntime();
 
     srand(1); // Inicializa la semilla para rand()
 
@@ -1876,7 +1918,7 @@ static void Build_AppNavInput_From_SensorSnapshot(uint32_t dt_ms, AppNavInput *i
     input->yaw_q16_deg = sensor_snapshot.yaw_fixed;
 }
 
-static void Run_Portable_Nav_Shadow_Tick(uint32_t dt_ms)
+static void Run_Portable_Nav_Tick(uint32_t dt_ms)
 {
     AppNavInput input = {0};
     AppNavOutput output = {0};
@@ -1885,12 +1927,49 @@ static void Run_Portable_Nav_Shadow_Tick(uint32_t dt_ms)
     App_Nav_Tick(&input, &output);
 }
 
+static uint8_t Build_DetectionFlags_From_AppNavDebug(const AppNavDebug *debug)
+{
+    uint8_t flags = 0U;
+
+    if (debug == NULL)
+    {
+        return flags;
+    }
+
+    if (debug->wall_front != 0U)
+        flags |= SENSOR_DET_WALL_FRONT;
+    if (debug->wall_left != 0U)
+        flags |= SENSOR_DET_WALL_LEFT;
+    if (debug->wall_right != 0U)
+        flags |= SENSOR_DET_WALL_RIGHT;
+    if (debug->wall_diag_left != 0U)
+        flags |= SENSOR_DET_WALL_DIAG_LEFT;
+    if (debug->wall_diag_right != 0U)
+        flags |= SENSOR_DET_WALL_DIAG_RIGHT;
+    if (debug->floor_front_black != 0U)
+        flags |= SENSOR_DET_FLOOR_FRONT;
+    if (debug->floor_rear_black != 0U)
+        flags |= SENSOR_DET_FLOOR_REAR;
+
+    return flags;
+}
+
+static void Apply_Portable_Nav_Perception_To_Snapshot(void)
+{
+    AppNavDebug debug = {0};
+
+    App_Nav_GetDebug(&debug);
+    sensor_snapshot.detection_flags = Build_DetectionFlags_From_AppNavDebug(&debug);
+    Sync_Legacy_Perception_From_Snapshot();
+}
+
 static void Run_Control_Step(uint32_t dt_ms)
 {
     control_step_dt_ms = dt_ms;
     ADC_Filter_Task();
     Update_Navigation_Perception();
-    Run_Portable_Nav_Shadow_Tick(dt_ms);
+    Run_Portable_Nav_Tick(dt_ms);
+    Apply_Portable_Nav_Perception_To_Snapshot();
 
     Modes_State_Machine();
 }
@@ -2642,30 +2721,6 @@ static int32_t ADC_To_Distance_mm(uint16_t adc_value)
     return (int32_t)App_Sensors_ConvertAdcToDistanceMm(adc_value);
 }
 
-static bool Detect_Low_With_Hysteresis(uint16_t value, uint16_t threshold, uint16_t hysteresis, bool was_detected)
-{
-    uint32_t release_threshold = (uint32_t)threshold + (uint32_t)hysteresis;
-
-    if (was_detected)
-    {
-        return ((uint32_t)value < release_threshold);
-    }
-
-    return (value < threshold);
-}
-
-static bool Detect_Front_Wall_With_Hysteresis(uint16_t left_value, uint16_t right_value, uint16_t threshold, uint16_t hysteresis, bool was_detected)
-{
-    uint32_t release_threshold = (uint32_t)threshold + (uint32_t)hysteresis;
-
-    if (was_detected)
-    {
-        return (((uint32_t)left_value < release_threshold) && ((uint32_t)right_value < release_threshold));
-    }
-
-    return ((left_value < threshold) && (right_value < threshold));
-}
-
 static void Sync_Legacy_Perception_From_Snapshot(void)
 {
     uint8_t flags = sensor_snapshot.detection_flags;
@@ -2872,9 +2927,6 @@ static void Handle_Smooth_Turn(void)
 
 static void Update_Navigation_Perception(void)
 {
-    uint8_t previous_flags = sensor_snapshot.detection_flags;
-    uint8_t new_flags = 0;
-
     for (uint8_t ch = 0; ch < ADC_CHANNELS; ch++)
     {
         sensor_snapshot.adc_filtered[ch] = (uint16_t)Get_Filtered_ADC_Value(ch);
@@ -2889,66 +2941,6 @@ static void Update_Navigation_Perception(void)
 
     MPU6050_GetCalibratedData(&hmpu, &sensor_snapshot.ax, &sensor_snapshot.ay, &sensor_snapshot.az, &sensor_snapshot.gx, &sensor_snapshot.gy, &sensor_snapshot.gz);
     sensor_snapshot.yaw_fixed = current_yaw_fixed;
-
-    if (Detect_Front_Wall_With_Hysteresis(sensor_snapshot.dist_front_left_mm,
-                                          sensor_snapshot.dist_front_right_mm,
-                                          wall_threshold_mm_front,
-                                          WALL_HYSTERESIS_MM,
-                                          ((previous_flags & SENSOR_DET_WALL_FRONT) != 0U)))
-    {
-        new_flags |= SENSOR_DET_WALL_FRONT;
-    }
-
-    if (Detect_Low_With_Hysteresis(sensor_snapshot.dist_left_lat_mm,
-                                   wall_threshold_mm_side,
-                                   WALL_HYSTERESIS_MM,
-                                   ((previous_flags & SENSOR_DET_WALL_LEFT) != 0U)))
-    {
-        new_flags |= SENSOR_DET_WALL_LEFT;
-    }
-
-    if (Detect_Low_With_Hysteresis(sensor_snapshot.dist_right_lat_mm,
-                                   wall_threshold_mm_side,
-                                   WALL_HYSTERESIS_MM,
-                                   ((previous_flags & SENSOR_DET_WALL_RIGHT) != 0U)))
-    {
-        new_flags |= SENSOR_DET_WALL_RIGHT;
-    }
-
-    if (Detect_Low_With_Hysteresis(sensor_snapshot.dist_diagonal_left_mm,
-                                   wall_threshold_mm_diagonal,
-                                   WALL_HYSTERESIS_MM,
-                                   ((previous_flags & SENSOR_DET_WALL_DIAG_LEFT) != 0U)))
-    {
-        new_flags |= SENSOR_DET_WALL_DIAG_LEFT;
-    }
-
-    if (Detect_Low_With_Hysteresis(sensor_snapshot.dist_diagonal_right_mm,
-                                   wall_threshold_mm_diagonal,
-                                   WALL_HYSTERESIS_MM,
-                                   ((previous_flags & SENSOR_DET_WALL_DIAG_RIGHT) != 0U)))
-    {
-        new_flags |= SENSOR_DET_WALL_DIAG_RIGHT;
-    }
-
-    if (Detect_Low_With_Hysteresis(sensor_snapshot.adc_filtered[SENSOR_FLOOR_FRONT_CH],
-                                   tape_detection_threshold_adc,
-                                   TAPE_HYSTERESIS_ADC,
-                                   ((previous_flags & SENSOR_DET_FLOOR_FRONT) != 0U)))
-    {
-        new_flags |= SENSOR_DET_FLOOR_FRONT;
-    }
-
-    if (Detect_Low_With_Hysteresis(sensor_snapshot.adc_filtered[SENSOR_FLOOR_REAR_CH],
-                                   tape_detection_threshold_adc,
-                                   TAPE_HYSTERESIS_ADC,
-                                   ((previous_flags & SENSOR_DET_FLOOR_REAR) != 0U)))
-    {
-        new_flags |= SENSOR_DET_FLOOR_REAR;
-    }
-
-    sensor_snapshot.detection_flags = new_flags;
-    Sync_Legacy_Perception_From_Snapshot();
 }
 
 static void Commit_Maze_State(int8_t heading_update, bool update_cell, bool send_update)

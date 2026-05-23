@@ -14,6 +14,8 @@
  */
 
 void App_Nav_Init(const AppNavConfig *config);
+void App_Nav_SetConfig(const AppNavConfig *config);
+void App_Nav_GetConfig(AppNavConfig *config_out);
 void App_Nav_Reset(void);
 void App_Nav_StartFindCells(void);
 void App_Nav_Stop(void);

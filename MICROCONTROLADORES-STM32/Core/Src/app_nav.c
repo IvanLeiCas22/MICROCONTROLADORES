@@ -66,7 +66,7 @@ static bool App_Nav_DetectFrontWallWithHysteresis(uint16_t left_value,
     return ((left_value < threshold) && (right_value < threshold));
 }
 
-static void App_Nav_UpdatePerceptionShadow(const AppNavInput *input)
+static void App_Nav_UpdatePerception(const AppNavInput *input)
 {
     uint16_t floor_front_adc = input->adc_filtered[APP_NAV_ADC_FLOOR_FRONT_CH];
     uint16_t floor_rear_adc = input->adc_filtered[APP_NAV_ADC_FLOOR_REAR_CH];
@@ -148,6 +148,26 @@ void App_Nav_Init(const AppNavConfig *config)
     App_Nav_ResetDebug();
 }
 
+void App_Nav_SetConfig(const AppNavConfig *config)
+{
+    if (config == NULL)
+    {
+        return;
+    }
+
+    app_nav_config = *config;
+}
+
+void App_Nav_GetConfig(AppNavConfig *config_out)
+{
+    if (config_out == NULL)
+    {
+        return;
+    }
+
+    *config_out = app_nav_config;
+}
+
 void App_Nav_Reset(void)
 {
     app_nav_enabled = false;
@@ -187,10 +207,10 @@ void App_Nav_Tick(const AppNavInput *input, AppNavOutput *output)
         return;
     }
 
-    App_Nav_UpdatePerceptionShadow(input);
+    App_Nav_UpdatePerception(input);
 
     /*
-     * Shadow mode only. The live navigation still runs in app_core.c.
+     * Perception-only mode. The live navigation still runs in app_core.c.
      * This portable layer observes sensors and exports debug perception
      * without owning motors or state-machine behavior yet.
      */
