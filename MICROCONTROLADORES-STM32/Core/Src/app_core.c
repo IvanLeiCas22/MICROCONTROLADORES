@@ -479,6 +479,11 @@ static AppNavConfig Build_AppNavConfig_From_LegacyRuntime(void)
     cfg.smooth_turn_pid_kd_q16 = pid_configs[PID_ROLE_SMOOTH_TURN].kd;
     cfg.smooth_turn_pid_output_limit_pwm = turn_max_pwm;
 
+    cfg.pivot_turn_pid_kp_q16 = pid_configs[PID_ROLE_TURN].kp;
+    cfg.pivot_turn_pid_ki_q16 = pid_configs[PID_ROLE_TURN].ki;
+    cfg.pivot_turn_pid_kd_q16 = pid_configs[PID_ROLE_TURN].kd;
+    cfg.pivot_turn_pid_output_limit_pwm = turn_max_pwm;
+
     return cfg;
 }
 
@@ -1007,6 +1012,7 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
 
         // Convertir de entero x100 a punto fijo.
         Set_Pid_Gains_From_U16(PID_ROLE_TURN, turn_kp_int, turn_ki_int, turn_kd_int, false);
+        Sync_AppNavConfig_From_LegacyRuntime();
         break;
     case CMD_GET_TURN_PID_GAINS: // Leer Kp, Ki, Kd del PID de giro
         uint8_t turn_pid_buffer[UNERBUS_TURN_PID_GAINS_SIZE];
@@ -1984,6 +1990,7 @@ void Turn_Start(int16_t angle_degrees)
     {
         // Reseteamos el PID que usaremos para el control de velocidad y el ángulo acumulado.
         PID_Reset(&turn_pid);
+        (void)App_Nav_StartPivotTurn();
         Reset_Yaw_Tracking(); // Reseteamos la medición de ángulo para un giro relativo.
 
         // Asignar el estado de giro correcto
@@ -2089,24 +2096,19 @@ static void Manage_Turn(void)
         return;
     }
 
-    // --- Lógica del PID de velocidad angular ---
+    AppNavInput input = {0};
+    AppNavOutput output = {0};
 
-    // 3. Obtener la velocidad angular actual del giroscopio.
-    int16_t gz = sensor_snapshot.gz;
+    Build_AppNavInput_From_SensorSnapshot(control_step_dt_ms, &input);
 
-    // Convertir el valor raw del giroscopio (gz) a grados por segundo (dps).
-    int16_t angular_velocity_dps = GyroRaw_To_Dps(gz);
-
-    // 4. Establecer el setpoint del PID de giro a la velocidad angular deseada.
-    PID_Set_Setpoint(&turn_pid, target_dps);
-
-    // 5. Calcular la salida del PID. La entrada es la velocidad angular actual.
-    //    La salida es la "fuerza" de giro (un valor de PWM).
-    int32_t pid_output_fixed = PID_Update(&turn_pid, angular_velocity_dps, control_step_dt_ms);
-    int16_t correction_pwm = (int16_t)FIXED_TO_INT(pid_output_fixed);
-
-    // 7. Aplicar las velocidades calculadas a los motores.
-    Set_Motor_Speeds(correction_pwm, -correction_pwm);
+    if (App_Nav_ComputePivotTurnPwm(&input, target_dps, &output))
+    {
+        Set_Motor_Speeds(output.right_motor_pwm, output.left_motor_pwm);
+    }
+    else
+    {
+        Set_Motor_Speeds(0, 0);
+    }
 }
 
 /**

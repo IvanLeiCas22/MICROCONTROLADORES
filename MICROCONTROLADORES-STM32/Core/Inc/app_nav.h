@@ -33,5 +33,9 @@ bool App_Nav_ComputeWallFollowPwm(const AppNavInput *input,
 bool App_Nav_StartSmoothTurn(AppNavSmoothTurnDirection direction);
 bool App_Nav_ComputeSmoothTurnPwm(const AppNavInput *input,
                                   AppNavOutput *output);
+bool App_Nav_StartPivotTurn(void);
+bool App_Nav_ComputePivotTurnPwm(const AppNavInput *input,
+                                 int16_t target_dps,
+                                 AppNavOutput *output);
 
 #endif /* INC_APP_NAV_H_ */

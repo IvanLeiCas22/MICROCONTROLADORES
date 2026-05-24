@@ -153,6 +153,11 @@ typedef struct
     int32_t smooth_turn_pid_ki_q16;
     int32_t smooth_turn_pid_kd_q16;
     int32_t smooth_turn_pid_output_limit_pwm;
+
+    int32_t pivot_turn_pid_kp_q16;
+    int32_t pivot_turn_pid_ki_q16;
+    int32_t pivot_turn_pid_kd_q16;
+    int32_t pivot_turn_pid_output_limit_pwm;
 } AppNavConfig;
 
 typedef struct
