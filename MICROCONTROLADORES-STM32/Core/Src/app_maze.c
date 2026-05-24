@@ -116,7 +116,7 @@ uint8_t App_Maze_WriteCurrentCellUpdatePayload(uint8_t *buffer)
     buffer[2] = maze_map[current_pos.x][current_pos.y];
     buffer[3] = (uint8_t)current_pos.heading;
 
-    return (uint8_t)UNERBUS_MAZE_CELL_UPDATE_SIZE;
+    return APP_MAZE_CELL_UPDATE_PAYLOAD_SIZE;
 }
 
 uint8_t App_Maze_WriteColumnSyncPayload(uint8_t requested_col, uint8_t *buffer)

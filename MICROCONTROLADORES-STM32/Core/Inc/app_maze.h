@@ -4,9 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "app_config.h"
-
-#define APP_MAZE_COLUMN_SYNC_PAYLOAD_SIZE (MAZE_HEIGHT + 4U)
+#include "app_maze_types.h"
 
 void App_Maze_ResetRobotPosition(void);
 void App_Maze_ResetState(void);

@@ -2527,7 +2527,7 @@ static void Current_Cell_Mapping(void)
 
 static void Send_Maze_Cell_Update(void)
 {
-    uint8_t payload[UNERBUS_MAZE_CELL_UPDATE_SIZE];
+    uint8_t payload[APP_MAZE_CELL_UPDATE_PAYLOAD_SIZE];
     uint8_t payload_len = App_Maze_WriteCurrentCellUpdatePayload(payload);
 
     if (payload_len != 0U)
