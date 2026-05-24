@@ -2527,7 +2527,16 @@ static void Current_Cell_Mapping(void)
 
 static void Send_Maze_Cell_Update(void)
 {
-    App_Maze_SendCurrentCellUpdate(&unerbus_esp01_handle);
+    uint8_t payload[UNERBUS_MAZE_CELL_UPDATE_SIZE];
+    uint8_t payload_len = App_Maze_WriteCurrentCellUpdatePayload(payload);
+
+    if (payload_len != 0U)
+    {
+        UNERBUS_Write(&unerbus_esp01_handle, payload, payload_len);
+        UNERBUS_Send(&unerbus_esp01_handle,
+                     CMD_UPDATE_MAZE_CELL,
+                     (uint8_t)(UNERBUS_CMD_ID_SIZE + payload_len));
+    }
 }
 
 static void Reset_Robot_Position(void)

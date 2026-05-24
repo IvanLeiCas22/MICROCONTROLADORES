@@ -104,16 +104,19 @@ void App_Maze_MapCurrentCell(bool front_wall_detected, bool right_wall_detected,
     }
 }
 
-void App_Maze_SendCurrentCellUpdate(_sUNERBUSHandle *bus)
+uint8_t App_Maze_WriteCurrentCellUpdatePayload(uint8_t *buffer)
 {
-    uint8_t cell_payload[UNERBUS_MAZE_CELL_UPDATE_SIZE] = {
-        current_pos.x,
-        current_pos.y,
-        maze_map[current_pos.x][current_pos.y],
-        (uint8_t)current_pos.heading};
+    if (buffer == NULL)
+    {
+        return 0U;
+    }
 
-    UNERBUS_Write(bus, cell_payload, UNERBUS_MAZE_CELL_UPDATE_SIZE);
-    UNERBUS_Send(bus, CMD_UPDATE_MAZE_CELL, (uint8_t)(UNERBUS_CMD_ID_SIZE + UNERBUS_MAZE_CELL_UPDATE_SIZE));
+    buffer[0] = current_pos.x;
+    buffer[1] = current_pos.y;
+    buffer[2] = maze_map[current_pos.x][current_pos.y];
+    buffer[3] = (uint8_t)current_pos.heading;
+
+    return (uint8_t)UNERBUS_MAZE_CELL_UPDATE_SIZE;
 }
 
 uint8_t App_Maze_WriteColumnSyncPayload(uint8_t requested_col, uint8_t *buffer)
