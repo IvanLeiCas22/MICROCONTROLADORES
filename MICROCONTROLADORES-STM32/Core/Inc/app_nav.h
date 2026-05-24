@@ -22,5 +22,8 @@ void App_Nav_Stop(void);
 void App_Nav_Tick(const AppNavInput *input, AppNavOutput *output);
 bool App_Nav_RecommendAction(uint32_t random_value,
                               AppNavRecommendedAction *action_out);
+bool App_Nav_StartStraightDriveYawHold(int32_t yaw_target_q16_deg);
+bool App_Nav_ComputeStraightDrivePwm(const AppNavInput *input,
+                                     AppNavOutput *output);
 
 #endif /* INC_APP_NAV_H_ */

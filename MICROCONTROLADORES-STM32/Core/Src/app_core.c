@@ -1654,6 +1654,7 @@ static void ManageButtonEvents(void)
                         Set_Robot_State(STATE_STRAIGHT_DRIVE);
                         PID_Reset(&centering_pid);
                         PID_Set_Setpoint(&centering_pid, FIXED_TO_INT(current_yaw_fixed));
+                        (void)App_Nav_StartStraightDriveYawHold(current_yaw_fixed);
                     }
                 }
                 break;
@@ -2449,13 +2450,19 @@ static void Handle_Straight_Drive(bool have_to_decide)
         }
     }
 
-    // Calcular la corrección del PID de guiñada
-    // El setpoint fue fijado al entrar en este estado
-    // El dt lo define el evento de control de la base de tiempo.
-    int16_t pwm_correction = (int16_t)(FIXED_TO_INT(PID_Update(&centering_pid, FIXED_TO_INT(current_yaw_fixed), control_step_dt_ms)));
+    AppNavInput input = {0};
+    AppNavOutput output = {0};
 
-    // Aplicar la corrección a la velocidad base de los motores
-    Set_Motor_Speeds(right_motor_base_speed - pwm_correction, left_motor_base_speed + pwm_correction);
+    Build_AppNavInput_From_SensorSnapshot(control_step_dt_ms, &input);
+
+    if (App_Nav_ComputeStraightDrivePwm(&input, &output))
+    {
+        Set_Motor_Speeds(output.right_motor_pwm, output.left_motor_pwm);
+    }
+    else
+    {
+        Set_Motor_Speeds(0, 0);
+    }
 }
 
 static void Handle_Deciding(void)
@@ -2513,6 +2520,7 @@ static void Handle_Deciding(void)
         Set_Robot_State(STATE_STRAIGHT_DRIVE);
         PID_Reset(&centering_pid);
         PID_Set_Setpoint(&centering_pid, FIXED_TO_INT(current_yaw_fixed));
+        (void)App_Nav_StartStraightDriveYawHold(current_yaw_fixed);
     }
 }
 
@@ -2566,6 +2574,10 @@ static void Set_Robot_State(RobotStateTypeDef new_state)
         nav_debug.last_transition_reason = nav_debug.pending_transition_reason;
         nav_debug.transition_sequence++;
         robot_state = new_state;
+        if (new_state == STATE_STRAIGHT_DRIVE_DESIDING)
+        {
+            (void)App_Nav_StartStraightDriveYawHold(current_yaw_fixed);
+        }
         // SSD_UPDATE_REQUEST = true;
     }
 

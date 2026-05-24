@@ -6,6 +6,8 @@
 static AppNavConfig app_nav_config;
 static AppNavDebug app_nav_debug;
 static PID_Controller_t app_nav_advance_pid;
+static int32_t app_nav_straight_yaw_target_q16_deg;
+static uint8_t app_nav_straight_active;
 static bool app_nav_enabled = false;
 
 /* Mirrors the legacy ADC channel order without depending on app_config.h. */
@@ -36,15 +38,40 @@ typedef enum
 
 static void App_Nav_ApplyAdvancePidConfig(uint8_t reset_state)
 {
+    int32_t output_limit_pwm = app_nav_config.advance_pid_output_limit_pwm;
+
+    if (output_limit_pwm < 0)
+    {
+        output_limit_pwm = 0;
+    }
+
     PID_Config_t cfg = {
         .kp = app_nav_config.advance_pid_kp_q16,
         .ki = app_nav_config.advance_pid_ki_q16,
         .kd = app_nav_config.advance_pid_kd_q16,
-        .out_min = -INT_TO_FIXED(app_nav_config.advance_pid_output_limit_pwm),
-        .out_max = INT_TO_FIXED(app_nav_config.advance_pid_output_limit_pwm),
+        .out_min = -INT_TO_FIXED(output_limit_pwm),
+        .out_max = INT_TO_FIXED(output_limit_pwm),
     };
 
     PID_ApplyConfig(&app_nav_advance_pid, &cfg, (reset_state != 0U));
+}
+
+static int32_t App_Nav_LimitCorrectionToMotorBases(int32_t correction)
+{
+    int32_t right_base = (int32_t)app_nav_config.right_motor_base_speed;
+    int32_t left_base = (int32_t)app_nav_config.left_motor_base_speed;
+
+    if (correction > right_base)
+    {
+        return right_base;
+    }
+
+    if (correction < -left_base)
+    {
+        return -left_base;
+    }
+
+    return correction;
 }
 
 static void App_Nav_ClearOutput(AppNavOutput *output)
@@ -173,6 +200,8 @@ void App_Nav_Init(const AppNavConfig *config)
     }
 
     app_nav_enabled = false;
+    app_nav_straight_active = 0U;
+    app_nav_straight_yaw_target_q16_deg = 0;
     App_Nav_ApplyAdvancePidConfig(1U);
     App_Nav_ResetDebug();
 }
@@ -201,6 +230,8 @@ void App_Nav_GetConfig(AppNavConfig *config_out)
 void App_Nav_Reset(void)
 {
     app_nav_enabled = false;
+    app_nav_straight_active = 0U;
+    app_nav_straight_yaw_target_q16_deg = 0;
     PID_Reset(&app_nav_advance_pid);
     App_Nav_ResetDebug();
 }
@@ -218,6 +249,7 @@ void App_Nav_StartFindCells(void)
 void App_Nav_Stop(void)
 {
     app_nav_enabled = false;
+    app_nav_straight_active = 0U;
     app_nav_debug.mode = APP_NAV_MODE_IDLE;
     app_nav_debug.previous_state = app_nav_debug.state;
     app_nav_debug.state = APP_NAV_STATE_IDLE;
@@ -340,5 +372,61 @@ bool App_Nav_RecommendAction(uint32_t random_value,
 
     *action_out = action;
     app_nav_debug.last_recommended_action = (uint8_t)action;
+    return true;
+}
+
+bool App_Nav_StartStraightDriveYawHold(int32_t yaw_target_q16_deg)
+{
+    app_nav_straight_yaw_target_q16_deg = yaw_target_q16_deg;
+    app_nav_straight_active = 1U;
+
+    PID_Reset(&app_nav_advance_pid);
+    PID_Set_Setpoint(&app_nav_advance_pid, FIXED_TO_INT(yaw_target_q16_deg));
+
+    app_nav_debug.yaw_target_deg = (int16_t)FIXED_TO_INT(yaw_target_q16_deg);
+    app_nav_debug.pwm_right_cmd = 0;
+    app_nav_debug.pwm_left_cmd = 0;
+
+    return true;
+}
+
+bool App_Nav_ComputeStraightDrivePwm(const AppNavInput *input,
+                                     AppNavOutput *output)
+{
+    int32_t pid_output_fixed;
+    int32_t correction;
+    int32_t right_pwm;
+    int32_t left_pwm;
+
+    App_Nav_ClearOutput(output);
+    app_nav_debug.pwm_right_cmd = 0;
+    app_nav_debug.pwm_left_cmd = 0;
+
+    if ((input == NULL) || (output == NULL))
+    {
+        return false;
+    }
+
+    if (app_nav_straight_active == 0U)
+    {
+        return false;
+    }
+
+    PID_Set_Setpoint(&app_nav_advance_pid,
+                     FIXED_TO_INT(app_nav_straight_yaw_target_q16_deg));
+    pid_output_fixed = PID_Update(&app_nav_advance_pid,
+                                  FIXED_TO_INT(input->yaw_q16_deg),
+                                  input->dt_ms);
+    correction = App_Nav_LimitCorrectionToMotorBases(FIXED_TO_INT(pid_output_fixed));
+
+    right_pwm = (int32_t)app_nav_config.right_motor_base_speed - correction;
+    left_pwm = (int32_t)app_nav_config.left_motor_base_speed + correction;
+
+    output->right_motor_pwm = (int16_t)right_pwm;
+    output->left_motor_pwm = (int16_t)left_pwm;
+
+    app_nav_debug.pwm_right_cmd = output->right_motor_pwm;
+    app_nav_debug.pwm_left_cmd = output->left_motor_pwm;
+
     return true;
 }
