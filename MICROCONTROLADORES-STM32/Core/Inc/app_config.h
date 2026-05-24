@@ -134,6 +134,7 @@ typedef enum
     CMD_UPDATE_MAZE_CELL = 0x92,            // (STM32 -> Qt) Enviar actualización de info de celda
     CMD_SYNC_MAZE_COLUMN = 0x93,            // Sincronizar 1 columna entera del laberinto
     CMD_GET_NAV_DEBUG_STATUS = 0x94,        // Leer telemetría mínima de navegación legacy
+    CMD_PRIMITIVE_TEST = 0x95,              // Banco de pruebas de primitivas
     CMD_OTHERS
 
 } CommandIdTypeDef;
@@ -283,6 +284,24 @@ extern uint16_t pwm_max_value;
 #define UNERBUS_DELAY_TICKS_SIZE (sizeof(uint8_t))          // Número de ticks de retardo como uint8_t
 #define UNERBUS_MAZE_CELL_UPDATE_SIZE (sizeof(uint8_t) * 4) // x, y, walls, heading
 #define UNERBUS_NAV_DEBUG_STATUS_SIZE 28U
+
+#define PRIM_TEST_STOP 0U
+#define PRIM_TEST_START 1U
+#define PRIM_TEST_GET_STATUS 2U
+#define PRIM_TEST_SET_CONFIG 3U
+#define PRIM_TEST_GET_CONFIG 4U
+
+#define PRIM_TEST_NONE 0U
+#define PRIM_TEST_SMOOTH_TURN 1U
+
+#define PRIM_TEST_SMOOTH_LEFT 0U
+#define PRIM_TEST_SMOOTH_RIGHT 1U
+
+#define PRIM_TEST_RESP_STATUS 0x80U
+#define PRIM_TEST_RESP_CONFIG 0x81U
+
+#define UNERBUS_PRIMITIVE_TEST_STATUS_SIZE 26U
+#define UNERBUS_PRIMITIVE_TEST_SMOOTH_CONFIG_SIZE 16U
 
 /* USB CDC Buffer Sizes */
 #define USB_CDC_RX_BUFFER_SIZE 128

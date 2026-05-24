@@ -116,6 +116,38 @@ typedef struct
 
 typedef enum
 {
+    PRIM_TEST_STATE_IDLE = 0U,
+    PRIM_TEST_STATE_RUNNING = 1U,
+    PRIM_TEST_STATE_REJECTED = 2U,
+    PRIM_TEST_STATE_ERROR = 3U
+} PrimitiveTestStateTypeDef;
+
+typedef enum
+{
+    PRIM_TEST_RESULT_OK = 0U,
+    PRIM_TEST_RESULT_BUSY = 1U,
+    PRIM_TEST_RESULT_UNSUPPORTED = 2U,
+    PRIM_TEST_RESULT_INVALID = 3U,
+    PRIM_TEST_RESULT_COMPUTE_FAILED = 4U
+} PrimitiveTestResultTypeDef;
+
+typedef struct
+{
+    bool active;
+    uint8_t test_type;
+    uint8_t variant;
+    uint8_t state;
+    uint8_t result;
+    uint32_t elapsed_ms;
+    int16_t last_left_pwm;
+    int16_t last_right_pwm;
+    int32_t last_yaw_deg_x10;
+    int32_t last_yaw_rate_dps_x10;
+    int32_t target_dps_x10;
+} PrimitiveTestContextTypeDef;
+
+typedef enum
+{
     NAV_DBG_TRANSITION_NONE = 0,
     NAV_DBG_TRANSITION_START_FIND_CELLS = 1,
     NAV_DBG_TRANSITION_STOP_TO_MENU = 2,
@@ -218,6 +250,7 @@ uint16_t adc_rear_floor = 0;
 uint16_t adc_front_floor = 0;
 uint8_t wall_fade_ticks = WALL_FADE_TICKS_DEFAULT;
 static SensorSnapshotTypeDef sensor_snapshot;
+static PrimitiveTestContextTypeDef primitive_test;
 
 static volatile int32_t current_yaw_fixed = 0; // Yaw angle in Q16.16 fixed-point (degrees)
 static volatile uint16_t gyro_sensitivity_x10 = GYRO_SENSITIVITY_X10_500DPS;
@@ -321,6 +354,13 @@ static void Build_AppNavInput_From_SensorSnapshot(uint32_t dt_ms, AppNavInput *i
 static void Run_Portable_Nav_Tick(uint32_t dt_ms);
 static uint8_t Build_DetectionFlags_From_AppNavDebug(const AppNavDebug *debug);
 static void Apply_Portable_Nav_Perception_To_Snapshot(void);
+static void PrimitiveTest_StartSmooth(uint8_t variant);
+static void PrimitiveTest_Stop(void);
+static void PrimitiveTest_Tick(uint32_t dt_ms);
+static void PrimitiveTest_WriteStatus(uint8_t *buffer);
+static void PrimitiveTest_WriteSmoothConfig(uint8_t *buffer);
+static void PrimitiveTest_SetSmoothConfigFromPayload(struct UNERBUSHandle *aBus);
+static uint8_t PrimitiveTest_HandleCommand(struct UNERBUSHandle *aBus);
 
 //==============================================================================
 // IMPLEMENTACIÓN DE WRAPPERS DE CALLBACKS HAL
@@ -1112,6 +1152,7 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
         {
             // Transición de RUNNING a MENU
             app_state = APP_STATE_MENU;
+            PrimitiveTest_Stop();
             Set_Motor_Speeds(0, 0); // Detener motores por seguridad
             Nav_Debug_ClearYawTarget();
             Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_STOP_TO_MENU);
@@ -1304,6 +1345,15 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
         Write_Nav_Debug_Status_To_Buffer(nav_debug_buffer);
         UNERBUS_Write(aBus, nav_debug_buffer, UNERBUS_NAV_DEBUG_STATUS_SIZE);
         length = UNERBUS_CMD_ID_SIZE + UNERBUS_NAV_DEBUG_STATUS_SIZE;
+        break;
+    }
+    case CMD_PRIMITIVE_TEST:
+    {
+        uint8_t primitive_response_size = PrimitiveTest_HandleCommand(aBus);
+        if (primitive_response_size != 0U)
+        {
+            length = UNERBUS_CMD_ID_SIZE + primitive_response_size;
+        }
         break;
     }
     default:
@@ -1653,6 +1703,7 @@ static void ManageButtonEvents(void)
             if (button_event == EVENT_LONG_PRESS_RELEASED)
             {
                 app_state = APP_STATE_MENU;
+                PrimitiveTest_Stop();
                 Nav_Debug_ClearYawTarget();
                 Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_STOP_TO_MENU);
                 Set_Robot_State(STATE_IDLE);
@@ -1873,6 +1924,321 @@ static void Apply_Portable_Nav_Perception_To_Snapshot(void)
     Sync_Legacy_Perception_From_Snapshot();
 }
 
+static void PrimitiveTest_WriteU16(uint8_t *buffer, uint8_t *idx, uint16_t value)
+{
+    buffer[(*idx)++] = (uint8_t)(value & 0xFFU);
+    buffer[(*idx)++] = (uint8_t)((value >> 8) & 0xFFU);
+}
+
+static void PrimitiveTest_WriteI16(uint8_t *buffer, uint8_t *idx, int16_t value)
+{
+    PrimitiveTest_WriteU16(buffer, idx, (uint16_t)value);
+}
+
+static void PrimitiveTest_WriteU32(uint8_t *buffer, uint8_t *idx, uint32_t value)
+{
+    buffer[(*idx)++] = (uint8_t)(value & 0xFFU);
+    buffer[(*idx)++] = (uint8_t)((value >> 8) & 0xFFU);
+    buffer[(*idx)++] = (uint8_t)((value >> 16) & 0xFFU);
+    buffer[(*idx)++] = (uint8_t)((value >> 24) & 0xFFU);
+}
+
+static void PrimitiveTest_WriteI32(uint8_t *buffer, uint8_t *idx, int32_t value)
+{
+    PrimitiveTest_WriteU32(buffer, idx, (uint32_t)value);
+}
+
+static int32_t PrimitiveTest_GetYawDegX10(void)
+{
+    return (int32_t)(((int64_t)current_yaw_fixed * 10) >> FIXED_POINT_SHIFT);
+}
+
+static int32_t PrimitiveTest_GetSmoothTargetDpsX10(uint8_t variant)
+{
+    int32_t target_dps_x10 = (int32_t)turn_target_dps * 10;
+
+    if (variant == PRIM_TEST_SMOOTH_RIGHT)
+    {
+        target_dps_x10 = -target_dps_x10;
+    }
+
+    return target_dps_x10;
+}
+
+static void PrimitiveTest_StartSmooth(uint8_t variant)
+{
+    AppNavSmoothTurnDirection direction;
+
+    if (primitive_test.active)
+    {
+        primitive_test.result = PRIM_TEST_RESULT_BUSY;
+        primitive_test.state = PRIM_TEST_STATE_RUNNING;
+        return;
+    }
+
+    if ((variant != PRIM_TEST_SMOOTH_LEFT) &&
+        (variant != PRIM_TEST_SMOOTH_RIGHT))
+    {
+        primitive_test.active = false;
+        primitive_test.test_type = PRIM_TEST_NONE;
+        primitive_test.variant = variant;
+        primitive_test.state = PRIM_TEST_STATE_REJECTED;
+        primitive_test.result = PRIM_TEST_RESULT_INVALID;
+        return;
+    }
+
+    direction = (variant == PRIM_TEST_SMOOTH_LEFT) ? APP_NAV_SMOOTH_TURN_LEFT : APP_NAV_SMOOTH_TURN_RIGHT;
+
+    if (!App_Nav_StartSmoothTurn(direction))
+    {
+        primitive_test.active = false;
+        primitive_test.test_type = PRIM_TEST_NONE;
+        primitive_test.variant = variant;
+        primitive_test.state = PRIM_TEST_STATE_REJECTED;
+        primitive_test.result = PRIM_TEST_RESULT_INVALID;
+        return;
+    }
+
+    primitive_test.active = true;
+    primitive_test.test_type = PRIM_TEST_SMOOTH_TURN;
+    primitive_test.variant = variant;
+    primitive_test.state = PRIM_TEST_STATE_RUNNING;
+    primitive_test.result = PRIM_TEST_RESULT_OK;
+    primitive_test.elapsed_ms = 0U;
+    primitive_test.last_left_pwm = 0;
+    primitive_test.last_right_pwm = 0;
+    primitive_test.last_yaw_deg_x10 = PrimitiveTest_GetYawDegX10();
+    primitive_test.last_yaw_rate_dps_x10 = GyroRaw_To_DpsX10(sensor_snapshot.gz);
+    primitive_test.target_dps_x10 = PrimitiveTest_GetSmoothTargetDpsX10(variant);
+}
+
+static void PrimitiveTest_Stop(void)
+{
+    primitive_test.active = false;
+    primitive_test.test_type = PRIM_TEST_NONE;
+    primitive_test.variant = PRIM_TEST_SMOOTH_LEFT;
+    primitive_test.state = PRIM_TEST_STATE_IDLE;
+    primitive_test.result = PRIM_TEST_RESULT_OK;
+    primitive_test.elapsed_ms = 0U;
+    primitive_test.last_left_pwm = 0;
+    primitive_test.last_right_pwm = 0;
+    primitive_test.target_dps_x10 = 0;
+    Set_Motor_Speeds(0, 0);
+}
+
+static void PrimitiveTest_Tick(uint32_t dt_ms)
+{
+    AppNavInput input = {0};
+    AppNavOutput output = {0};
+
+    if (!primitive_test.active)
+    {
+        return;
+    }
+
+    if ((UINT32_MAX - primitive_test.elapsed_ms) >= dt_ms)
+    {
+        primitive_test.elapsed_ms += dt_ms;
+    }
+    else
+    {
+        primitive_test.elapsed_ms = UINT32_MAX;
+    }
+
+    Build_AppNavInput_From_SensorSnapshot(dt_ms, &input);
+
+    if ((primitive_test.test_type == PRIM_TEST_SMOOTH_TURN) &&
+        App_Nav_ComputeSmoothTurnPwm(&input, &output))
+    {
+        Set_Motor_Speeds(output.right_motor_pwm, output.left_motor_pwm);
+        primitive_test.last_left_pwm = output.left_motor_pwm;
+        primitive_test.last_right_pwm = output.right_motor_pwm;
+        primitive_test.last_yaw_deg_x10 = PrimitiveTest_GetYawDegX10();
+        primitive_test.last_yaw_rate_dps_x10 = GyroRaw_To_DpsX10(sensor_snapshot.gz);
+        primitive_test.target_dps_x10 = PrimitiveTest_GetSmoothTargetDpsX10(primitive_test.variant);
+        primitive_test.state = PRIM_TEST_STATE_RUNNING;
+        primitive_test.result = PRIM_TEST_RESULT_OK;
+    }
+    else
+    {
+        primitive_test.active = false;
+        primitive_test.state = PRIM_TEST_STATE_ERROR;
+        primitive_test.result = PRIM_TEST_RESULT_COMPUTE_FAILED;
+        primitive_test.last_left_pwm = 0;
+        primitive_test.last_right_pwm = 0;
+        Set_Motor_Speeds(0, 0);
+    }
+}
+
+static void PrimitiveTest_WriteStatus(uint8_t *buffer)
+{
+    uint8_t idx = 0U;
+
+    buffer[idx++] = PRIM_TEST_RESP_STATUS;
+    buffer[idx++] = primitive_test.test_type;
+    buffer[idx++] = primitive_test.variant;
+    buffer[idx++] = primitive_test.active ? 1U : 0U;
+    buffer[idx++] = primitive_test.state;
+    buffer[idx++] = primitive_test.result;
+    PrimitiveTest_WriteU32(buffer, &idx, primitive_test.elapsed_ms);
+    PrimitiveTest_WriteI32(buffer, &idx, primitive_test.last_yaw_deg_x10);
+    PrimitiveTest_WriteI32(buffer, &idx, primitive_test.last_yaw_rate_dps_x10);
+    PrimitiveTest_WriteI32(buffer, &idx, primitive_test.target_dps_x10);
+    PrimitiveTest_WriteI16(buffer, &idx, primitive_test.last_left_pwm);
+    PrimitiveTest_WriteI16(buffer, &idx, primitive_test.last_right_pwm);
+}
+
+static void PrimitiveTest_WriteSmoothConfig(uint8_t *buffer)
+{
+    uint8_t idx = 0U;
+
+    buffer[idx++] = PRIM_TEST_RESP_CONFIG;
+    buffer[idx++] = PRIM_TEST_SMOOTH_TURN;
+    PrimitiveTest_WriteU16(buffer, &idx, Fixed_To_Gain_Hundredths(pid_configs[PID_ROLE_SMOOTH_TURN].kp));
+    PrimitiveTest_WriteU16(buffer, &idx, Fixed_To_Gain_Hundredths(pid_configs[PID_ROLE_SMOOTH_TURN].ki));
+    PrimitiveTest_WriteU16(buffer, &idx, Fixed_To_Gain_Hundredths(pid_configs[PID_ROLE_SMOOTH_TURN].kd));
+    PrimitiveTest_WriteU16(buffer, &idx, turn_max_pwm);
+    PrimitiveTest_WriteU16(buffer, &idx, faster_motor_smooth_turn_speed);
+    PrimitiveTest_WriteU16(buffer, &idx, slower_motor_smooth_turn_speed);
+    PrimitiveTest_WriteU16(buffer, &idx, turn_target_dps);
+}
+
+static void PrimitiveTest_SetSmoothConfigFromPayload(struct UNERBUSHandle *aBus)
+{
+    uint16_t kp_x100 = UNERBUS_GetUInt16(aBus);
+    uint16_t ki_x100 = UNERBUS_GetUInt16(aBus);
+    uint16_t kd_x100 = UNERBUS_GetUInt16(aBus);
+    uint16_t output_limit_pwm = UNERBUS_GetUInt16(aBus);
+
+    Set_Pid_Gains_From_U16(PID_ROLE_SMOOTH_TURN, kp_x100, ki_x100, kd_x100);
+
+    turn_max_pwm = output_limit_pwm;
+    if (turn_max_pwm > pwm_max_value)
+    {
+        turn_max_pwm = pwm_max_value;
+    }
+
+    pid_configs[PID_ROLE_TURN].out_min = INT_TO_FIXED(-turn_max_pwm);
+    pid_configs[PID_ROLE_TURN].out_max = INT_TO_FIXED(turn_max_pwm);
+    pid_configs[PID_ROLE_SMOOTH_TURN].out_min = INT_TO_FIXED(-turn_max_pwm);
+    pid_configs[PID_ROLE_SMOOTH_TURN].out_max = INT_TO_FIXED(turn_max_pwm);
+
+    faster_motor_smooth_turn_speed = UNERBUS_GetUInt16(aBus);
+    slower_motor_smooth_turn_speed = UNERBUS_GetUInt16(aBus);
+    turn_target_dps = UNERBUS_GetUInt16(aBus);
+
+    if (faster_motor_smooth_turn_speed > (pwm_max_value - 1U))
+    {
+        faster_motor_smooth_turn_speed = (pwm_max_value - 1U);
+    }
+
+    if (slower_motor_smooth_turn_speed > (pwm_max_value - 1U))
+    {
+        slower_motor_smooth_turn_speed = (pwm_max_value - 1U);
+    }
+
+    Sync_AppNavConfig_From_LegacyRuntime();
+}
+
+static uint8_t PrimitiveTest_HandleCommand(struct UNERBUSHandle *aBus)
+{
+    uint8_t subcmd = UNERBUS_GetUInt8(aBus);
+    uint8_t test_type;
+
+    switch (subcmd)
+    {
+    case PRIM_TEST_STOP:
+    {
+        uint8_t status_buffer[UNERBUS_PRIMITIVE_TEST_STATUS_SIZE];
+        PrimitiveTest_Stop();
+        PrimitiveTest_WriteStatus(status_buffer);
+        UNERBUS_Write(aBus, status_buffer, UNERBUS_PRIMITIVE_TEST_STATUS_SIZE);
+        return UNERBUS_PRIMITIVE_TEST_STATUS_SIZE;
+    }
+    case PRIM_TEST_START:
+    {
+        uint8_t status_buffer[UNERBUS_PRIMITIVE_TEST_STATUS_SIZE];
+        test_type = UNERBUS_GetUInt8(aBus);
+        uint8_t variant = UNERBUS_GetUInt8(aBus);
+
+        if (test_type == PRIM_TEST_SMOOTH_TURN)
+        {
+            PrimitiveTest_StartSmooth(variant);
+        }
+        else
+        {
+            primitive_test.active = false;
+            primitive_test.test_type = test_type;
+            primitive_test.variant = variant;
+            primitive_test.state = PRIM_TEST_STATE_REJECTED;
+            primitive_test.result = PRIM_TEST_RESULT_UNSUPPORTED;
+        }
+
+        PrimitiveTest_WriteStatus(status_buffer);
+        UNERBUS_Write(aBus, status_buffer, UNERBUS_PRIMITIVE_TEST_STATUS_SIZE);
+        return UNERBUS_PRIMITIVE_TEST_STATUS_SIZE;
+    }
+    case PRIM_TEST_GET_STATUS:
+    {
+        uint8_t status_buffer[UNERBUS_PRIMITIVE_TEST_STATUS_SIZE];
+        PrimitiveTest_WriteStatus(status_buffer);
+        UNERBUS_Write(aBus, status_buffer, UNERBUS_PRIMITIVE_TEST_STATUS_SIZE);
+        return UNERBUS_PRIMITIVE_TEST_STATUS_SIZE;
+    }
+    case PRIM_TEST_SET_CONFIG:
+    {
+        uint8_t config_buffer[UNERBUS_PRIMITIVE_TEST_SMOOTH_CONFIG_SIZE];
+        test_type = UNERBUS_GetUInt8(aBus);
+
+        if (test_type == PRIM_TEST_SMOOTH_TURN)
+        {
+            PrimitiveTest_SetSmoothConfigFromPayload(aBus);
+            primitive_test.result = PRIM_TEST_RESULT_OK;
+            PrimitiveTest_WriteSmoothConfig(config_buffer);
+            UNERBUS_Write(aBus, config_buffer, UNERBUS_PRIMITIVE_TEST_SMOOTH_CONFIG_SIZE);
+            return UNERBUS_PRIMITIVE_TEST_SMOOTH_CONFIG_SIZE;
+        }
+
+        uint8_t status_buffer[UNERBUS_PRIMITIVE_TEST_STATUS_SIZE];
+        primitive_test.test_type = test_type;
+        primitive_test.state = PRIM_TEST_STATE_REJECTED;
+        primitive_test.result = PRIM_TEST_RESULT_UNSUPPORTED;
+        PrimitiveTest_WriteStatus(status_buffer);
+        UNERBUS_Write(aBus, status_buffer, UNERBUS_PRIMITIVE_TEST_STATUS_SIZE);
+        return UNERBUS_PRIMITIVE_TEST_STATUS_SIZE;
+    }
+    case PRIM_TEST_GET_CONFIG:
+    {
+        uint8_t config_buffer[UNERBUS_PRIMITIVE_TEST_SMOOTH_CONFIG_SIZE];
+        test_type = UNERBUS_GetUInt8(aBus);
+
+        if (test_type == PRIM_TEST_SMOOTH_TURN)
+        {
+            PrimitiveTest_WriteSmoothConfig(config_buffer);
+            UNERBUS_Write(aBus, config_buffer, UNERBUS_PRIMITIVE_TEST_SMOOTH_CONFIG_SIZE);
+            return UNERBUS_PRIMITIVE_TEST_SMOOTH_CONFIG_SIZE;
+        }
+
+        uint8_t status_buffer[UNERBUS_PRIMITIVE_TEST_STATUS_SIZE];
+        primitive_test.test_type = test_type;
+        primitive_test.state = PRIM_TEST_STATE_REJECTED;
+        primitive_test.result = PRIM_TEST_RESULT_UNSUPPORTED;
+        PrimitiveTest_WriteStatus(status_buffer);
+        UNERBUS_Write(aBus, status_buffer, UNERBUS_PRIMITIVE_TEST_STATUS_SIZE);
+        return UNERBUS_PRIMITIVE_TEST_STATUS_SIZE;
+    }
+    default:
+    {
+        uint8_t status_buffer[UNERBUS_PRIMITIVE_TEST_STATUS_SIZE];
+        primitive_test.state = PRIM_TEST_STATE_REJECTED;
+        primitive_test.result = PRIM_TEST_RESULT_INVALID;
+        PrimitiveTest_WriteStatus(status_buffer);
+        UNERBUS_Write(aBus, status_buffer, UNERBUS_PRIMITIVE_TEST_STATUS_SIZE);
+        return UNERBUS_PRIMITIVE_TEST_STATUS_SIZE;
+    }
+    }
+}
+
 static void Run_Control_Step(uint32_t dt_ms)
 {
     control_step_dt_ms = dt_ms;
@@ -1880,6 +2246,12 @@ static void Run_Control_Step(uint32_t dt_ms)
     Update_Navigation_Perception();
     Run_Portable_Nav_Tick(dt_ms);
     Apply_Portable_Nav_Perception_To_Snapshot();
+
+    if (primitive_test.active)
+    {
+        PrimitiveTest_Tick(dt_ms);
+        return;
+    }
 
     Modes_State_Machine();
 }

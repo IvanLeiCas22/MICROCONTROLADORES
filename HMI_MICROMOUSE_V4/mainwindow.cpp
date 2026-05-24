@@ -3,6 +3,7 @@
 #include <QBrush>
 #include <QDataStream>
 #include <QDebug>
+#include <QFormLayout>
 #include <QGraphicsLineItem>
 #include <QGraphicsRectItem>
 #include <QIntValidator>
@@ -22,6 +23,19 @@ constexpr quint8 SENSOR_DET_WALL_DIAG_RIGHT = 0x10;
 constexpr quint8 SENSOR_DET_FLOOR_FRONT = 0x20;
 constexpr quint8 SENSOR_DET_FLOOR_REAR = 0x40;
 
+constexpr quint8 PRIM_TEST_STOP = 0x00;
+constexpr quint8 PRIM_TEST_START = 0x01;
+constexpr quint8 PRIM_TEST_GET_STATUS = 0x02;
+constexpr quint8 PRIM_TEST_SET_CONFIG = 0x03;
+constexpr quint8 PRIM_TEST_GET_CONFIG = 0x04;
+constexpr quint8 PRIM_TEST_SMOOTH_TURN = 0x01;
+constexpr quint8 PRIM_TEST_SMOOTH_LEFT = 0x00;
+constexpr quint8 PRIM_TEST_SMOOTH_RIGHT = 0x01;
+constexpr quint8 PRIM_TEST_RESP_STATUS = 0x80;
+constexpr quint8 PRIM_TEST_RESP_CONFIG = 0x81;
+constexpr int PRIM_TEST_STATUS_SIZE = 26;
+constexpr int PRIM_TEST_CONFIG_SIZE = 16;
+
 void setDetectionLabel(QLabel *label, bool active) {
   label->setText(active ? " " : "");
   label->setStyleSheet(
@@ -34,7 +48,8 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), ui(new Ui::MainWindow),
       serialPort(new QSerialPort(this)), m_parser(new UnerbusParser(this)),
       udpSocket(nullptr), sensorUpdateTimer(new QTimer(this)),
-      pwmUpdateTimer(new QTimer(this)) // Inicializar el nuevo temporizador
+      pwmUpdateTimer(new QTimer(this)),
+      primitiveTestUpdateTimer_(new QTimer(this))
 {
   ui->setupUi(this);
 
@@ -50,8 +65,9 @@ MainWindow::MainWindow(QWidget *parent)
                                    2); // ID 2 para la página de Configuración
   navigationButtonGroup->addButton(ui->btnControl,
                                    3); // ID 3 para la página de control
+  navigationButtonGroup->addButton(ui->btnPruebas, 4);
   navigationButtonGroup->addButton(
-      ui->btnLabyrinth, 4); // ID 4 para la página de visual del laberinto
+      ui->btnLabyrinth, 5); // ID 5 para la página de visual del laberinto
   // Conectar la señal buttonClicked del grupo al slot
   // on_navigationButtonClicked
   connect(navigationButtonGroup, &QButtonGroup::buttonClicked, this,
@@ -72,6 +88,8 @@ MainWindow::MainWindow(QWidget *parent)
   connect(sensorUpdateTimer, &QTimer::timeout, this,
           &MainWindow::requestSensorData);
   connect(pwmUpdateTimer, &QTimer::timeout, this, &MainWindow::requestPwmData);
+  connect(primitiveTestUpdateTimer_, &QTimer::timeout, this,
+          &MainWindow::requestPrimitiveTestStatus);
 
   updateSerialPortList();
   updateUIState(false, false);                   // Estado inicial: desconectado
@@ -80,6 +98,7 @@ MainWindow::MainWindow(QWidget *parent)
   populateCMDComboBox();
   setupControlPage(); // Configurar la página de control
   setupConfigPage();
+  setupPrimitiveTestPage();
   setupActivitiesTab();
 
   QIntValidator *turnAngleValidator = new QIntValidator(-360, 360, this);
@@ -146,6 +165,11 @@ void MainWindow::on_navigationButtonClicked(QAbstractButton *button) {
 
   // Cambiar la página del stacked widget
   ui->stackedScreens->setCurrentIndex(pageIndex);
+
+  if (pageIndex == 4) {
+    requestPrimitiveTestConfig();
+    requestPrimitiveTestStatus();
+  }
 
   // El QButtonGroup ya se encarga de que solo un botón esté checked si
   // setExclusive(true) Por lo tanto, no necesitamos setChecked(true) aquí
@@ -471,6 +495,10 @@ void MainWindow::onPacketReceived(quint8 command, const QByteArray &payload) {
           }
       }
       break;
+  }
+  case Unerbus::CommandId::CMD_PRIMITIVE_TEST: {
+    updatePrimitiveTestResponse(payload);
+    break;
   }
   default:
     qDebug() << "Comando desconocido:" << Qt::hex << command;
@@ -2758,4 +2786,249 @@ void MainWindow::requestMazeColumn(quint8 col) {
     stream.setByteOrder(QDataStream::LittleEndian);
     stream << col;
     sendUnerbusCommand(Unerbus::CommandId::CMD_SYNC_MAZE_COLUMN, payload);
+}
+
+void MainWindow::setupPrimitiveTestPage()
+{
+    ui->comboPrimitiveTest->blockSignals(true);
+    ui->comboPrimitiveTest->clear();
+    ui->comboPrimitiveTest->addItem("Smooth turn left", PRIM_TEST_SMOOTH_LEFT);
+    ui->comboPrimitiveTest->addItem("Smooth turn right", PRIM_TEST_SMOOTH_RIGHT);
+    ui->comboPrimitiveTest->blockSignals(false);
+
+    ui->stackedPrimitiveConfig->setCurrentWidget(ui->pagePrimitiveConfigSmooth);
+    ui->stackedPrimitiveTelemetry->setCurrentWidget(ui->pagePrimitiveTelemetrySmooth);
+
+    QFormLayout *configLayout = qobject_cast<QFormLayout *>(ui->pagePrimitiveConfigSmooth->layout());
+    if (configLayout == nullptr) {
+        configLayout = new QFormLayout(ui->pagePrimitiveConfigSmooth);
+    }
+
+    auto createSpin = [](QWidget *parent, int minimum, int maximum, int value) {
+        QSpinBox *spin = new QSpinBox(parent);
+        spin->setRange(minimum, maximum);
+        spin->setValue(value);
+        return spin;
+    };
+
+    spinPrimSmoothKp = createSpin(ui->pagePrimitiveConfigSmooth, 0, 65535, 2000);
+    spinPrimSmoothKi = createSpin(ui->pagePrimitiveConfigSmooth, 0, 65535, 500);
+    spinPrimSmoothKd = createSpin(ui->pagePrimitiveConfigSmooth, 0, 65535, 200);
+    spinPrimSmoothOutputLimit = createSpin(ui->pagePrimitiveConfigSmooth, 0, 65535, 6500);
+    spinPrimSmoothFasterPwm = createSpin(ui->pagePrimitiveConfigSmooth, 0, 65535, 6000);
+    spinPrimSmoothSlowerPwm = createSpin(ui->pagePrimitiveConfigSmooth, 0, 65535, 2500);
+    spinPrimSmoothTargetDps = createSpin(ui->pagePrimitiveConfigSmooth, 0, 2000, 360);
+
+    configLayout->addRow("Kp x100", spinPrimSmoothKp);
+    configLayout->addRow("Ki x100", spinPrimSmoothKi);
+    configLayout->addRow("Kd x100", spinPrimSmoothKd);
+    configLayout->addRow("Output limit PWM", spinPrimSmoothOutputLimit);
+    configLayout->addRow("Faster PWM", spinPrimSmoothFasterPwm);
+    configLayout->addRow("Slower PWM", spinPrimSmoothSlowerPwm);
+    configLayout->addRow("Target dps", spinPrimSmoothTargetDps);
+
+    QFormLayout *telemetryLayout = qobject_cast<QFormLayout *>(ui->pagePrimitiveTelemetrySmooth->layout());
+    if (telemetryLayout == nullptr) {
+        telemetryLayout = new QFormLayout(ui->pagePrimitiveTelemetrySmooth);
+    }
+
+    auto createLabel = [](QWidget *parent) {
+        QLabel *label = new QLabel("-", parent);
+        label->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        return label;
+    };
+
+    lblPrimTestActive = createLabel(ui->pagePrimitiveTelemetrySmooth);
+    lblPrimTestState = createLabel(ui->pagePrimitiveTelemetrySmooth);
+    lblPrimTestElapsed = createLabel(ui->pagePrimitiveTelemetrySmooth);
+    lblPrimTestYaw = createLabel(ui->pagePrimitiveTelemetrySmooth);
+    lblPrimTestYawRate = createLabel(ui->pagePrimitiveTelemetrySmooth);
+    lblPrimTestTargetDps = createLabel(ui->pagePrimitiveTelemetrySmooth);
+    lblPrimTestLeftPwm = createLabel(ui->pagePrimitiveTelemetrySmooth);
+    lblPrimTestRightPwm = createLabel(ui->pagePrimitiveTelemetrySmooth);
+    lblPrimTestResult = createLabel(ui->pagePrimitiveTelemetrySmooth);
+
+    telemetryLayout->addRow("Active", lblPrimTestActive);
+    telemetryLayout->addRow("State", lblPrimTestState);
+    telemetryLayout->addRow("Elapsed ms", lblPrimTestElapsed);
+    telemetryLayout->addRow("Yaw deg", lblPrimTestYaw);
+    telemetryLayout->addRow("Yaw rate dps", lblPrimTestYawRate);
+    telemetryLayout->addRow("Target dps", lblPrimTestTargetDps);
+    telemetryLayout->addRow("Left PWM", lblPrimTestLeftPwm);
+    telemetryLayout->addRow("Right PWM", lblPrimTestRightPwm);
+    telemetryLayout->addRow("Result", lblPrimTestResult);
+}
+
+quint8 MainWindow::currentPrimitiveVariant() const
+{
+    return static_cast<quint8>(ui->comboPrimitiveTest->currentData().toUInt());
+}
+
+void MainWindow::sendPrimitiveSmoothConfig()
+{
+    QByteArray payload;
+    QDataStream stream(&payload, QIODevice::WriteOnly);
+    stream.setByteOrder(QDataStream::LittleEndian);
+
+    stream << PRIM_TEST_SET_CONFIG;
+    stream << PRIM_TEST_SMOOTH_TURN;
+    stream << static_cast<quint16>(spinPrimSmoothKp->value());
+    stream << static_cast<quint16>(spinPrimSmoothKi->value());
+    stream << static_cast<quint16>(spinPrimSmoothKd->value());
+    stream << static_cast<quint16>(spinPrimSmoothOutputLimit->value());
+    stream << static_cast<quint16>(spinPrimSmoothFasterPwm->value());
+    stream << static_cast<quint16>(spinPrimSmoothSlowerPwm->value());
+    stream << static_cast<quint16>(spinPrimSmoothTargetDps->value());
+
+    sendUnerbusCommand(Unerbus::CommandId::CMD_PRIMITIVE_TEST, payload);
+}
+
+void MainWindow::requestPrimitiveTestStatus()
+{
+    QByteArray payload;
+    QDataStream stream(&payload, QIODevice::WriteOnly);
+    stream.setByteOrder(QDataStream::LittleEndian);
+    stream << PRIM_TEST_GET_STATUS;
+    sendUnerbusCommand(Unerbus::CommandId::CMD_PRIMITIVE_TEST, payload);
+}
+
+void MainWindow::requestPrimitiveTestConfig()
+{
+    QByteArray payload;
+    QDataStream stream(&payload, QIODevice::WriteOnly);
+    stream.setByteOrder(QDataStream::LittleEndian);
+    stream << PRIM_TEST_GET_CONFIG;
+    stream << PRIM_TEST_SMOOTH_TURN;
+    sendUnerbusCommand(Unerbus::CommandId::CMD_PRIMITIVE_TEST, payload);
+}
+
+void MainWindow::updatePrimitiveTestResponse(const QByteArray &payload)
+{
+    if (payload.isEmpty()) {
+        return;
+    }
+
+    const quint8 responseType = static_cast<quint8>(payload.at(0));
+    if (responseType == PRIM_TEST_RESP_STATUS) {
+        updatePrimitiveTestStatus(payload);
+    } else if (responseType == PRIM_TEST_RESP_CONFIG) {
+        updatePrimitiveTestConfig(payload);
+    }
+}
+
+void MainWindow::updatePrimitiveTestStatus(const QByteArray &payload)
+{
+    if (payload.size() < PRIM_TEST_STATUS_SIZE) {
+        return;
+    }
+
+    QDataStream stream(payload);
+    stream.setByteOrder(QDataStream::LittleEndian);
+
+    quint8 responseType, testType, variant, active, state, result;
+    quint32 elapsedMs;
+    qint32 yawDegX10, yawRateDpsX10, targetDpsX10;
+    qint16 leftPwm, rightPwm;
+
+    stream >> responseType >> testType >> variant >> active >> state >> result;
+    stream >> elapsedMs >> yawDegX10 >> yawRateDpsX10 >> targetDpsX10;
+    stream >> leftPwm >> rightPwm;
+
+    Q_UNUSED(responseType);
+    Q_UNUSED(testType);
+    Q_UNUSED(variant);
+
+    lblPrimTestActive->setText(active ? "yes" : "no");
+    lblPrimTestState->setText(QString::number(state));
+    lblPrimTestResult->setText(QString::number(result));
+    lblPrimTestElapsed->setText(QString::number(elapsedMs));
+    lblPrimTestYaw->setText(QString::number(yawDegX10 / 10.0, 'f', 1));
+    lblPrimTestYawRate->setText(QString::number(yawRateDpsX10 / 10.0, 'f', 1));
+    lblPrimTestTargetDps->setText(QString::number(targetDpsX10 / 10.0, 'f', 1));
+    lblPrimTestLeftPwm->setText(QString::number(leftPwm));
+    lblPrimTestRightPwm->setText(QString::number(rightPwm));
+}
+
+void MainWindow::updatePrimitiveTestConfig(const QByteArray &payload)
+{
+    if (payload.size() < PRIM_TEST_CONFIG_SIZE) {
+        return;
+    }
+
+    QDataStream stream(payload);
+    stream.setByteOrder(QDataStream::LittleEndian);
+
+    quint8 responseType, testType;
+    quint16 kp, ki, kd, outputLimit, fasterPwm, slowerPwm, targetDps;
+
+    stream >> responseType >> testType;
+    stream >> kp >> ki >> kd >> outputLimit >> fasterPwm >> slowerPwm >> targetDps;
+
+    if ((responseType != PRIM_TEST_RESP_CONFIG) ||
+        (testType != PRIM_TEST_SMOOTH_TURN)) {
+        return;
+    }
+
+    spinPrimSmoothKp->setValue(kp);
+    spinPrimSmoothKi->setValue(ki);
+    spinPrimSmoothKd->setValue(kd);
+    spinPrimSmoothOutputLimit->setValue(outputLimit);
+    spinPrimSmoothFasterPwm->setValue(fasterPwm);
+    spinPrimSmoothSlowerPwm->setValue(slowerPwm);
+    spinPrimSmoothTargetDps->setValue(targetDps);
+}
+
+void MainWindow::on_btnPrimitiveStart_clicked()
+{
+    sendPrimitiveSmoothConfig();
+
+    QByteArray payload;
+    QDataStream stream(&payload, QIODevice::WriteOnly);
+    stream.setByteOrder(QDataStream::LittleEndian);
+    stream << PRIM_TEST_START;
+    stream << PRIM_TEST_SMOOTH_TURN;
+    stream << currentPrimitiveVariant();
+    sendUnerbusCommand(Unerbus::CommandId::CMD_PRIMITIVE_TEST, payload);
+}
+
+
+void MainWindow::on_btnPrimitiveStop_clicked()
+{
+    QByteArray payload;
+    QDataStream stream(&payload, QIODevice::WriteOnly);
+    stream.setByteOrder(QDataStream::LittleEndian);
+    stream << PRIM_TEST_STOP;
+    sendUnerbusCommand(Unerbus::CommandId::CMD_PRIMITIVE_TEST, payload);
+}
+
+
+void MainWindow::on_btnPrimitiveApplyConfig_clicked()
+{
+    sendPrimitiveSmoothConfig();
+}
+
+
+void MainWindow::on_btnPrimitiveUpdateStatus_clicked()
+{
+    requestPrimitiveTestStatus();
+}
+
+
+void MainWindow::on_chkPrimitiveAutoUpdate_toggled(bool checked)
+{
+    if (checked) {
+        primitiveTestUpdateTimer_->start(100);
+        requestPrimitiveTestStatus();
+    } else {
+        primitiveTestUpdateTimer_->stop();
+    }
+}
+
+
+void MainWindow::on_comboPrimitiveTest_currentIndexChanged(int index)
+{
+    Q_UNUSED(index);
+    ui->stackedPrimitiveConfig->setCurrentWidget(ui->pagePrimitiveConfigSmooth);
+    ui->stackedPrimitiveTelemetry->setCurrentWidget(ui->pagePrimitiveTelemetrySmooth);
+    requestPrimitiveTestConfig();
 }

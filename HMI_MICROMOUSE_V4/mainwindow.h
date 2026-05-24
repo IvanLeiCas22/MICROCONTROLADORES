@@ -6,7 +6,9 @@
 #include <QGraphicsLineItem>
 #include <QGraphicsRectItem>
 #include <QGraphicsScene>
+#include <QLabel>
 #include <QMainWindow>
+#include <QSpinBox>
 #include <QTimer>
 #include <QtNetwork/QUdpSocket>
 #include <QtSerialPort/QSerialPort>     // Incluir para QSerialPort
@@ -122,6 +124,18 @@ private slots:
 
   void on_btnSyncMaze_clicked();
 
+  void on_btnPrimitiveStart_clicked();
+
+  void on_btnPrimitiveStop_clicked();
+
+  void on_btnPrimitiveApplyConfig_clicked();
+
+  void on_btnPrimitiveUpdateStatus_clicked();
+
+  void on_chkPrimitiveAutoUpdate_toggled(bool checked);
+
+  void on_comboPrimitiveTest_currentIndexChanged(int index);
+
   private:
   Ui::MainWindow *ui;
   QButtonGroup *navigationButtonGroup; // Nuevo miembro para agrupar los botones
@@ -136,6 +150,25 @@ private slots:
 
   QTimer *sensorUpdateTimer; // Temporizador para actualizaciones automáticas
   QTimer *pwmUpdateTimer;    // Temporizador para actualizaciones de PWM
+  QTimer *primitiveTestUpdateTimer_;
+
+  QSpinBox *spinPrimSmoothKp = nullptr;
+  QSpinBox *spinPrimSmoothKi = nullptr;
+  QSpinBox *spinPrimSmoothKd = nullptr;
+  QSpinBox *spinPrimSmoothOutputLimit = nullptr;
+  QSpinBox *spinPrimSmoothFasterPwm = nullptr;
+  QSpinBox *spinPrimSmoothSlowerPwm = nullptr;
+  QSpinBox *spinPrimSmoothTargetDps = nullptr;
+
+  QLabel *lblPrimTestActive = nullptr;
+  QLabel *lblPrimTestState = nullptr;
+  QLabel *lblPrimTestElapsed = nullptr;
+  QLabel *lblPrimTestYaw = nullptr;
+  QLabel *lblPrimTestYawRate = nullptr;
+  QLabel *lblPrimTestTargetDps = nullptr;
+  QLabel *lblPrimTestLeftPwm = nullptr;
+  QLabel *lblPrimTestRightPwm = nullptr;
+  QLabel *lblPrimTestResult = nullptr;
 
   quint16 m_pwmPeriod = 1000; // Almacena el período máximo de PWM para escalar
                               // los valores de la UI.
@@ -231,6 +264,14 @@ private slots:
   void updateTurnSpeedPID(const QByteArray &payload);
   void updateTurnTargetDps(const QByteArray &payload);
   void updateDelayTicksUI(const QByteArray &payload);
+  void setupPrimitiveTestPage();
+  void requestPrimitiveTestStatus();
+  void requestPrimitiveTestConfig();
+  void sendPrimitiveSmoothConfig();
+  void updatePrimitiveTestResponse(const QByteArray &payload);
+  void updatePrimitiveTestStatus(const QByteArray &payload);
+  void updatePrimitiveTestConfig(const QByteArray &payload);
+  quint8 currentPrimitiveVariant() const;
 
 protected:
   // Filtro maestro de cualquier evento del ratón
