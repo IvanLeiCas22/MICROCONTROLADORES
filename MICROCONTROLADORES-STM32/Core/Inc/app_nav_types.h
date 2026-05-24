@@ -62,6 +62,12 @@ typedef enum
 
 typedef enum
 {
+    APP_NAV_SMOOTH_TURN_LEFT = 0,
+    APP_NAV_SMOOTH_TURN_RIGHT = 1
+} AppNavSmoothTurnDirection;
+
+typedef enum
+{
     APP_NAV_SMOOTH_FINISH_NONE = 0,
     APP_NAV_SMOOTH_FINISH_REAR_TAPE = 1,
     APP_NAV_SMOOTH_FINISH_YAW_TARGET = 2,

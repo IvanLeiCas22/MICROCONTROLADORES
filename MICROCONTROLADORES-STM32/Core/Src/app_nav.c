@@ -7,9 +7,11 @@ static AppNavConfig app_nav_config;
 static AppNavDebug app_nav_debug;
 static PID_Controller_t app_nav_advance_pid;
 static PID_Controller_t app_nav_smooth_turn_pid;
+static AppNavSmoothTurnDirection app_nav_smooth_turn_direction;
 static int32_t app_nav_straight_yaw_target_q16_deg;
 static uint8_t app_nav_straight_active;
 static uint8_t app_nav_wall_follow_active;
+static uint8_t app_nav_smooth_turn_active;
 static bool app_nav_enabled = false;
 
 /* Mirrors the legacy ADC channel order without depending on app_config.h. */
@@ -76,6 +78,18 @@ static void App_Nav_ApplySmoothTurnPidConfig(uint8_t reset_state)
     };
 
     PID_ApplyConfig(&app_nav_smooth_turn_pid, &cfg, (reset_state != 0U));
+}
+
+static void App_Nav_SetSmoothTurnSetpoint(AppNavSmoothTurnDirection direction)
+{
+    int32_t target_dps = (int32_t)app_nav_config.turn_target_dps;
+
+    if (direction == APP_NAV_SMOOTH_TURN_RIGHT)
+    {
+        target_dps = -target_dps;
+    }
+
+    PID_Set_Setpoint(&app_nav_smooth_turn_pid, target_dps);
 }
 
 static int32_t App_Nav_LimitCorrectionToMotorBases(int32_t correction,
@@ -226,6 +240,8 @@ void App_Nav_Init(const AppNavConfig *config)
     app_nav_enabled = false;
     app_nav_straight_active = 0U;
     app_nav_wall_follow_active = 0U;
+    app_nav_smooth_turn_active = 0U;
+    app_nav_smooth_turn_direction = APP_NAV_SMOOTH_TURN_LEFT;
     app_nav_straight_yaw_target_q16_deg = 0;
     App_Nav_ApplyAdvancePidConfig(1U);
     App_Nav_ApplySmoothTurnPidConfig(1U);
@@ -259,6 +275,8 @@ void App_Nav_Reset(void)
     app_nav_enabled = false;
     app_nav_straight_active = 0U;
     app_nav_wall_follow_active = 0U;
+    app_nav_smooth_turn_active = 0U;
+    app_nav_smooth_turn_direction = APP_NAV_SMOOTH_TURN_LEFT;
     app_nav_straight_yaw_target_q16_deg = 0;
     PID_Reset(&app_nav_advance_pid);
     PID_Reset(&app_nav_smooth_turn_pid);
@@ -280,6 +298,7 @@ void App_Nav_Stop(void)
     app_nav_enabled = false;
     app_nav_straight_active = 0U;
     app_nav_wall_follow_active = 0U;
+    app_nav_smooth_turn_active = 0U;
     app_nav_debug.mode = APP_NAV_MODE_IDLE;
     app_nav_debug.previous_state = app_nav_debug.state;
     app_nav_debug.state = APP_NAV_STATE_IDLE;
@@ -410,6 +429,7 @@ bool App_Nav_StartStraightDriveYawHold(int32_t yaw_target_q16_deg)
     app_nav_straight_yaw_target_q16_deg = yaw_target_q16_deg;
     app_nav_straight_active = 1U;
     app_nav_wall_follow_active = 0U;
+    app_nav_smooth_turn_active = 0U;
 
     PID_Reset(&app_nav_advance_pid);
     PID_Set_Setpoint(&app_nav_advance_pid, FIXED_TO_INT(yaw_target_q16_deg));
@@ -468,6 +488,7 @@ bool App_Nav_StartWallFollowAdvance(void)
 {
     app_nav_straight_active = 0U;
     app_nav_wall_follow_active = 1U;
+    app_nav_smooth_turn_active = 0U;
     app_nav_straight_yaw_target_q16_deg = 0;
 
     PID_Reset(&app_nav_advance_pid);
@@ -475,6 +496,86 @@ bool App_Nav_StartWallFollowAdvance(void)
 
     app_nav_debug.pwm_right_cmd = 0;
     app_nav_debug.pwm_left_cmd = 0;
+
+    return true;
+}
+
+bool App_Nav_StartSmoothTurn(AppNavSmoothTurnDirection direction)
+{
+    if ((direction != APP_NAV_SMOOTH_TURN_LEFT) &&
+        (direction != APP_NAV_SMOOTH_TURN_RIGHT))
+    {
+        return false;
+    }
+
+    app_nav_smooth_turn_direction = direction;
+    app_nav_smooth_turn_active = 1U;
+    app_nav_straight_active = 0U;
+    app_nav_wall_follow_active = 0U;
+    app_nav_straight_yaw_target_q16_deg = 0;
+
+    PID_Reset(&app_nav_smooth_turn_pid);
+    App_Nav_SetSmoothTurnSetpoint(direction);
+
+    app_nav_debug.pwm_right_cmd = 0;
+    app_nav_debug.pwm_left_cmd = 0;
+
+    return true;
+}
+
+bool App_Nav_ComputeSmoothTurnPwm(const AppNavInput *input,
+                                  AppNavOutput *output)
+{
+    int16_t base_right;
+    int16_t base_left;
+    int32_t pid_output_fixed;
+    int16_t correction;
+    int16_t right_speed;
+    int16_t left_speed;
+
+    App_Nav_ClearOutput(output);
+    app_nav_debug.pwm_right_cmd = 0;
+    app_nav_debug.pwm_left_cmd = 0;
+
+    if ((input == NULL) || (output == NULL))
+    {
+        return false;
+    }
+
+    if (app_nav_smooth_turn_active == 0U)
+    {
+        return false;
+    }
+
+    if (app_nav_smooth_turn_direction == APP_NAV_SMOOTH_TURN_LEFT)
+    {
+        base_right = (int16_t)app_nav_config.faster_motor_smooth_turn_speed;
+        base_left = (int16_t)app_nav_config.slower_motor_smooth_turn_speed;
+    }
+    else if (app_nav_smooth_turn_direction == APP_NAV_SMOOTH_TURN_RIGHT)
+    {
+        base_right = (int16_t)app_nav_config.slower_motor_smooth_turn_speed;
+        base_left = (int16_t)app_nav_config.faster_motor_smooth_turn_speed;
+    }
+    else
+    {
+        return false;
+    }
+
+    App_Nav_SetSmoothTurnSetpoint(app_nav_smooth_turn_direction);
+    pid_output_fixed = PID_Update(&app_nav_smooth_turn_pid,
+                                  input->yaw_rate_dps,
+                                  input->dt_ms);
+    correction = (int16_t)FIXED_TO_INT(pid_output_fixed);
+
+    right_speed = base_right + correction;
+    left_speed = base_left - correction;
+
+    output->right_motor_pwm = right_speed;
+    output->left_motor_pwm = left_speed;
+
+    app_nav_debug.pwm_right_cmd = output->right_motor_pwm;
+    app_nav_debug.pwm_left_cmd = output->left_motor_pwm;
 
     return true;
 }

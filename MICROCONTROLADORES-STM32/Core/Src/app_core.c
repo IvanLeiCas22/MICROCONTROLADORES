@@ -2566,6 +2566,14 @@ static void Set_Robot_State(RobotStateTypeDef new_state)
         {
             (void)App_Nav_StartWallFollowAdvance();
         }
+        else if (new_state == STATE_SMOOTH_TURN_LEFT)
+        {
+            (void)App_Nav_StartSmoothTurn(APP_NAV_SMOOTH_TURN_LEFT);
+        }
+        else if (new_state == STATE_SMOOTH_TURN_RIGHT)
+        {
+            (void)App_Nav_StartSmoothTurn(APP_NAV_SMOOTH_TURN_RIGHT);
+        }
         else if (new_state == STATE_STRAIGHT_DRIVE_DESIDING)
         {
             (void)App_Nav_StartStraightDriveYawHold(current_yaw_fixed);
@@ -2657,7 +2665,6 @@ static void Sync_Legacy_Perception_From_Snapshot(void)
 static void Handle_Smooth_Turn(void)
 {
     bool wall_detected = false;
-    int16_t base_right = 0, base_left = 0;
     RobotStateTypeDef completed_turn_state = robot_state;
 
     adc_rear_floor = sensor_snapshot.adc_filtered[SENSOR_FLOOR_REAR_CH];
@@ -2680,15 +2687,11 @@ static void Handle_Smooth_Turn(void)
     if (completed_turn_state == STATE_SMOOTH_TURN_LEFT)
     {
         wall_detected = (dist_diagonal_left_mm < after_turn_wall_threshold_mm);
-        base_right = (int16_t)faster_motor_smooth_turn_speed; // exterior
-        base_left = (int16_t)slower_motor_smooth_turn_speed;  // interior
         heading_update = TURN_LEFT;
     }
     else if (completed_turn_state == STATE_SMOOTH_TURN_RIGHT)
     {
         wall_detected = (dist_diagonal_right_mm < after_turn_wall_threshold_mm);
-        base_right = (int16_t)slower_motor_smooth_turn_speed; // interior
-        base_left = (int16_t)faster_motor_smooth_turn_speed;  // exterior
         heading_update = TURN_RIGHT;
     }
 
@@ -2820,17 +2823,19 @@ static void Handle_Smooth_Turn(void)
         return;
     }
 
-    int16_t gz = sensor_snapshot.gz;
+    AppNavInput input = {0};
+    AppNavOutput output = {0};
 
-    int16_t angular_velocity_dps = GyroRaw_To_Dps(gz);
+    Build_AppNavInput_From_SensorSnapshot(control_step_dt_ms, &input);
 
-    int32_t pid_output_fixed = PID_Update(&turn_velocity_pid, angular_velocity_dps, control_step_dt_ms);
-    int16_t correction = (int16_t)FIXED_TO_INT(pid_output_fixed);
-
-    int16_t right_speed = base_right + correction;
-    int16_t left_speed = base_left - correction;
-
-    Set_Motor_Speeds(right_speed, left_speed);
+    if (App_Nav_ComputeSmoothTurnPwm(&input, &output))
+    {
+        Set_Motor_Speeds(output.right_motor_pwm, output.left_motor_pwm);
+    }
+    else
+    {
+        Set_Motor_Speeds(0, 0);
+    }
 }
 
 static void Update_Navigation_Perception(void)

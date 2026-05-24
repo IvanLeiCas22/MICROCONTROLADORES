@@ -30,5 +30,8 @@ bool App_Nav_ComputeWallFollowPwm(const AppNavInput *input,
                                   uint16_t right_base_pwm,
                                   uint16_t left_base_pwm,
                                   AppNavOutput *output);
+bool App_Nav_StartSmoothTurn(AppNavSmoothTurnDirection direction);
+bool App_Nav_ComputeSmoothTurnPwm(const AppNavInput *input,
+                                  AppNavOutput *output);
 
 #endif /* INC_APP_NAV_H_ */
