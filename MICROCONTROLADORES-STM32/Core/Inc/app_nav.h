@@ -42,5 +42,8 @@ bool App_Nav_StartPivotTurn(void);
 bool App_Nav_ComputePivotTurnPwm(const AppNavInput *input,
                                  int16_t target_dps,
                                  AppNavOutput *output);
+bool App_Nav_StartBraking(void);
+bool App_Nav_ComputeBrakingPwm(const AppNavInput *input,
+                               AppNavOutput *output);
 
 #endif /* INC_APP_NAV_H_ */

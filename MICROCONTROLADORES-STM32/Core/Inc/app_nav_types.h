@@ -158,6 +158,12 @@ typedef struct
     int32_t pivot_turn_pid_ki_q16;
     int32_t pivot_turn_pid_kd_q16;
     int32_t pivot_turn_pid_output_limit_pwm;
+
+    int32_t braking_pid_kp_q16;
+    int32_t braking_pid_ki_q16;
+    int32_t braking_pid_kd_q16;
+    int32_t braking_pid_output_limit_pwm;
+    int16_t braking_min_speed_pwm;
 } AppNavConfig;
 
 typedef struct

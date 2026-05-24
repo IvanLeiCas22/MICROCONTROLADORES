@@ -8,12 +8,14 @@ static AppNavDebug app_nav_debug;
 static PID_Controller_t app_nav_advance_pid;
 static PID_Controller_t app_nav_smooth_turn_pid;
 static PID_Controller_t app_nav_pivot_turn_pid;
+static PID_Controller_t app_nav_braking_pid;
 static AppNavSmoothTurnDirection app_nav_smooth_turn_direction;
 static int32_t app_nav_straight_yaw_target_q16_deg;
 static uint8_t app_nav_straight_active;
 static uint8_t app_nav_wall_follow_active;
 static uint8_t app_nav_smooth_turn_active;
 static uint8_t app_nav_pivot_turn_active;
+static uint8_t app_nav_braking_active;
 static bool app_nav_enabled = false;
 
 /* Mirrors the legacy ADC channel order without depending on app_config.h. */
@@ -100,6 +102,26 @@ static void App_Nav_ApplyPivotTurnPidConfig(uint8_t reset_state)
     };
 
     PID_ApplyConfig(&app_nav_pivot_turn_pid, &cfg, (reset_state != 0U));
+}
+
+static void App_Nav_ApplyBrakingPidConfig(uint8_t reset_state)
+{
+    int32_t output_limit_pwm = app_nav_config.braking_pid_output_limit_pwm;
+
+    if (output_limit_pwm < 0)
+    {
+        output_limit_pwm = 0;
+    }
+
+    PID_Config_t cfg = {
+        .kp = app_nav_config.braking_pid_kp_q16,
+        .ki = app_nav_config.braking_pid_ki_q16,
+        .kd = app_nav_config.braking_pid_kd_q16,
+        .out_min = -INT_TO_FIXED(output_limit_pwm),
+        .out_max = INT_TO_FIXED(output_limit_pwm),
+    };
+
+    PID_ApplyConfig(&app_nav_braking_pid, &cfg, (reset_state != 0U));
 }
 
 static void App_Nav_SetSmoothTurnSetpoint(AppNavSmoothTurnDirection direction)
@@ -264,11 +286,13 @@ void App_Nav_Init(const AppNavConfig *config)
     app_nav_wall_follow_active = 0U;
     app_nav_smooth_turn_active = 0U;
     app_nav_pivot_turn_active = 0U;
+    app_nav_braking_active = 0U;
     app_nav_smooth_turn_direction = APP_NAV_SMOOTH_TURN_LEFT;
     app_nav_straight_yaw_target_q16_deg = 0;
     App_Nav_ApplyAdvancePidConfig(1U);
     App_Nav_ApplySmoothTurnPidConfig(1U);
     App_Nav_ApplyPivotTurnPidConfig(1U);
+    App_Nav_ApplyBrakingPidConfig(1U);
     App_Nav_ResetDebug();
 }
 
@@ -283,6 +307,7 @@ void App_Nav_SetConfig(const AppNavConfig *config)
     App_Nav_ApplyAdvancePidConfig(0U);
     App_Nav_ApplySmoothTurnPidConfig(0U);
     App_Nav_ApplyPivotTurnPidConfig(0U);
+    App_Nav_ApplyBrakingPidConfig(0U);
 }
 
 void App_Nav_GetConfig(AppNavConfig *config_out)
@@ -302,11 +327,13 @@ void App_Nav_Reset(void)
     app_nav_wall_follow_active = 0U;
     app_nav_smooth_turn_active = 0U;
     app_nav_pivot_turn_active = 0U;
+    app_nav_braking_active = 0U;
     app_nav_smooth_turn_direction = APP_NAV_SMOOTH_TURN_LEFT;
     app_nav_straight_yaw_target_q16_deg = 0;
     PID_Reset(&app_nav_advance_pid);
     PID_Reset(&app_nav_smooth_turn_pid);
     PID_Reset(&app_nav_pivot_turn_pid);
+    PID_Reset(&app_nav_braking_pid);
     App_Nav_ResetDebug();
 }
 
@@ -327,6 +354,7 @@ void App_Nav_Stop(void)
     app_nav_wall_follow_active = 0U;
     app_nav_smooth_turn_active = 0U;
     app_nav_pivot_turn_active = 0U;
+    app_nav_braking_active = 0U;
     app_nav_debug.mode = APP_NAV_MODE_IDLE;
     app_nav_debug.previous_state = app_nav_debug.state;
     app_nav_debug.state = APP_NAV_STATE_IDLE;
@@ -459,6 +487,7 @@ bool App_Nav_StartStraightDriveYawHold(int32_t yaw_target_q16_deg)
     app_nav_wall_follow_active = 0U;
     app_nav_smooth_turn_active = 0U;
     app_nav_pivot_turn_active = 0U;
+    app_nav_braking_active = 0U;
 
     PID_Reset(&app_nav_advance_pid);
     PID_Set_Setpoint(&app_nav_advance_pid, FIXED_TO_INT(yaw_target_q16_deg));
@@ -578,6 +607,7 @@ bool App_Nav_StartWallFollowAdvance(void)
     app_nav_wall_follow_active = 1U;
     app_nav_smooth_turn_active = 0U;
     app_nav_pivot_turn_active = 0U;
+    app_nav_braking_active = 0U;
     app_nav_straight_yaw_target_q16_deg = 0;
 
     PID_Reset(&app_nav_advance_pid);
@@ -602,6 +632,7 @@ bool App_Nav_StartSmoothTurn(AppNavSmoothTurnDirection direction)
     app_nav_straight_active = 0U;
     app_nav_wall_follow_active = 0U;
     app_nav_pivot_turn_active = 0U;
+    app_nav_braking_active = 0U;
     app_nav_straight_yaw_target_q16_deg = 0;
 
     PID_Reset(&app_nav_smooth_turn_pid);
@@ -676,6 +707,7 @@ bool App_Nav_StartPivotTurn(void)
     app_nav_straight_active = 0U;
     app_nav_wall_follow_active = 0U;
     app_nav_smooth_turn_active = 0U;
+    app_nav_braking_active = 0U;
     app_nav_straight_yaw_target_q16_deg = 0;
 
     PID_Reset(&app_nav_pivot_turn_pid);
@@ -715,6 +747,77 @@ bool App_Nav_ComputePivotTurnPwm(const AppNavInput *input,
 
     output->right_motor_pwm = correction_pwm;
     output->left_motor_pwm = -correction_pwm;
+
+    app_nav_debug.pwm_right_cmd = output->right_motor_pwm;
+    app_nav_debug.pwm_left_cmd = output->left_motor_pwm;
+
+    return true;
+}
+
+bool App_Nav_StartBraking(void)
+{
+    app_nav_braking_active = 1U;
+    app_nav_straight_active = 0U;
+    app_nav_wall_follow_active = 0U;
+    app_nav_smooth_turn_active = 0U;
+    app_nav_pivot_turn_active = 0U;
+    app_nav_straight_yaw_target_q16_deg = 0;
+
+    PID_Reset(&app_nav_braking_pid);
+    PID_Set_Setpoint(&app_nav_braking_pid,
+                     (int32_t)app_nav_config.wall_braking_target_mm);
+
+    app_nav_debug.pwm_right_cmd = 0;
+    app_nav_debug.pwm_left_cmd = 0;
+
+    return true;
+}
+
+bool App_Nav_ComputeBrakingPwm(const AppNavInput *input,
+                               AppNavOutput *output)
+{
+    uint16_t dist_front_avg_mm;
+    int32_t pid_output_fixed;
+    int16_t motor_speed;
+    int16_t min_speed = app_nav_config.braking_min_speed_pwm;
+
+    App_Nav_ClearOutput(output);
+    app_nav_debug.pwm_right_cmd = 0;
+    app_nav_debug.pwm_left_cmd = 0;
+
+    if ((input == NULL) || (output == NULL))
+    {
+        return false;
+    }
+
+    if (app_nav_braking_active == 0U)
+    {
+        return false;
+    }
+
+    dist_front_avg_mm = (uint16_t)(((uint32_t)input->dist_front_left_mm +
+                                    (uint32_t)input->dist_front_right_mm) /
+                                   2U);
+
+    PID_Set_Setpoint(&app_nav_braking_pid,
+                     (int32_t)app_nav_config.wall_braking_target_mm);
+    pid_output_fixed = PID_Update(&app_nav_braking_pid,
+                                  dist_front_avg_mm,
+                                  input->dt_ms);
+
+    motor_speed = (int16_t)(-FIXED_TO_INT(pid_output_fixed));
+
+    if ((motor_speed > 0) && (motor_speed < min_speed))
+    {
+        motor_speed = min_speed;
+    }
+    else if ((motor_speed < 0) && (motor_speed > -min_speed))
+    {
+        motor_speed = -min_speed;
+    }
+
+    output->right_motor_pwm = motor_speed;
+    output->left_motor_pwm = motor_speed;
 
     app_nav_debug.pwm_right_cmd = output->right_motor_pwm;
     app_nav_debug.pwm_left_cmd = output->left_motor_pwm;

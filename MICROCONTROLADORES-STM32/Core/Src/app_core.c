@@ -484,6 +484,12 @@ static AppNavConfig Build_AppNavConfig_From_LegacyRuntime(void)
     cfg.pivot_turn_pid_kd_q16 = pid_configs[PID_ROLE_TURN].kd;
     cfg.pivot_turn_pid_output_limit_pwm = turn_max_pwm;
 
+    cfg.braking_pid_kp_q16 = pid_configs[PID_ROLE_BRAKING].kp;
+    cfg.braking_pid_ki_q16 = pid_configs[PID_ROLE_BRAKING].ki;
+    cfg.braking_pid_kd_q16 = pid_configs[PID_ROLE_BRAKING].kd;
+    cfg.braking_pid_output_limit_pwm = braking_max_pwm_offset;
+    cfg.braking_min_speed_pwm = (int16_t)braking_min_speed;
+
     return cfg;
 }
 
@@ -1178,6 +1184,7 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
         kd_int = UNERBUS_GetUInt16(aBus);
         // Se usa 100 para ampliar el rango de Kp hasta ~655
         Set_Pid_Gains_From_U16(PID_ROLE_BRAKING, kp_int, ki_int, kd_int, false);
+        Sync_AppNavConfig_From_LegacyRuntime();
         break;
     case CMD_GET_BRAKING_PID_GAINS:
         uint8_t braking_pid_buffer[UNERBUS_BRAKING_PID_GAINS_SIZE];
@@ -1205,6 +1212,7 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
         pid_configs[PID_ROLE_BRAKING].out_min = INT_TO_FIXED(-braking_max_pwm_offset);
         pid_configs[PID_ROLE_BRAKING].out_max = INT_TO_FIXED(braking_max_pwm_offset);
         Apply_Pid_Config(PID_ROLE_BRAKING, false);
+        Sync_AppNavConfig_From_LegacyRuntime();
         break;
     case CMD_GET_BRAKING_MAX_SPEED:
         uint8_t braking_speed_buffer[UNERBUS_BRAKING_MAX_SPEED_SIZE];
@@ -1215,6 +1223,7 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
         break;
     case CMD_SET_BRAKING_MIN_SPEED:
         braking_min_speed = UNERBUS_GetUInt16(aBus);
+        Sync_AppNavConfig_From_LegacyRuntime();
         break;
     case CMD_GET_BRAKING_MIN_SPEED:
         uint8_t braking_min_speed_buffer[UNERBUS_BRAKING_MIN_SPEED_SIZE];
@@ -2533,22 +2542,19 @@ static void Handle_Braking(void)
         return;
     }
 
-    // 3. Calcular la salida del PID. El setpoint ya está configurado.
-    int32_t pid_output_fixed = PID_Update(&braking_pid, dist_front_avg_mm, control_step_dt_ms);
+    AppNavInput input = {0};
+    AppNavOutput output = {0};
 
-    // 4. Invertir la salida del PID para obtener la velocidad.
-    //    Si estamos lejos (dist > target), el PID da una salida negativa.
-    //    Necesitamos una velocidad POSITIVA para avanzar.
-    int16_t motor_speed = -(int16_t)FIXED_TO_INT(pid_output_fixed);
+    Build_AppNavInput_From_SensorSnapshot(control_step_dt_ms, &input);
 
-    // 5. Lógica de potencia mínima para vencer la inercia.
-    if (motor_speed > 0 && motor_speed < braking_min_speed)
-        motor_speed = braking_min_speed;
-    else if (motor_speed < 0 && motor_speed > -braking_min_speed)
-        motor_speed = -braking_min_speed;
-
-    // 6. Aplicar la MISMA velocidad a ambos motores para un frenado recto.
-    Set_Motor_Speeds(motor_speed, motor_speed);
+    if (App_Nav_ComputeBrakingPwm(&input, &output))
+    {
+        Set_Motor_Speeds(output.right_motor_pwm, output.left_motor_pwm);
+    }
+    else
+    {
+        Set_Motor_Speeds(0, 0);
+    }
 }
 
 /**
@@ -2579,6 +2585,10 @@ static void Set_Robot_State(RobotStateTypeDef new_state)
         else if (new_state == STATE_STRAIGHT_DRIVE_DESIDING)
         {
             (void)App_Nav_StartStraightDriveYawHold(current_yaw_fixed);
+        }
+        else if (new_state == STATE_BRAKING)
+        {
+            (void)App_Nav_StartBraking();
         }
         // SSD_UPDATE_REQUEST = true;
     }
