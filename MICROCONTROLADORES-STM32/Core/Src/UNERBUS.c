@@ -353,6 +353,45 @@ int16_t UNERBUS_GetInt16(_sUNERBUSHandle *aBus){
 }
 
 /**
+ * @brief Escribe un uint8_t en little-endian y avanza el indice.
+ */
+void UNERBUS_PutUInt8(uint8_t *buffer, uint16_t *index, uint8_t value){
+	buffer[(*index)++] = value;
+}
+
+/**
+ * @brief Escribe un uint16_t en little-endian y avanza el indice.
+ */
+void UNERBUS_PutUInt16(uint8_t *buffer, uint16_t *index, uint16_t value){
+	buffer[(*index)++] = (uint8_t)(value & 0xFFU);
+	buffer[(*index)++] = (uint8_t)((value >> 8) & 0xFFU);
+}
+
+/**
+ * @brief Escribe un int16_t en little-endian y avanza el indice.
+ */
+void UNERBUS_PutInt16(uint8_t *buffer, uint16_t *index, int16_t value){
+	UNERBUS_PutUInt16(buffer, index, (uint16_t)value);
+}
+
+/**
+ * @brief Escribe un uint32_t en little-endian y avanza el indice.
+ */
+void UNERBUS_PutUInt32(uint8_t *buffer, uint16_t *index, uint32_t value){
+	buffer[(*index)++] = (uint8_t)(value & 0xFFUL);
+	buffer[(*index)++] = (uint8_t)((value >> 8) & 0xFFUL);
+	buffer[(*index)++] = (uint8_t)((value >> 16) & 0xFFUL);
+	buffer[(*index)++] = (uint8_t)((value >> 24) & 0xFFUL);
+}
+
+/**
+ * @brief Escribe un int32_t en little-endian y avanza el indice.
+ */
+void UNERBUS_PutInt32(uint8_t *buffer, uint16_t *index, int32_t value){
+	UNERBUS_PutUInt32(buffer, index, (uint32_t)value);
+}
+
+/**
  * @brief Extrae un float del payload recibido.
  */
 float UNERBUS_GetFloat(_sUNERBUSHandle *aBus){

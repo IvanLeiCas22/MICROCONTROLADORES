@@ -1924,30 +1924,6 @@ static void Apply_Portable_Nav_Perception_To_Snapshot(void)
     Sync_Legacy_Perception_From_Snapshot();
 }
 
-static void PrimitiveTest_WriteU16(uint8_t *buffer, uint8_t *idx, uint16_t value)
-{
-    buffer[(*idx)++] = (uint8_t)(value & 0xFFU);
-    buffer[(*idx)++] = (uint8_t)((value >> 8) & 0xFFU);
-}
-
-static void PrimitiveTest_WriteI16(uint8_t *buffer, uint8_t *idx, int16_t value)
-{
-    PrimitiveTest_WriteU16(buffer, idx, (uint16_t)value);
-}
-
-static void PrimitiveTest_WriteU32(uint8_t *buffer, uint8_t *idx, uint32_t value)
-{
-    buffer[(*idx)++] = (uint8_t)(value & 0xFFU);
-    buffer[(*idx)++] = (uint8_t)((value >> 8) & 0xFFU);
-    buffer[(*idx)++] = (uint8_t)((value >> 16) & 0xFFU);
-    buffer[(*idx)++] = (uint8_t)((value >> 24) & 0xFFU);
-}
-
-static void PrimitiveTest_WriteI32(uint8_t *buffer, uint8_t *idx, int32_t value)
-{
-    PrimitiveTest_WriteU32(buffer, idx, (uint32_t)value);
-}
-
 static int32_t PrimitiveTest_GetYawDegX10(void)
 {
     return (int32_t)(((int64_t)current_yaw_fixed * 10) >> FIXED_POINT_SHIFT);
@@ -2072,35 +2048,35 @@ static void PrimitiveTest_Tick(uint32_t dt_ms)
 
 static void PrimitiveTest_WriteStatus(uint8_t *buffer)
 {
-    uint8_t idx = 0U;
+    uint16_t idx = 0U;
 
-    buffer[idx++] = PRIM_TEST_RESP_STATUS;
-    buffer[idx++] = primitive_test.test_type;
-    buffer[idx++] = primitive_test.variant;
-    buffer[idx++] = primitive_test.active ? 1U : 0U;
-    buffer[idx++] = primitive_test.state;
-    buffer[idx++] = primitive_test.result;
-    PrimitiveTest_WriteU32(buffer, &idx, primitive_test.elapsed_ms);
-    PrimitiveTest_WriteI32(buffer, &idx, primitive_test.last_yaw_deg_x10);
-    PrimitiveTest_WriteI32(buffer, &idx, primitive_test.last_yaw_rate_dps_x10);
-    PrimitiveTest_WriteI32(buffer, &idx, primitive_test.target_dps_x10);
-    PrimitiveTest_WriteI16(buffer, &idx, primitive_test.last_left_pwm);
-    PrimitiveTest_WriteI16(buffer, &idx, primitive_test.last_right_pwm);
+    UNERBUS_PutUInt8(buffer, &idx, PRIM_TEST_RESP_STATUS);
+    UNERBUS_PutUInt8(buffer, &idx, primitive_test.test_type);
+    UNERBUS_PutUInt8(buffer, &idx, primitive_test.variant);
+    UNERBUS_PutUInt8(buffer, &idx, primitive_test.active ? 1U : 0U);
+    UNERBUS_PutUInt8(buffer, &idx, primitive_test.state);
+    UNERBUS_PutUInt8(buffer, &idx, primitive_test.result);
+    UNERBUS_PutUInt32(buffer, &idx, primitive_test.elapsed_ms);
+    UNERBUS_PutInt32(buffer, &idx, primitive_test.last_yaw_deg_x10);
+    UNERBUS_PutInt32(buffer, &idx, primitive_test.last_yaw_rate_dps_x10);
+    UNERBUS_PutInt32(buffer, &idx, primitive_test.target_dps_x10);
+    UNERBUS_PutInt16(buffer, &idx, primitive_test.last_left_pwm);
+    UNERBUS_PutInt16(buffer, &idx, primitive_test.last_right_pwm);
 }
 
 static void PrimitiveTest_WriteSmoothConfig(uint8_t *buffer)
 {
-    uint8_t idx = 0U;
+    uint16_t idx = 0U;
 
-    buffer[idx++] = PRIM_TEST_RESP_CONFIG;
-    buffer[idx++] = PRIM_TEST_SMOOTH_TURN;
-    PrimitiveTest_WriteU16(buffer, &idx, Fixed_To_Gain_Hundredths(pid_configs[PID_ROLE_SMOOTH_TURN].kp));
-    PrimitiveTest_WriteU16(buffer, &idx, Fixed_To_Gain_Hundredths(pid_configs[PID_ROLE_SMOOTH_TURN].ki));
-    PrimitiveTest_WriteU16(buffer, &idx, Fixed_To_Gain_Hundredths(pid_configs[PID_ROLE_SMOOTH_TURN].kd));
-    PrimitiveTest_WriteU16(buffer, &idx, turn_max_pwm);
-    PrimitiveTest_WriteU16(buffer, &idx, faster_motor_smooth_turn_speed);
-    PrimitiveTest_WriteU16(buffer, &idx, slower_motor_smooth_turn_speed);
-    PrimitiveTest_WriteU16(buffer, &idx, turn_target_dps);
+    UNERBUS_PutUInt8(buffer, &idx, PRIM_TEST_RESP_CONFIG);
+    UNERBUS_PutUInt8(buffer, &idx, PRIM_TEST_SMOOTH_TURN);
+    UNERBUS_PutUInt16(buffer, &idx, Fixed_To_Gain_Hundredths(pid_configs[PID_ROLE_SMOOTH_TURN].kp));
+    UNERBUS_PutUInt16(buffer, &idx, Fixed_To_Gain_Hundredths(pid_configs[PID_ROLE_SMOOTH_TURN].ki));
+    UNERBUS_PutUInt16(buffer, &idx, Fixed_To_Gain_Hundredths(pid_configs[PID_ROLE_SMOOTH_TURN].kd));
+    UNERBUS_PutUInt16(buffer, &idx, turn_max_pwm);
+    UNERBUS_PutUInt16(buffer, &idx, faster_motor_smooth_turn_speed);
+    UNERBUS_PutUInt16(buffer, &idx, slower_motor_smooth_turn_speed);
+    UNERBUS_PutUInt16(buffer, &idx, turn_target_dps);
 }
 
 static void PrimitiveTest_SetSmoothConfigFromPayload(struct UNERBUSHandle *aBus)

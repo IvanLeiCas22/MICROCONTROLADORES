@@ -345,7 +345,7 @@ QPushButton:checked {
     <item>
      <widget class="QStackedWidget" name="stackedScreens">
       <property name="currentIndex">
-       <number>4</number>
+       <number>2</number>
       </property>
       <widget class="QWidget" name="pageHome">
        <layout class="QVBoxLayout" name="verticalLayout_2">
@@ -2020,7 +2020,7 @@ QPushButton:checked {
              <item row="2" column="3">
               <widget class="QLineEdit" name="editFasterMotorSmooth">
                <property name="text">
-                <string>6500</string>
+                <string>3600</string>
                </property>
               </widget>
              </item>
@@ -2083,7 +2083,7 @@ QPushButton:checked {
              <item row="3" column="3">
               <widget class="QLineEdit" name="editSlowerMotorSmooth">
                <property name="text">
-                <string>2500</string>
+                <string>3600</string>
                </property>
               </widget>
              </item>
@@ -2139,7 +2139,7 @@ QPushButton:checked {
              <item row="4" column="1">
               <widget class="QLineEdit" name="editKiSmoothTurn">
                <property name="text">
-                <string>40</string>
+                <string>300</string>
                </property>
               </widget>
              </item>

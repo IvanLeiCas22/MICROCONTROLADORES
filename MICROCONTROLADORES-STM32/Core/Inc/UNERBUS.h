@@ -151,6 +151,31 @@ uint16_t UNERBUS_GetUInt16(_sUNERBUSHandle *aBus);
 int16_t UNERBUS_GetInt16(_sUNERBUSHandle *aBus);
 
 /**
+ * @brief Escribe un uint8_t en little-endian y avanza el indice.
+ */
+void UNERBUS_PutUInt8(uint8_t *buffer, uint16_t *index, uint8_t value);
+
+/**
+ * @brief Escribe un uint16_t en little-endian y avanza el indice.
+ */
+void UNERBUS_PutUInt16(uint8_t *buffer, uint16_t *index, uint16_t value);
+
+/**
+ * @brief Escribe un int16_t en little-endian y avanza el indice.
+ */
+void UNERBUS_PutInt16(uint8_t *buffer, uint16_t *index, int16_t value);
+
+/**
+ * @brief Escribe un uint32_t en little-endian y avanza el indice.
+ */
+void UNERBUS_PutUInt32(uint8_t *buffer, uint16_t *index, uint32_t value);
+
+/**
+ * @brief Escribe un int32_t en little-endian y avanza el indice.
+ */
+void UNERBUS_PutInt32(uint8_t *buffer, uint16_t *index, int32_t value);
+
+/**
  * @brief Extrae un float del paquete recibido.
  */
 float UNERBUS_GetFloat(_sUNERBUSHandle *aBus);
