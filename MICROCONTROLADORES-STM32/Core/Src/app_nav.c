@@ -10,7 +10,12 @@ static PID_Controller_t app_nav_smooth_turn_pid;
 static PID_Controller_t app_nav_pivot_turn_pid;
 static PID_Controller_t app_nav_braking_pid;
 static AppNavSmoothTurnDirection app_nav_smooth_turn_direction;
+static AppNavPivotActionType app_nav_pivot_action_type;
+static AppNavPivotActionState app_nav_pivot_action_state;
 static int32_t app_nav_straight_yaw_target_q16_deg;
+static int16_t app_nav_pivot_target_yaw_degrees;
+static int16_t app_nav_pivot_last_target_dps;
+static uint32_t app_nav_pivot_elapsed_ms;
 static uint8_t app_nav_straight_active;
 static uint8_t app_nav_wall_follow_active;
 static uint8_t app_nav_smooth_turn_active;
@@ -43,6 +48,7 @@ typedef enum
 #define APP_NAV_OPTION_FRONT_MASK (1U << APP_NAV_DECISION_FRONT)
 #define APP_NAV_OPTION_RIGHT_MASK (1U << APP_NAV_DECISION_RIGHT)
 #define APP_NAV_OPTION_LEFT_MASK (1U << APP_NAV_DECISION_LEFT)
+#define APP_NAV_PIVOT_COMPLETION_DEAD_ZONE_DEG 1
 
 static void App_Nav_ApplyAdvancePidConfig(uint8_t reset_state)
 {
@@ -164,6 +170,54 @@ static void App_Nav_ClearOutput(AppNavOutput *output)
     }
 
     memset(output, 0, sizeof(*output));
+}
+
+static int32_t App_Nav_AbsInt32(int32_t value)
+{
+    return (value < 0) ? -value : value;
+}
+
+static void App_Nav_ClearPivotActionState(void)
+{
+    app_nav_pivot_action_type = APP_NAV_PIVOT_LEFT_90;
+    app_nav_pivot_action_state = APP_NAV_PIVOT_ACTION_IDLE;
+    app_nav_pivot_target_yaw_degrees = 0;
+    app_nav_pivot_last_target_dps = 0;
+    app_nav_pivot_elapsed_ms = 0U;
+}
+
+static bool App_Nav_GetPivotActionTargets(AppNavPivotActionType action,
+                                          int16_t *target_yaw_degrees,
+                                          int16_t *base_target_dps)
+{
+    int16_t target_dps = (int16_t)app_nav_config.pivot_turn_target_dps;
+
+    if ((target_yaw_degrees == NULL) || (base_target_dps == NULL))
+    {
+        return false;
+    }
+
+    switch (action)
+    {
+    case APP_NAV_PIVOT_LEFT_90:
+        *target_yaw_degrees = -90;
+        *base_target_dps = target_dps;
+        return true;
+    case APP_NAV_PIVOT_RIGHT_90:
+        *target_yaw_degrees = 90;
+        *base_target_dps = -target_dps;
+        return true;
+    case APP_NAV_PIVOT_180_LEFT:
+        *target_yaw_degrees = -180;
+        *base_target_dps = target_dps;
+        return true;
+    case APP_NAV_PIVOT_180_RIGHT:
+        *target_yaw_degrees = 180;
+        *base_target_dps = -target_dps;
+        return true;
+    default:
+        return false;
+    }
 }
 
 static uint8_t App_Nav_BoolToU8(bool value)
@@ -289,6 +343,7 @@ void App_Nav_Init(const AppNavConfig *config)
     app_nav_braking_active = 0U;
     app_nav_smooth_turn_direction = APP_NAV_SMOOTH_TURN_LEFT;
     app_nav_straight_yaw_target_q16_deg = 0;
+    App_Nav_ClearPivotActionState();
     App_Nav_ApplyAdvancePidConfig(1U);
     App_Nav_ApplySmoothTurnPidConfig(1U);
     App_Nav_ApplyPivotTurnPidConfig(1U);
@@ -330,6 +385,7 @@ void App_Nav_Reset(void)
     app_nav_braking_active = 0U;
     app_nav_smooth_turn_direction = APP_NAV_SMOOTH_TURN_LEFT;
     app_nav_straight_yaw_target_q16_deg = 0;
+    App_Nav_ClearPivotActionState();
     PID_Reset(&app_nav_advance_pid);
     PID_Reset(&app_nav_smooth_turn_pid);
     PID_Reset(&app_nav_pivot_turn_pid);
@@ -355,6 +411,7 @@ void App_Nav_Stop(void)
     app_nav_smooth_turn_active = 0U;
     app_nav_pivot_turn_active = 0U;
     app_nav_braking_active = 0U;
+    App_Nav_ClearPivotActionState();
     app_nav_debug.mode = APP_NAV_MODE_IDLE;
     app_nav_debug.previous_state = app_nav_debug.state;
     app_nav_debug.state = APP_NAV_STATE_IDLE;
@@ -488,6 +545,7 @@ bool App_Nav_StartStraightDriveYawHold(int32_t yaw_target_q16_deg)
     app_nav_smooth_turn_active = 0U;
     app_nav_pivot_turn_active = 0U;
     app_nav_braking_active = 0U;
+    App_Nav_ClearPivotActionState();
 
     PID_Reset(&app_nav_advance_pid);
     PID_Set_Setpoint(&app_nav_advance_pid, FIXED_TO_INT(yaw_target_q16_deg));
@@ -609,6 +667,7 @@ bool App_Nav_StartWallFollowAdvance(void)
     app_nav_pivot_turn_active = 0U;
     app_nav_braking_active = 0U;
     app_nav_straight_yaw_target_q16_deg = 0;
+    App_Nav_ClearPivotActionState();
 
     PID_Reset(&app_nav_advance_pid);
     PID_Set_Setpoint(&app_nav_advance_pid, 0);
@@ -634,6 +693,7 @@ bool App_Nav_StartSmoothTurn(AppNavSmoothTurnDirection direction)
     app_nav_pivot_turn_active = 0U;
     app_nav_braking_active = 0U;
     app_nav_straight_yaw_target_q16_deg = 0;
+    App_Nav_ClearPivotActionState();
 
     PID_Reset(&app_nav_smooth_turn_pid);
     App_Nav_SetSmoothTurnSetpoint(direction);
@@ -754,6 +814,137 @@ bool App_Nav_ComputePivotTurnPwm(const AppNavInput *input,
     return true;
 }
 
+void App_Nav_StopPivotAction(void)
+{
+    app_nav_pivot_turn_active = 0U;
+    App_Nav_ClearPivotActionState();
+    PID_Reset(&app_nav_pivot_turn_pid);
+
+    app_nav_debug.pwm_right_cmd = 0;
+    app_nav_debug.pwm_left_cmd = 0;
+}
+
+bool App_Nav_StartPivotAction(AppNavPivotActionType action)
+{
+    int16_t target_yaw_degrees;
+    int16_t base_target_dps;
+
+    if (!App_Nav_GetPivotActionTargets(action,
+                                       &target_yaw_degrees,
+                                       &base_target_dps))
+    {
+        app_nav_pivot_action_state = APP_NAV_PIVOT_ACTION_ERROR;
+        return false;
+    }
+
+    if (!App_Nav_StartPivotTurn())
+    {
+        app_nav_pivot_action_state = APP_NAV_PIVOT_ACTION_ERROR;
+        return false;
+    }
+
+    app_nav_pivot_action_type = action;
+    app_nav_pivot_action_state = APP_NAV_PIVOT_ACTION_RUNNING;
+    app_nav_pivot_target_yaw_degrees = target_yaw_degrees;
+    app_nav_pivot_last_target_dps = base_target_dps;
+    app_nav_pivot_elapsed_ms = 0U;
+
+    app_nav_debug.yaw_target_deg = target_yaw_degrees;
+    app_nav_debug.pwm_right_cmd = 0;
+    app_nav_debug.pwm_left_cmd = 0;
+
+    return true;
+}
+
+AppNavPivotActionState App_Nav_TickPivotAction(const AppNavInput *input,
+                                               AppNavOutput *output)
+{
+    int32_t current_yaw_degrees;
+    int32_t target_abs;
+    int32_t current_abs;
+    int16_t base_target_dps;
+    int16_t target_dps;
+
+    App_Nav_ClearOutput(output);
+    app_nav_debug.pwm_right_cmd = 0;
+    app_nav_debug.pwm_left_cmd = 0;
+
+    if ((input == NULL) || (output == NULL))
+    {
+        app_nav_pivot_action_state = APP_NAV_PIVOT_ACTION_ERROR;
+        return app_nav_pivot_action_state;
+    }
+
+    if (app_nav_pivot_action_state == APP_NAV_PIVOT_ACTION_IDLE)
+    {
+        return APP_NAV_PIVOT_ACTION_IDLE;
+    }
+
+    if ((app_nav_pivot_action_state == APP_NAV_PIVOT_ACTION_DONE) ||
+        (app_nav_pivot_action_state == APP_NAV_PIVOT_ACTION_TIMEOUT) ||
+        (app_nav_pivot_action_state == APP_NAV_PIVOT_ACTION_ERROR))
+    {
+        return app_nav_pivot_action_state;
+    }
+
+    if ((UINT32_MAX - app_nav_pivot_elapsed_ms) >= input->dt_ms)
+    {
+        app_nav_pivot_elapsed_ms += input->dt_ms;
+    }
+    else
+    {
+        app_nav_pivot_elapsed_ms = UINT32_MAX;
+    }
+
+    if (!App_Nav_GetPivotActionTargets(app_nav_pivot_action_type,
+                                       &app_nav_pivot_target_yaw_degrees,
+                                       &base_target_dps))
+    {
+        app_nav_pivot_turn_active = 0U;
+        app_nav_pivot_action_state = APP_NAV_PIVOT_ACTION_ERROR;
+        return app_nav_pivot_action_state;
+    }
+
+    current_yaw_degrees = FIXED_TO_INT(input->yaw_q16_deg);
+    target_abs = App_Nav_AbsInt32(app_nav_pivot_target_yaw_degrees);
+    current_abs = App_Nav_AbsInt32(current_yaw_degrees);
+
+    if (target_abs == 0)
+    {
+        app_nav_pivot_turn_active = 0U;
+        app_nav_pivot_action_state = APP_NAV_PIVOT_ACTION_ERROR;
+        return app_nav_pivot_action_state;
+    }
+
+    target_dps = (int16_t)(((int32_t)base_target_dps *
+                            (int32_t)(((((target_abs - current_abs) * (int16_t)100) /
+                                        target_abs) +
+                                       (int16_t)40)) /
+                           100));
+    app_nav_pivot_last_target_dps = target_dps;
+    app_nav_debug.yaw_target_deg = app_nav_pivot_target_yaw_degrees;
+
+    if (current_abs >= (target_abs - APP_NAV_PIVOT_COMPLETION_DEAD_ZONE_DEG))
+    {
+        app_nav_pivot_turn_active = 0U;
+        app_nav_pivot_action_state = APP_NAV_PIVOT_ACTION_DONE;
+        return app_nav_pivot_action_state;
+    }
+
+    if (!App_Nav_ComputePivotTurnPwm(input, target_dps, output))
+    {
+        app_nav_pivot_turn_active = 0U;
+        app_nav_pivot_action_state = APP_NAV_PIVOT_ACTION_ERROR;
+        App_Nav_ClearOutput(output);
+        app_nav_debug.pwm_right_cmd = 0;
+        app_nav_debug.pwm_left_cmd = 0;
+        return app_nav_pivot_action_state;
+    }
+
+    app_nav_pivot_action_state = APP_NAV_PIVOT_ACTION_RUNNING;
+    return app_nav_pivot_action_state;
+}
+
 bool App_Nav_StartBraking(void)
 {
     app_nav_braking_active = 1U;
@@ -762,6 +953,7 @@ bool App_Nav_StartBraking(void)
     app_nav_smooth_turn_active = 0U;
     app_nav_pivot_turn_active = 0U;
     app_nav_straight_yaw_target_q16_deg = 0;
+    App_Nav_ClearPivotActionState();
 
     PID_Reset(&app_nav_braking_pid);
     PID_Set_Setpoint(&app_nav_braking_pid,

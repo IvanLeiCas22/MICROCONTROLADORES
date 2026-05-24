@@ -2295,7 +2295,38 @@ void Turn_Start(int16_t angle_degrees)
         (robot_state == STATE_IDLE && menu_mode == MENU_MODE_MANUAL_CONTROL))
     {
         // Preparamos el giro portable y el ángulo acumulado.
-        (void)App_Nav_StartPivotTurn();
+        AppNavPivotActionType action;
+        bool has_portable_action = true;
+
+        if (angle_degrees == 90)
+        {
+            action = APP_NAV_PIVOT_RIGHT_90;
+        }
+        else if (angle_degrees == -90)
+        {
+            action = APP_NAV_PIVOT_LEFT_90;
+        }
+        else if (angle_degrees == 180)
+        {
+            action = APP_NAV_PIVOT_180_RIGHT;
+        }
+        else if (angle_degrees == -180)
+        {
+            action = APP_NAV_PIVOT_180_LEFT;
+        }
+        else
+        {
+            has_portable_action = false;
+        }
+
+        if (has_portable_action)
+        {
+            (void)App_Nav_StartPivotAction(action);
+        }
+        else
+        {
+            (void)App_Nav_StartPivotTurn();
+        }
         Reset_Yaw_Tracking(); // Reseteamos la medición de ángulo para un giro relativo.
 
         // Asignar el estado de giro correcto
@@ -2338,46 +2369,23 @@ static void Update_Robot_Heading(int8_t turn_direction)
  */
 static void Manage_Turn(void)
 {
-    int32_t current_yaw_degrees = FIXED_TO_INT(current_yaw_fixed);
-    int16_t target_yaw_degrees = 0;
-    int16_t target_dps = 0;
+    AppNavInput input = {0};
+    AppNavOutput output = {0};
+    AppNavPivotActionState pivot_state;
 
-    // 1. Determinar el ángulo objetivo (para la condición de parada) y la velocidad angular
-    //    objetivo que se entrega a app_nav, basándose en el estado de giro.
-    switch (robot_state)
+    Build_AppNavInput_From_SensorSnapshot(control_step_dt_ms, &input);
+    pivot_state = App_Nav_TickPivotAction(&input, &output);
+
+    if (pivot_state == APP_NAV_PIVOT_ACTION_RUNNING)
     {
-    case STATE_TURNING_LEFT:
-        target_yaw_degrees = -90;
-        target_dps = (int16_t)pivot_turn_target_dps; // Un 'gz' positivo es giro a la izquierda.
-        break;
-    case STATE_TURNING_RIGHT:
-        target_yaw_degrees = 90;
-        target_dps = -((int16_t)pivot_turn_target_dps); // Un 'gz' negativo es giro a la derecha.
-        break;
-    case STATE_TURN_AROUND_LEFT:
-        target_yaw_degrees = -180;
-        target_dps = (int16_t)pivot_turn_target_dps;
-        break;
-    case STATE_TURN_AROUND_RIGHT:
-        target_yaw_degrees = 180;
-        target_dps = -((int16_t)pivot_turn_target_dps);
-        break;
-    default: // Estado inesperado
-        Set_Motor_Speeds(0, 0);
+        Set_Motor_Speeds(output.right_motor_pwm, output.left_motor_pwm);
         return;
     }
 
-    Nav_Debug_SetYawTargetDeg(target_yaw_degrees);
+    Set_Motor_Speeds(0, 0);
 
-    target_dps = ((int32_t)target_dps * (int32_t)((((abs(target_yaw_degrees) - abs(current_yaw_degrees)) * (int16_t)100) / abs(target_yaw_degrees)) + (int16_t)40)) / 100;
-
-    // 2. Comprobar si el giro ha terminado (condición de parada basada en el ángulo total girado).
-    if (abs(current_yaw_degrees) >= (abs(target_yaw_degrees) - TURN_COMPLETION_DEAD_ZONE))
+    if (pivot_state == APP_NAV_PIVOT_ACTION_DONE)
     {
-        Set_Motor_Speeds(0, 0);
-
-        // El pivote se usa para giros de 180 grados: actualizamos heading y
-        // publicamos la pose para que la HMI refleje el giro sin esperar avance.
         Commit_Maze_State(TURN_AROUND, false, true);
 
         if (menu_mode == MENU_MODE_MANUAL_CONTROL)
@@ -2388,27 +2396,16 @@ static void Manage_Turn(void)
         }
         else
         {
-            // Después de un giro, volvemos a navegar.
             Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_PIVOT_DONE);
             Set_Robot_State(STATE_NAVIGATING);
             kick_start_active = true;
             motion_confirm_counter = 0;
         }
-        return;
     }
-
-    AppNavInput input = {0};
-    AppNavOutput output = {0};
-
-    Build_AppNavInput_From_SensorSnapshot(control_step_dt_ms, &input);
-
-    if (App_Nav_ComputePivotTurnPwm(&input, target_dps, &output))
+    else if ((pivot_state == APP_NAV_PIVOT_ACTION_TIMEOUT) ||
+             (pivot_state == APP_NAV_PIVOT_ACTION_ERROR))
     {
-        Set_Motor_Speeds(output.right_motor_pwm, output.left_motor_pwm);
-    }
-    else
-    {
-        Set_Motor_Speeds(0, 0);
+        App_Nav_StopPivotAction();
     }
 }
 
