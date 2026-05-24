@@ -474,6 +474,11 @@ static AppNavConfig Build_AppNavConfig_From_LegacyRuntime(void)
     cfg.advance_pid_kd_q16 = pid_configs[PID_ROLE_CENTERING].kd;
     cfg.advance_pid_output_limit_pwm = max_pwm_correction;
 
+    cfg.smooth_turn_pid_kp_q16 = pid_configs[PID_ROLE_SMOOTH_TURN].kp;
+    cfg.smooth_turn_pid_ki_q16 = pid_configs[PID_ROLE_SMOOTH_TURN].ki;
+    cfg.smooth_turn_pid_kd_q16 = pid_configs[PID_ROLE_SMOOTH_TURN].kd;
+    cfg.smooth_turn_pid_output_limit_pwm = turn_max_pwm;
+
     return cfg;
 }
 
@@ -1024,6 +1029,7 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
         pid_configs[PID_ROLE_SMOOTH_TURN].out_min = INT_TO_FIXED(-turn_max_pwm);
         pid_configs[PID_ROLE_SMOOTH_TURN].out_max = INT_TO_FIXED(turn_max_pwm);
         Apply_Pid_Config(PID_ROLE_SMOOTH_TURN, false);
+        Sync_AppNavConfig_From_LegacyRuntime();
         break;
     case CMD_GET_TURN_MAX_SPEED:
         uint8_t speed_buffer[UNERBUS_TURN_MAX_SPEED_SIZE];
@@ -1258,6 +1264,7 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
         vel_ki_int = UNERBUS_GetUInt16(aBus);
         vel_kd_int = UNERBUS_GetUInt16(aBus);
         Set_Pid_Gains_From_U16(PID_ROLE_SMOOTH_TURN, vel_kp_int, vel_ki_int, vel_kd_int, false);
+        Sync_AppNavConfig_From_LegacyRuntime();
         break;
     case CMD_GET_TURN_VELOCITY_PID_GAINS:
         uint8_t vel_pid_buffer[UNERBUS_TURN_VELOCITY_PID_GAINS_SIZE];
@@ -1854,6 +1861,7 @@ static void Build_AppNavInput_From_SensorSnapshot(uint32_t dt_ms, AppNavInput *i
     input->gz = sensor_snapshot.gz;
 
     input->yaw_q16_deg = sensor_snapshot.yaw_fixed;
+    input->yaw_rate_dps = GyroRaw_To_Dps(sensor_snapshot.gz);
 }
 
 static void Run_Portable_Nav_Tick(uint32_t dt_ms)

@@ -6,6 +6,7 @@
 static AppNavConfig app_nav_config;
 static AppNavDebug app_nav_debug;
 static PID_Controller_t app_nav_advance_pid;
+static PID_Controller_t app_nav_smooth_turn_pid;
 static int32_t app_nav_straight_yaw_target_q16_deg;
 static uint8_t app_nav_straight_active;
 static uint8_t app_nav_wall_follow_active;
@@ -55,6 +56,26 @@ static void App_Nav_ApplyAdvancePidConfig(uint8_t reset_state)
     };
 
     PID_ApplyConfig(&app_nav_advance_pid, &cfg, (reset_state != 0U));
+}
+
+static void App_Nav_ApplySmoothTurnPidConfig(uint8_t reset_state)
+{
+    int32_t output_limit_pwm = app_nav_config.smooth_turn_pid_output_limit_pwm;
+
+    if (output_limit_pwm < 0)
+    {
+        output_limit_pwm = 0;
+    }
+
+    PID_Config_t cfg = {
+        .kp = app_nav_config.smooth_turn_pid_kp_q16,
+        .ki = app_nav_config.smooth_turn_pid_ki_q16,
+        .kd = app_nav_config.smooth_turn_pid_kd_q16,
+        .out_min = -INT_TO_FIXED(output_limit_pwm),
+        .out_max = INT_TO_FIXED(output_limit_pwm),
+    };
+
+    PID_ApplyConfig(&app_nav_smooth_turn_pid, &cfg, (reset_state != 0U));
 }
 
 static int32_t App_Nav_LimitCorrectionToMotorBases(int32_t correction,
@@ -207,6 +228,7 @@ void App_Nav_Init(const AppNavConfig *config)
     app_nav_wall_follow_active = 0U;
     app_nav_straight_yaw_target_q16_deg = 0;
     App_Nav_ApplyAdvancePidConfig(1U);
+    App_Nav_ApplySmoothTurnPidConfig(1U);
     App_Nav_ResetDebug();
 }
 
@@ -219,6 +241,7 @@ void App_Nav_SetConfig(const AppNavConfig *config)
 
     app_nav_config = *config;
     App_Nav_ApplyAdvancePidConfig(0U);
+    App_Nav_ApplySmoothTurnPidConfig(0U);
 }
 
 void App_Nav_GetConfig(AppNavConfig *config_out)
@@ -238,6 +261,7 @@ void App_Nav_Reset(void)
     app_nav_wall_follow_active = 0U;
     app_nav_straight_yaw_target_q16_deg = 0;
     PID_Reset(&app_nav_advance_pid);
+    PID_Reset(&app_nav_smooth_turn_pid);
     App_Nav_ResetDebug();
 }
 

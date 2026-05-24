@@ -102,6 +102,7 @@ typedef struct
     int16_t gz;
 
     int32_t yaw_q16_deg;
+    int16_t yaw_rate_dps;
 } AppNavInput;
 
 typedef struct
@@ -141,6 +142,11 @@ typedef struct
     int32_t advance_pid_ki_q16;
     int32_t advance_pid_kd_q16;
     int32_t advance_pid_output_limit_pwm;
+
+    int32_t smooth_turn_pid_kp_q16;
+    int32_t smooth_turn_pid_ki_q16;
+    int32_t smooth_turn_pid_kd_q16;
+    int32_t smooth_turn_pid_output_limit_pwm;
 } AppNavConfig;
 
 typedef struct
