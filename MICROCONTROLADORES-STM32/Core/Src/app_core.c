@@ -83,11 +83,7 @@ static MenuModeTypeDef menu_mode = MENU_MODE_IDLE;
 static uint32_t temporary_heartbeat = 0;
 static uint8_t temporary_heartbeat_ticks = 0;
 
-// --- Variables de PID y Control del Robot ---
-PID_Controller_t centering_pid;
-PID_Controller_t turn_pid;
-PID_Controller_t turn_velocity_pid;
-PID_Controller_t braking_pid;
+// --- Configuraciones PID runtime sincronizadas con app_nav ---
 typedef enum
 {
     PID_ROLE_CENTERING = 0,
@@ -98,11 +94,6 @@ typedef enum
 } PID_Role_t;
 
 static PID_Config_t pid_configs[PID_ROLE_COUNT];
-static PID_Controller_t *const pid_instances[PID_ROLE_COUNT] = {
-    &centering_pid,
-    &turn_pid,
-    &turn_velocity_pid,
-    &braking_pid};
 
 typedef struct
 {
@@ -314,8 +305,7 @@ static void Modes_State_Machine(void);
 static void Update_Navigation_Perception(void);
 static void Commit_Maze_State(int8_t heading_update, bool update_cell, bool send_update);
 static void Init_Pid_Configs(void);
-static void Apply_Pid_Config(PID_Role_t role, bool reset_state);
-static void Set_Pid_Gains_From_U16(PID_Role_t role, uint16_t kp_x100, uint16_t ki_x100, uint16_t kd_x100, bool reset_state);
+static void Set_Pid_Gains_From_U16(PID_Role_t role, uint16_t kp_x100, uint16_t ki_x100, uint16_t kd_x100);
 static void Write_Pid_Gains_To_Buffer(PID_Role_t role, uint8_t *buffer);
 static void Write_Nav_Debug_Status_To_Buffer(uint8_t *buffer);
 static void Nav_Debug_SetTransitionReason(NavDebugTransitionReason reason);
@@ -570,17 +560,11 @@ static void Integrate_Yaw_From_Gyro(int16_t gz_calibrated)
     current_yaw_fixed -= yaw_delta_q16;
 }
 
-static void Apply_Pid_Config(PID_Role_t role, bool reset_state)
-{
-    PID_ApplyConfig(pid_instances[role], &pid_configs[role], reset_state);
-}
-
-static void Set_Pid_Gains_From_U16(PID_Role_t role, uint16_t kp_x100, uint16_t ki_x100, uint16_t kd_x100, bool reset_state)
+static void Set_Pid_Gains_From_U16(PID_Role_t role, uint16_t kp_x100, uint16_t ki_x100, uint16_t kd_x100)
 {
     pid_configs[role].kp = Gain_Hundredths_To_Fixed(kp_x100);
     pid_configs[role].ki = Gain_Hundredths_To_Fixed(ki_x100);
     pid_configs[role].kd = Gain_Hundredths_To_Fixed(kd_x100);
-    Apply_Pid_Config(role, reset_state);
 }
 
 static void Write_Pid_Gains_To_Buffer(PID_Role_t role, uint8_t *buffer)
@@ -946,7 +930,7 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
 
         // Convertir de entero x100 a punto fijo.
         // Se usa 100 para ampliar el rango de Kp hasta ~655
-        Set_Pid_Gains_From_U16(PID_ROLE_CENTERING, kp_int, ki_int, kd_int, false);
+        Set_Pid_Gains_From_U16(PID_ROLE_CENTERING, kp_int, ki_int, kd_int);
         Sync_AppNavConfig_From_LegacyRuntime();
         break;
     case CMD_GET_PID_GAINS: // Leer Kp, Ki, Kd
@@ -965,7 +949,6 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
         // Actualizar la configuración del PID con los nuevos valores
         pid_configs[PID_ROLE_CENTERING].out_min = INT_TO_FIXED(-max_pwm_correction);
         pid_configs[PID_ROLE_CENTERING].out_max = INT_TO_FIXED(max_pwm_correction);
-        Apply_Pid_Config(PID_ROLE_CENTERING, false);
         Sync_AppNavConfig_From_LegacyRuntime();
         break;
     case CMD_GET_MAX_PWM_CORRECTION: // Leer la corrección máxima del PWM
@@ -1017,7 +1000,7 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
         turn_kd_int = UNERBUS_GetUInt16(aBus);
 
         // Convertir de entero x100 a punto fijo.
-        Set_Pid_Gains_From_U16(PID_ROLE_TURN, turn_kp_int, turn_ki_int, turn_kd_int, false);
+        Set_Pid_Gains_From_U16(PID_ROLE_TURN, turn_kp_int, turn_ki_int, turn_kd_int);
         Sync_AppNavConfig_From_LegacyRuntime();
         break;
     case CMD_GET_TURN_PID_GAINS: // Leer Kp, Ki, Kd del PID de giro
@@ -1036,11 +1019,9 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
 
         pid_configs[PID_ROLE_TURN].out_min = INT_TO_FIXED(-turn_max_pwm);
         pid_configs[PID_ROLE_TURN].out_max = INT_TO_FIXED(turn_max_pwm);
-        Apply_Pid_Config(PID_ROLE_TURN, false);
 
         pid_configs[PID_ROLE_SMOOTH_TURN].out_min = INT_TO_FIXED(-turn_max_pwm);
         pid_configs[PID_ROLE_SMOOTH_TURN].out_max = INT_TO_FIXED(turn_max_pwm);
-        Apply_Pid_Config(PID_ROLE_SMOOTH_TURN, false);
         Sync_AppNavConfig_From_LegacyRuntime();
         break;
     case CMD_GET_TURN_MAX_SPEED:
@@ -1103,15 +1084,13 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
         {
             // Transición de MENU a RUNNING
             app_state = APP_STATE_RUNNING;
-            // Resetear PIDs y Yaw para un inicio limpio
+            // Resetear yaw para un inicio limpio
             if (menu_mode == MENU_MODE_FIND_CELLS)
             {
                 Start_FindCells_Legacy_Mode();
             }
             else
             {
-                PID_Reset(&centering_pid);
-                PID_Reset(&turn_pid);
                 Reset_Yaw_Tracking();
 
                 // Iniciar la máquina de estados del robot si el modo es activo.
@@ -1183,7 +1162,7 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
         ki_int = UNERBUS_GetUInt16(aBus);
         kd_int = UNERBUS_GetUInt16(aBus);
         // Se usa 100 para ampliar el rango de Kp hasta ~655
-        Set_Pid_Gains_From_U16(PID_ROLE_BRAKING, kp_int, ki_int, kd_int, false);
+        Set_Pid_Gains_From_U16(PID_ROLE_BRAKING, kp_int, ki_int, kd_int);
         Sync_AppNavConfig_From_LegacyRuntime();
         break;
     case CMD_GET_BRAKING_PID_GAINS:
@@ -1195,7 +1174,6 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
     case CMD_SET_BRAKING_PARAMS:
         wall_braking_target_mm = UNERBUS_GetUInt16(aBus);
         braking_accel_stop_threshold = UNERBUS_GetUInt16(aBus);
-        PID_Set_Setpoint(&braking_pid, wall_braking_target_mm);
         Sync_AppNavConfig_From_LegacyRuntime();
         break;
     case CMD_GET_BRAKING_PARAMS:
@@ -1211,7 +1189,6 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
         braking_max_pwm_offset = UNERBUS_GetUInt16(aBus);
         pid_configs[PID_ROLE_BRAKING].out_min = INT_TO_FIXED(-braking_max_pwm_offset);
         pid_configs[PID_ROLE_BRAKING].out_max = INT_TO_FIXED(braking_max_pwm_offset);
-        Apply_Pid_Config(PID_ROLE_BRAKING, false);
         Sync_AppNavConfig_From_LegacyRuntime();
         break;
     case CMD_GET_BRAKING_MAX_SPEED:
@@ -1278,7 +1255,7 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
         vel_kp_int = UNERBUS_GetUInt16(aBus);
         vel_ki_int = UNERBUS_GetUInt16(aBus);
         vel_kd_int = UNERBUS_GetUInt16(aBus);
-        Set_Pid_Gains_From_U16(PID_ROLE_SMOOTH_TURN, vel_kp_int, vel_ki_int, vel_kd_int, false);
+        Set_Pid_Gains_From_U16(PID_ROLE_SMOOTH_TURN, vel_kp_int, vel_ki_int, vel_kd_int);
         Sync_AppNavConfig_From_LegacyRuntime();
         break;
     case CMD_GET_TURN_VELOCITY_PID_GAINS:
@@ -1289,15 +1266,6 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
         break;
     case CMD_SET_TURN_TARGET_DPS:
         turn_target_dps = UNERBUS_GetUInt16(aBus);
-
-        if (robot_state == STATE_SMOOTH_TURN_LEFT)
-        {
-            PID_Set_Setpoint(&turn_velocity_pid, turn_target_dps);
-        }
-        else if (robot_state == STATE_SMOOTH_TURN_RIGHT)
-        {
-            PID_Set_Setpoint(&turn_velocity_pid, -turn_target_dps);
-        }
         Sync_AppNavConfig_From_LegacyRuntime();
         break;
     case CMD_GET_TURN_TARGET_DPS:
@@ -1664,18 +1632,13 @@ static void ManageButtonEvents(void)
                 }
                 else
                 {
-                    // Resetear PIDs y estados al iniciar un modo
-                    PID_Reset(&centering_pid);
-                    PID_Reset(&turn_pid);
-                    PID_Reset(&braking_pid);
+                    // Resetear yaw y estados al iniciar un modo
                     Reset_Yaw_Tracking();
                     Set_Robot_State(STATE_IDLE);
 
                     if (menu_mode == MENU_MODE_DRIVE_STRAIGHT)
                     {
                         Set_Robot_State(STATE_STRAIGHT_DRIVE);
-                        PID_Reset(&centering_pid);
-                        PID_Set_Setpoint(&centering_pid, FIXED_TO_INT(current_yaw_fixed));
                         (void)App_Nav_StartStraightDriveYawHold(current_yaw_fixed);
                     }
                 }
@@ -1797,24 +1760,10 @@ void App_Core_Init(void)
     wall_target_mm = WALL_FOLLOW_TARGET_MM;
     wall_braking_target_mm = WALL_BRAKING_TARGET_MM;
 
-    /* --- INICIALIZACIÓN DEL PID DE SEGUIMIENTO DE PARED --- */
+    /* --- INICIALIZACIÓN DE CONFIGURACIONES PID RUNTIME --- */
     Init_Pid_Configs();
-    Apply_Pid_Config(PID_ROLE_CENTERING, true);
-    PID_Set_Setpoint(&centering_pid, 0);                                                        // El setpoint se ajustará dinámicamente
 
-    /* --- INICIALIZACIÓN DEL PID DE FRENADO --- */
     braking_max_pwm_offset = BRAKING_MAX_SPEED_DEFAULT;
-    Apply_Pid_Config(PID_ROLE_BRAKING, true);
-    PID_Set_Setpoint(&braking_pid, wall_braking_target_mm);
-    // La salida es la velocidad, así que el límite es el PWM máximo.
-
-    /* --- INICIALIZACIÓN DEL PID DE GIRO --- */
-    Apply_Pid_Config(PID_ROLE_TURN, true);
-
-    /* --- NUEVO: INICIALIZACIÓN DEL PID DE VELOCIDAD DE GIRO --- */
-    Apply_Pid_Config(PID_ROLE_SMOOTH_TURN, true);
-    // La salida de este PID ES la potencia del motor, así que sus límites son los límites de PWM.
-    PID_Set_Setpoint(&turn_velocity_pid, turn_target_dps);
 
     Sync_AppNavConfig_From_LegacyRuntime();
 
@@ -1997,8 +1946,7 @@ void Turn_Start(int16_t angle_degrees)
     if ((robot_state == STATE_NAVIGATING || robot_state == STATE_DECIDING) ||
         (robot_state == STATE_IDLE && menu_mode == MENU_MODE_MANUAL_CONTROL))
     {
-        // Reseteamos el PID que usaremos para el control de velocidad y el ángulo acumulado.
-        PID_Reset(&turn_pid);
+        // Preparamos el giro portable y el ángulo acumulado.
         (void)App_Nav_StartPivotTurn();
         Reset_Yaw_Tracking(); // Reseteamos la medición de ángulo para un giro relativo.
 
@@ -2038,9 +1986,7 @@ static void Update_Robot_Heading(int8_t turn_direction)
 }
 
 /**
- * @brief Gestiona el estado de giro del robot usando un controlador PID de velocidad angular.
- *        Este método utiliza 'turn_pid' para alcanzar y mantener una velocidad angular objetivo
- *        durante los giros pivote.
+ * @brief Gestiona el estado de giro del robot y delega el PWM de pivote en app_nav.
  */
 static void Manage_Turn(void)
 {
@@ -2049,7 +1995,7 @@ static void Manage_Turn(void)
     int16_t target_dps = 0;
 
     // 1. Determinar el ángulo objetivo (para la condición de parada) y la velocidad angular
-    //    objetivo (para el setpoint del PID) basándose en el estado de giro.
+    //    objetivo que se entrega a app_nav, basándose en el estado de giro.
     switch (robot_state)
     {
     case STATE_TURNING_LEFT:
@@ -2097,8 +2043,6 @@ static void Manage_Turn(void)
             // Después de un giro, volvemos a navegar.
             Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_PIVOT_DONE);
             Set_Robot_State(STATE_NAVIGATING);
-            PID_Reset(&centering_pid);
-            PID_Reset(&braking_pid);
             kick_start_active = true;
             motion_confirm_counter = 0;
         }
@@ -2250,9 +2194,6 @@ static void Reset_Maze_State(void)
 
 static void Start_FindCells_Legacy_Mode(void)
 {
-    PID_Reset(&centering_pid);
-    PID_Reset(&turn_pid);
-    PID_Reset(&braking_pid);
     Reset_Yaw_Tracking();
 
     Reset_Maze_State();
@@ -2304,7 +2245,6 @@ static void Handle_Navigating(void)
     if (front_avg_mm < wall_threshold_mm_braking_start)
     {
         Set_Motor_Speeds(0, 0);
-        PID_Reset(&braking_pid);
         Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_FRONT_WALL_BRAKING);
         Set_Robot_State(STATE_BRAKING);
         return;
@@ -2319,8 +2259,6 @@ static void Handle_Navigating(void)
             wall_diagonal_faded = NO_WALL_FADED;
             Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_DIAGONALS_LOST_DECISION);
             Set_Robot_State(STATE_STRAIGHT_DRIVE_DESIDING);
-            PID_Reset(&centering_pid);
-            PID_Set_Setpoint(&centering_pid, FIXED_TO_INT(current_yaw_fixed));
             return;
         }
         else if (!left_diagonal_wall_detected)
@@ -2399,7 +2337,7 @@ static void Handle_Navigating(void)
 }
 
 /**
- * @brief Maneja el estado de avance recto usando el PID de yaw.
+ * @brief Maneja el estado de avance recto delegando el yaw-hold en app_nav.
  *        Se detiene si detecta un obstáculo frontal.
  */
 static void Handle_Straight_Drive(bool have_to_decide)
@@ -2441,7 +2379,6 @@ static void Handle_Straight_Drive(bool have_to_decide)
             {
                 Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_STRAIGHT_REAR_TAPE_NAVIGATING);
                 Set_Robot_State(STATE_NAVIGATING);
-                PID_Reset(&centering_pid);
                 kick_start_active = true;
                 motion_confirm_counter = 0;
             }
@@ -2489,8 +2426,6 @@ static void Handle_Deciding(void)
         Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_DECIDE_SMOOTH_LEFT);
         Set_Robot_State(STATE_SMOOTH_TURN_LEFT);
         Reset_Yaw_Tracking();
-        PID_Reset(&turn_velocity_pid);
-        PID_Set_Setpoint(&turn_velocity_pid, turn_target_dps);
     }
     else if (action == APP_NAV_ACTION_SMOOTH_RIGHT)
     {
@@ -2500,15 +2435,12 @@ static void Handle_Deciding(void)
         Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_DECIDE_SMOOTH_RIGHT);
         Set_Robot_State(STATE_SMOOTH_TURN_RIGHT);
         Reset_Yaw_Tracking();
-        PID_Reset(&turn_velocity_pid);
-        PID_Set_Setpoint(&turn_velocity_pid, -turn_target_dps);
     }
     else if (action == APP_NAV_ACTION_GO_FRONT_NAVIGATING)
     {
         Nav_Debug_ClearYawTarget();
         Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_DECIDE_FRONT_NAVIGATING);
         Set_Robot_State(STATE_NAVIGATING);
-        PID_Reset(&centering_pid);
         /*             kick_start_active = true;
                     motion_confirm_counter = 0; */
     }
@@ -2517,8 +2449,6 @@ static void Handle_Deciding(void)
         Nav_Debug_SetYawTargetDeg((int16_t)FIXED_TO_INT(current_yaw_fixed));
         Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_DECIDE_FRONT_STRAIGHT);
         Set_Robot_State(STATE_STRAIGHT_DRIVE);
-        PID_Reset(&centering_pid);
-        PID_Set_Setpoint(&centering_pid, FIXED_TO_INT(current_yaw_fixed));
         (void)App_Nav_StartStraightDriveYawHold(current_yaw_fixed);
     }
 }
@@ -2727,7 +2657,6 @@ static void Handle_Smooth_Turn(void)
             Set_Motor_Speeds(0, 0);
             Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_SMOOTH_DONE);
             Set_Robot_State(STATE_DECIDING);
-            PID_Reset(&centering_pid);
             kick_start_active = false;
             motion_confirm_counter = 0;
             return;
@@ -2742,7 +2671,6 @@ static void Handle_Smooth_Turn(void)
             Set_Motor_Speeds(0, 0);
             Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_SMOOTH_DONE);
             Set_Robot_State(STATE_IDLE);
-            PID_Reset(&centering_pid);
             return;
         }
 
@@ -2756,7 +2684,6 @@ static void Handle_Smooth_Turn(void)
             Set_Motor_Speeds(0, 0);
             Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_SMOOTH_DONE);
             Set_Robot_State(STATE_IDLE);
-            PID_Reset(&centering_pid);
             return;
         }
 
@@ -2800,7 +2727,6 @@ static void Handle_Smooth_Turn(void)
             Set_Motor_Speeds(right_motor_base_speed, left_motor_base_speed);
             Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_SMOOTH_DONE);
             Set_Robot_State(STATE_NAVIGATING);
-            PID_Reset(&centering_pid);
             kick_start_active = true;
             motion_confirm_counter = 0;
             return;
@@ -2817,7 +2743,6 @@ static void Handle_Smooth_Turn(void)
             Set_Motor_Speeds(right_motor_base_speed, left_motor_base_speed);
             Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_SMOOTH_DONE);
             Set_Robot_State(STATE_NAVIGATING);
-            PID_Reset(&centering_pid);
             kick_start_active = true;
             motion_confirm_counter = 0;
             return;
