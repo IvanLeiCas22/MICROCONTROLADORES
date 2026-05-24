@@ -2361,42 +2361,22 @@ static void Handle_Navigating(void)
     current_left_base_speed = wall_diagonal_faded ? ((uint32_t)current_left_base_speed * 90) / 100 : current_left_base_speed;
     current_right_base_speed = wall_diagonal_faded ? ((uint32_t)current_right_base_speed * 90) / 100 : current_right_base_speed;
 
-    int32_t pid_output_fixed = 0;
+    AppNavInput input = {0};
+    AppNavOutput output = {0};
 
-    if (left_diagonal_wall_detected && right_diagonal_wall_detected && left_wall_detected && right_wall_detected)
-    {
-        int32_t measured_diff = dist_left_lat_mm - dist_right_lat_mm;
-        PID_Set_Setpoint(&centering_pid, 0);
-        pid_output_fixed = PID_Update(&centering_pid, measured_diff, control_step_dt_ms);
-    }
-    else if (right_diagonal_wall_detected && right_wall_detected)
-    {
-        /*         PID_Set_Setpoint(&centering_pid, wall_target_mm);
-                pid_output_fixed = PID_Update(&centering_pid, dist_right_lat_mm, control_step_dt_ms);
-                pid_output_fixed = -pid_output_fixed; */
+    Build_AppNavInput_From_SensorSnapshot(control_step_dt_ms, &input);
 
-        int32_t measured_diff = (wall_target_mm - dist_right_lat_mm) * 2; // Se multiplica por 2 para dar más peso a la corrección al perder la pared diagonal, ya que solo queda una referencia.
-        PID_Set_Setpoint(&centering_pid, 0);
-        pid_output_fixed = PID_Update(&centering_pid, measured_diff, control_step_dt_ms);
-    }
-    else if (left_diagonal_wall_detected && left_wall_detected)
+    if (App_Nav_ComputeWallFollowPwm(&input,
+                                     current_right_base_speed,
+                                     current_left_base_speed,
+                                     &output))
     {
-        /*         PID_Set_Setpoint(&centering_pid, wall_target_mm);
-                pid_output_fixed = PID_Update(&centering_pid, dist_left_lat_mm, control_step_dt_ms); */
-
-        int32_t measured_diff = (dist_left_lat_mm - wall_target_mm) * 2; // Se multiplica por 2 para dar más peso a la corrección al perder la pared diagonal, ya que solo queda una referencia.
-        PID_Set_Setpoint(&centering_pid, 0);
-        pid_output_fixed = PID_Update(&centering_pid, measured_diff, control_step_dt_ms);
+        Set_Motor_Speeds(output.right_motor_pwm, output.left_motor_pwm);
     }
     else
     {
-        // CASO 4: Sin paredes.
-        Set_Motor_Speeds(0, 0); 
-        return;
+        Set_Motor_Speeds(0, 0);
     }
-
-    int16_t correction = (int16_t)FIXED_TO_INT(pid_output_fixed);
-    Set_Motor_Speeds(current_right_base_speed - correction, current_left_base_speed + correction);
 }
 
 /**
@@ -2574,7 +2554,11 @@ static void Set_Robot_State(RobotStateTypeDef new_state)
         nav_debug.last_transition_reason = nav_debug.pending_transition_reason;
         nav_debug.transition_sequence++;
         robot_state = new_state;
-        if (new_state == STATE_STRAIGHT_DRIVE_DESIDING)
+        if (new_state == STATE_NAVIGATING)
+        {
+            (void)App_Nav_StartWallFollowAdvance();
+        }
+        else if (new_state == STATE_STRAIGHT_DRIVE_DESIDING)
         {
             (void)App_Nav_StartStraightDriveYawHold(current_yaw_fixed);
         }
