@@ -2750,19 +2750,23 @@ static void Handle_Smooth_Turn(void)
             return;
         }
 
-        int32_t pid_output_fixed = PID_Update(&centering_pid, FIXED_TO_INT(current_yaw_fixed), control_step_dt_ms);
-        int16_t correction = (int16_t)FIXED_TO_INT(pid_output_fixed);
+        AppNavInput input = {0};
+        AppNavOutput output = {0};
 
-        int16_t post_right_base = (int16_t)(right_motor_base_speed);
-        int16_t post_left_base = (int16_t)(left_motor_base_speed);
-        int16_t correction_limit = (post_right_base < post_left_base) ? post_right_base : post_left_base;
+        Build_AppNavInput_From_SensorSnapshot(control_step_dt_ms, &input);
 
-        if (correction > correction_limit)
-            correction = correction_limit;
-        else if (correction < -correction_limit)
-            correction = -correction_limit;
+        if (App_Nav_ComputeYawHoldAdvancePwm(&input,
+                                             right_motor_base_speed,
+                                             left_motor_base_speed,
+                                             &output))
+        {
+            Set_Motor_Speeds(output.right_motor_pwm, output.left_motor_pwm);
+        }
+        else
+        {
+            Set_Motor_Speeds(0, 0);
+        }
 
-        Set_Motor_Speeds(post_right_base - correction, post_left_base + correction);
         return;
     }
 
@@ -2816,8 +2820,7 @@ static void Handle_Smooth_Turn(void)
         smooth_post_yaw_target_deg = (int16_t)FIXED_TO_INT(current_yaw_fixed);
         Nav_Debug_SetSmoothFinishReason(NAV_DBG_SMOOTH_FINISH_YAW_TARGET);
         Nav_Debug_SetYawTargetDeg(smooth_post_yaw_target_deg);
-        PID_Reset(&centering_pid);
-        PID_Set_Setpoint(&centering_pid, smooth_post_yaw_target_deg);
+        (void)App_Nav_StartYawHoldAdvance(current_yaw_fixed);
 
         int16_t post_right_base = (int16_t)(right_motor_base_speed / 2U);
         int16_t post_left_base = (int16_t)(left_motor_base_speed / 2U);

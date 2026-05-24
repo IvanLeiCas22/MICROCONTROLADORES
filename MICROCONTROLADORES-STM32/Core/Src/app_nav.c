@@ -470,6 +470,65 @@ bool App_Nav_StartStraightDriveYawHold(int32_t yaw_target_q16_deg)
     return true;
 }
 
+bool App_Nav_StartYawHoldAdvance(int32_t yaw_target_q16_deg)
+{
+    return App_Nav_StartStraightDriveYawHold(yaw_target_q16_deg);
+}
+
+bool App_Nav_ComputeYawHoldAdvancePwm(const AppNavInput *input,
+                                      uint16_t right_base_pwm,
+                                      uint16_t left_base_pwm,
+                                      AppNavOutput *output)
+{
+    int32_t pid_output_fixed;
+    int32_t correction;
+    int32_t correction_limit;
+    int32_t right_pwm;
+    int32_t left_pwm;
+
+    App_Nav_ClearOutput(output);
+    app_nav_debug.pwm_right_cmd = 0;
+    app_nav_debug.pwm_left_cmd = 0;
+
+    if ((input == NULL) || (output == NULL))
+    {
+        return false;
+    }
+
+    if (app_nav_straight_active == 0U)
+    {
+        return false;
+    }
+
+    PID_Set_Setpoint(&app_nav_advance_pid,
+                     FIXED_TO_INT(app_nav_straight_yaw_target_q16_deg));
+    pid_output_fixed = PID_Update(&app_nav_advance_pid,
+                                  FIXED_TO_INT(input->yaw_q16_deg),
+                                  input->dt_ms);
+    correction = FIXED_TO_INT(pid_output_fixed);
+    correction_limit = (right_base_pwm < left_base_pwm) ? (int32_t)right_base_pwm : (int32_t)left_base_pwm;
+
+    if (correction > correction_limit)
+    {
+        correction = correction_limit;
+    }
+    else if (correction < -correction_limit)
+    {
+        correction = -correction_limit;
+    }
+
+    right_pwm = (int32_t)right_base_pwm - correction;
+    left_pwm = (int32_t)left_base_pwm + correction;
+
+    output->right_motor_pwm = (int16_t)right_pwm;
+    output->left_motor_pwm = (int16_t)left_pwm;
+
+    app_nav_debug.pwm_right_cmd = output->right_motor_pwm;
+    app_nav_debug.pwm_left_cmd = output->left_motor_pwm;
+
+    return true;
+}
+
 bool App_Nav_ComputeStraightDrivePwm(const AppNavInput *input,
                                      AppNavOutput *output)
 {
