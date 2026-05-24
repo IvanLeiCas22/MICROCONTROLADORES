@@ -2,6 +2,7 @@
 #define INC_APP_NAV_CONFIG_H_
 
 #include "app_nav_types.h"
+#include "pid_controller.h"
 
 /*
  * Default navigation configuration for the portable navigation core.
@@ -30,6 +31,11 @@
 #define APP_NAV_DEFAULT_TURN_TARGET_DPS 360U
 #define APP_NAV_DEFAULT_PIVOT_TURN_TARGET_DPS 360U
 
+#define APP_NAV_DEFAULT_ADVANCE_PID_KP_Q16 HUNDREDTHS_TO_FIXED(80)
+#define APP_NAV_DEFAULT_ADVANCE_PID_KI_Q16 HUNDREDTHS_TO_FIXED(0)
+#define APP_NAV_DEFAULT_ADVANCE_PID_KD_Q16 HUNDREDTHS_TO_FIXED(20)
+#define APP_NAV_DEFAULT_ADVANCE_PID_OUTPUT_LIMIT_PWM 4000
+
 static inline AppNavConfig App_Nav_DefaultConfig(void)
 {
     AppNavConfig cfg;
@@ -52,6 +58,11 @@ static inline AppNavConfig App_Nav_DefaultConfig(void)
 
     cfg.turn_target_dps = APP_NAV_DEFAULT_TURN_TARGET_DPS;
     cfg.pivot_turn_target_dps = APP_NAV_DEFAULT_PIVOT_TURN_TARGET_DPS;
+
+    cfg.advance_pid_kp_q16 = APP_NAV_DEFAULT_ADVANCE_PID_KP_Q16;
+    cfg.advance_pid_ki_q16 = APP_NAV_DEFAULT_ADVANCE_PID_KI_Q16;
+    cfg.advance_pid_kd_q16 = APP_NAV_DEFAULT_ADVANCE_PID_KD_Q16;
+    cfg.advance_pid_output_limit_pwm = APP_NAV_DEFAULT_ADVANCE_PID_OUTPUT_LIMIT_PWM;
 
     return cfg;
 }

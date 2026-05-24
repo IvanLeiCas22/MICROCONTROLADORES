@@ -469,6 +469,11 @@ static AppNavConfig Build_AppNavConfig_From_LegacyRuntime(void)
     cfg.turn_target_dps = turn_target_dps;
     cfg.pivot_turn_target_dps = pivot_turn_target_dps;
 
+    cfg.advance_pid_kp_q16 = pid_configs[PID_ROLE_CENTERING].kp;
+    cfg.advance_pid_ki_q16 = pid_configs[PID_ROLE_CENTERING].ki;
+    cfg.advance_pid_kd_q16 = pid_configs[PID_ROLE_CENTERING].kd;
+    cfg.advance_pid_output_limit_pwm = max_pwm_correction;
+
     return cfg;
 }
 
@@ -926,6 +931,7 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
         // Convertir de entero x100 a punto fijo.
         // Se usa 100 para ampliar el rango de Kp hasta ~655
         Set_Pid_Gains_From_U16(PID_ROLE_CENTERING, kp_int, ki_int, kd_int, false);
+        Sync_AppNavConfig_From_LegacyRuntime();
         break;
     case CMD_GET_PID_GAINS: // Leer Kp, Ki, Kd
         uint8_t response_buffer[UNERBUS_PID_GAINS_SIZE];
@@ -944,6 +950,7 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
         pid_configs[PID_ROLE_CENTERING].out_min = INT_TO_FIXED(-max_pwm_correction);
         pid_configs[PID_ROLE_CENTERING].out_max = INT_TO_FIXED(max_pwm_correction);
         Apply_Pid_Config(PID_ROLE_CENTERING, false);
+        Sync_AppNavConfig_From_LegacyRuntime();
         break;
     case CMD_GET_MAX_PWM_CORRECTION: // Leer la corrección máxima del PWM
         uint8_t response_buffer_2[UNERBUS_CONTROL_PARAMS_SIZE];

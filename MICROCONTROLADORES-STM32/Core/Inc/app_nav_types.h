@@ -136,6 +136,11 @@ typedef struct
 
     uint16_t turn_target_dps;
     uint16_t pivot_turn_target_dps;
+
+    int32_t advance_pid_kp_q16;
+    int32_t advance_pid_ki_q16;
+    int32_t advance_pid_kd_q16;
+    int32_t advance_pid_output_limit_pwm;
 } AppNavConfig;
 
 typedef struct

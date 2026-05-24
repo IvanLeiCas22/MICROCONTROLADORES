@@ -1,9 +1,11 @@
 #include "app_nav.h"
+#include "pid_controller.h"
 
 #include <string.h>
 
 static AppNavConfig app_nav_config;
 static AppNavDebug app_nav_debug;
+static PID_Controller_t app_nav_advance_pid;
 static bool app_nav_enabled = false;
 
 /* Mirrors the legacy ADC channel order without depending on app_config.h. */
@@ -31,6 +33,19 @@ typedef enum
 #define APP_NAV_OPTION_FRONT_MASK (1U << APP_NAV_DECISION_FRONT)
 #define APP_NAV_OPTION_RIGHT_MASK (1U << APP_NAV_DECISION_RIGHT)
 #define APP_NAV_OPTION_LEFT_MASK (1U << APP_NAV_DECISION_LEFT)
+
+static void App_Nav_ApplyAdvancePidConfig(uint8_t reset_state)
+{
+    PID_Config_t cfg = {
+        .kp = app_nav_config.advance_pid_kp_q16,
+        .ki = app_nav_config.advance_pid_ki_q16,
+        .kd = app_nav_config.advance_pid_kd_q16,
+        .out_min = -INT_TO_FIXED(app_nav_config.advance_pid_output_limit_pwm),
+        .out_max = INT_TO_FIXED(app_nav_config.advance_pid_output_limit_pwm),
+    };
+
+    PID_ApplyConfig(&app_nav_advance_pid, &cfg, (reset_state != 0U));
+}
 
 static void App_Nav_ClearOutput(AppNavOutput *output)
 {
@@ -158,6 +173,7 @@ void App_Nav_Init(const AppNavConfig *config)
     }
 
     app_nav_enabled = false;
+    App_Nav_ApplyAdvancePidConfig(1U);
     App_Nav_ResetDebug();
 }
 
@@ -169,6 +185,7 @@ void App_Nav_SetConfig(const AppNavConfig *config)
     }
 
     app_nav_config = *config;
+    App_Nav_ApplyAdvancePidConfig(0U);
 }
 
 void App_Nav_GetConfig(AppNavConfig *config_out)
@@ -184,6 +201,7 @@ void App_Nav_GetConfig(AppNavConfig *config_out)
 void App_Nav_Reset(void)
 {
     app_nav_enabled = false;
+    PID_Reset(&app_nav_advance_pid);
     App_Nav_ResetDebug();
 }
 
