@@ -19,6 +19,19 @@ typedef enum
     APP_NAV_ADC_FLOOR_REAR_CH = 7U
 } AppNavAdcChannel;
 
+typedef enum
+{
+    APP_NAV_DECISION_BACK = 0U,
+    APP_NAV_DECISION_FRONT = 1U,
+    APP_NAV_DECISION_RIGHT = 2U,
+    APP_NAV_DECISION_LEFT = 3U
+} AppNavDecisionOption;
+
+#define APP_NAV_OPTION_BACK_MASK (1U << APP_NAV_DECISION_BACK)
+#define APP_NAV_OPTION_FRONT_MASK (1U << APP_NAV_DECISION_FRONT)
+#define APP_NAV_OPTION_RIGHT_MASK (1U << APP_NAV_DECISION_RIGHT)
+#define APP_NAV_OPTION_LEFT_MASK (1U << APP_NAV_DECISION_LEFT)
+
 static void App_Nav_ClearOutput(AppNavOutput *output)
 {
     if (output == NULL)
@@ -232,4 +245,82 @@ void App_Nav_GetDebug(AppNavDebug *debug_out)
     }
 
     *debug_out = app_nav_debug;
+}
+
+bool App_Nav_RecommendAction(uint32_t random_value,
+                              AppNavRecommendedAction *action_out)
+{
+    uint8_t available_options = APP_NAV_OPTION_BACK_MASK;
+    uint8_t valid_options[3] = {0U, 0U, 0U};
+    uint8_t valid_count = 0U;
+    uint8_t choice;
+    AppNavRecommendedAction action = APP_NAV_ACTION_NONE;
+
+    if (action_out == NULL)
+    {
+        return false;
+    }
+
+    if (app_nav_debug.wall_front == 0U)
+    {
+        available_options |= APP_NAV_OPTION_FRONT_MASK;
+        valid_options[valid_count] = APP_NAV_DECISION_FRONT;
+        valid_count++;
+    }
+
+    if (app_nav_debug.wall_right == 0U)
+    {
+        available_options |= APP_NAV_OPTION_RIGHT_MASK;
+        valid_options[valid_count] = APP_NAV_DECISION_RIGHT;
+        valid_count++;
+    }
+
+    if (app_nav_debug.wall_left == 0U)
+    {
+        available_options |= APP_NAV_OPTION_LEFT_MASK;
+        valid_options[valid_count] = APP_NAV_DECISION_LEFT;
+        valid_count++;
+    }
+
+    app_nav_debug.available_options_mask = available_options;
+    app_nav_debug.valid_option_count = valid_count;
+
+    if (available_options == APP_NAV_OPTION_BACK_MASK)
+    {
+        action = APP_NAV_ACTION_GO_BACK;
+    }
+    else if (valid_count == 0U)
+    {
+        *action_out = APP_NAV_ACTION_NONE;
+        app_nav_debug.last_recommended_action = (uint8_t)APP_NAV_ACTION_NONE;
+        return false;
+    }
+    else
+    {
+        choice = valid_options[random_value % valid_count];
+
+        if (choice == APP_NAV_DECISION_LEFT)
+        {
+            action = APP_NAV_ACTION_SMOOTH_LEFT;
+        }
+        else if (choice == APP_NAV_DECISION_RIGHT)
+        {
+            action = APP_NAV_ACTION_SMOOTH_RIGHT;
+        }
+        else
+        {
+            if ((app_nav_debug.wall_left != 0U) || (app_nav_debug.wall_right != 0U))
+            {
+                action = APP_NAV_ACTION_GO_FRONT_NAVIGATING;
+            }
+            else
+            {
+                action = APP_NAV_ACTION_GO_FRONT_STRAIGHT;
+            }
+        }
+    }
+
+    *action_out = action;
+    app_nav_debug.last_recommended_action = (uint8_t)action;
+    return true;
 }

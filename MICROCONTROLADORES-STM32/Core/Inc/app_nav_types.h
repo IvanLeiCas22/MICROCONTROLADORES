@@ -71,6 +71,16 @@ typedef enum
     APP_NAV_SMOOTH_FINISH_FRONT_WALL_SAFETY = 6
 } AppNavSmoothFinishReason;
 
+typedef enum
+{
+    APP_NAV_ACTION_NONE = 0,
+    APP_NAV_ACTION_GO_BACK,
+    APP_NAV_ACTION_GO_FRONT_NAVIGATING,
+    APP_NAV_ACTION_GO_FRONT_STRAIGHT,
+    APP_NAV_ACTION_SMOOTH_LEFT,
+    APP_NAV_ACTION_SMOOTH_RIGHT
+} AppNavRecommendedAction;
+
 typedef struct
 {
     uint32_t dt_ms;
@@ -151,6 +161,10 @@ typedef struct
     uint8_t wall_right;
     uint8_t wall_diag_left;
     uint8_t wall_diag_right;
+
+    uint8_t available_options_mask;
+    uint8_t valid_option_count;
+    uint8_t last_recommended_action;
 
     uint16_t floor_front_adc;
     uint16_t floor_rear_adc;

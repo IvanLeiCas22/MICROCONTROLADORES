@@ -20,5 +20,7 @@ void App_Nav_Reset(void);
 void App_Nav_StartFindCells(void);
 void App_Nav_Stop(void);
 void App_Nav_Tick(const AppNavInput *input, AppNavOutput *output);
+bool App_Nav_RecommendAction(uint32_t random_value,
+                              AppNavRecommendedAction *action_out);
 
 #endif /* INC_APP_NAV_H_ */

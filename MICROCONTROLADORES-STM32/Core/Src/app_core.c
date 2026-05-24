@@ -2523,63 +2523,33 @@ static void Handle_Straight_Drive(bool have_to_decide)
 
 static void Handle_Deciding(void)
 {
-    uint8_t available_Options = 0;
-    uint8_t validOptions[4] = {0, 0, 0, 0};
-    uint8_t validOptionsCounter = 0;
-    enum Direcciones
+    AppNavRecommendedAction action = APP_NAV_ACTION_NONE;
+
+    if (!App_Nav_RecommendAction((uint32_t)rand(), &action) ||
+        (action == APP_NAV_ACTION_NONE))
     {
-        ATRAS,
-        ADELANTE,
-        DERECHA,
-        IZQUIERDA
-    };
-
-    // Las distancias y las banderas de pared ya vienen actualizadas por
-    // Update_Navigation_Perception() antes de entrar en la máquina de estados.
-
-    // Analizar las opciones (asumiendo que 1 siempre es "atrás" y está libre)
-    // Bit 0: Atrás (Siempre 1)
-    // Bit 1: Adelante
-    // Bit 2: Derecha
-    // Bit 3: Izquierda
-    available_Options = ((!left_wall_detected) << 3) |
-                     ((!right_wall_detected) << 2) |
-                     ((!front_wall_detected) << 1) |
-                     (1 << 0); // El camino de atrás siempre suele estar libre
-
-    // Si solo está disponible el camino hacia atrás
-    if (available_Options == 1)
-    {
-        Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_DECIDE_DEAD_END);
-        Turn_Start(180); // Callejón sin salida
+        Set_Motor_Speeds(0, 0);
+        Set_Robot_State(STATE_IDLE);
         return;
     }
 
-    for (uint8_t i = 1; i < 4; i++)
+    if (action == APP_NAV_ACTION_GO_BACK)
     {
-        // Verificamos si el bit 'i' está encendido
-        if (available_Options & (1 << i))
-        {
-            validOptions[validOptionsCounter] = i;
-            validOptionsCounter++;
-        }
+        Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_DECIDE_DEAD_END);
+        Turn_Start(180);
     }
-
-    // Elegimos una opción al azar:
-    uint8_t choice = validOptions[rand() % validOptionsCounter];
-
-    if (choice == IZQUIERDA)
+    else if (action == APP_NAV_ACTION_SMOOTH_LEFT)
     {
         Nav_Debug_SetSmoothDirection(NAV_DBG_SMOOTH_DIR_LEFT);
         Nav_Debug_SetSmoothFinishReason(NAV_DBG_SMOOTH_FINISH_NONE);
         Nav_Debug_SetYawTargetDeg(90);
         Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_DECIDE_SMOOTH_LEFT);
-        Set_Robot_State(STATE_SMOOTH_TURN_LEFT); // Prioridad a la izquierda
+        Set_Robot_State(STATE_SMOOTH_TURN_LEFT);
         Reset_Yaw_Tracking();
         PID_Reset(&turn_velocity_pid);
-        PID_Set_Setpoint(&turn_velocity_pid, turn_target_dps); // Valores positivos de gz para giro a la izquierda
+        PID_Set_Setpoint(&turn_velocity_pid, turn_target_dps);
     }
-    else if (choice == DERECHA)
+    else if (action == APP_NAV_ACTION_SMOOTH_RIGHT)
     {
         Nav_Debug_SetSmoothDirection(NAV_DBG_SMOOTH_DIR_RIGHT);
         Nav_Debug_SetSmoothFinishReason(NAV_DBG_SMOOTH_FINISH_NONE);
@@ -2588,27 +2558,24 @@ static void Handle_Deciding(void)
         Set_Robot_State(STATE_SMOOTH_TURN_RIGHT);
         Reset_Yaw_Tracking();
         PID_Reset(&turn_velocity_pid);
-        PID_Set_Setpoint(&turn_velocity_pid, -turn_target_dps); // Valores negativos de gz para giro a la derecha
+        PID_Set_Setpoint(&turn_velocity_pid, -turn_target_dps);
     }
-    else if (choice == ADELANTE)
+    else if (action == APP_NAV_ACTION_GO_FRONT_NAVIGATING)
     {
-        if (left_wall_detected || right_wall_detected)
-        {
-            Nav_Debug_ClearYawTarget();
-            Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_DECIDE_FRONT_NAVIGATING);
-            Set_Robot_State(STATE_NAVIGATING);
-            PID_Reset(&centering_pid);
-            /*             kick_start_active = true;
-                        motion_confirm_counter = 0; */
-        }
-        else
-        {
-            Nav_Debug_SetYawTargetDeg((int16_t)FIXED_TO_INT(current_yaw_fixed));
-            Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_DECIDE_FRONT_STRAIGHT);
-            Set_Robot_State(STATE_STRAIGHT_DRIVE);
-            PID_Reset(&centering_pid);
-            PID_Set_Setpoint(&centering_pid, FIXED_TO_INT(current_yaw_fixed));
-        }
+        Nav_Debug_ClearYawTarget();
+        Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_DECIDE_FRONT_NAVIGATING);
+        Set_Robot_State(STATE_NAVIGATING);
+        PID_Reset(&centering_pid);
+        /*             kick_start_active = true;
+                    motion_confirm_counter = 0; */
+    }
+    else if (action == APP_NAV_ACTION_GO_FRONT_STRAIGHT)
+    {
+        Nav_Debug_SetYawTargetDeg((int16_t)FIXED_TO_INT(current_yaw_fixed));
+        Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_DECIDE_FRONT_STRAIGHT);
+        Set_Robot_State(STATE_STRAIGHT_DRIVE);
+        PID_Reset(&centering_pid);
+        PID_Set_Setpoint(&centering_pid, FIXED_TO_INT(current_yaw_fixed));
     }
 }
 
