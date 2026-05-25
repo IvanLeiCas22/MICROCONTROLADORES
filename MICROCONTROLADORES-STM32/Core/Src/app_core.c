@@ -2548,22 +2548,37 @@ static void Seed_FindCells_Initial_Cell_IfPending(void)
 
 static void Handle_Navigating(void)
 {
-    adc_rear_floor = sensor_snapshot.adc_filtered[SENSOR_FLOOR_REAR_CH];
-    bool current_rear_tape = ((sensor_snapshot.detection_flags & SENSOR_DET_FLOOR_REAR) != 0U);
+    AppNavInput input = {0};
+    AppNavOutput output = {0};
+    AppNavAdvanceActionState advance_state;
 
-    if (current_rear_tape && !was_rear_tape_detected)
+    Build_AppNavInput_From_SensorSnapshot(control_step_dt_ms, &input);
+    advance_state = App_Nav_TickAdvanceAction(&input, &output);
+
+    if ((advance_state == APP_NAV_ADVANCE_ACTION_WAIT_LEAVE_REAR_TAPE) ||
+        (advance_state == APP_NAV_ADVANCE_ACTION_RUNNING_WALL_FOLLOW) ||
+        (advance_state == APP_NAV_ADVANCE_ACTION_RUNNING_YAW_HOLD))
     {
-        rear_tape_detected = true;
-        was_rear_tape_detected = true;
+        Set_Motor_Speeds(output.right_motor_pwm, output.left_motor_pwm);
+        return;
     }
-    else if (!current_rear_tape)
+
+    if (advance_state == APP_NAV_ADVANCE_ACTION_DONE_REAR_TAPE)
     {
+        Set_Motor_Speeds(0, 0);
+        Update_Robot_Position();
+        Commit_Maze_State(false, true, true);
+        rear_tape_detected = false;
         was_rear_tape_detected = false;
+        Handle_Deciding();
+        if (robot_state == STATE_NAVIGATING)
+        {
+            (void)App_Nav_StartAdvanceAction(APP_NAV_ADVANCE_ACTION_WALL_FOLLOW_AUTO_YAW_HOLD);
+        }
+        return;
     }
 
-    uint16_t front_avg_mm = (uint16_t)((dist_front_left_mm + dist_front_right_mm) / 2);
-
-    if (front_avg_mm < wall_threshold_mm_braking_start)
+    if (advance_state == APP_NAV_ADVANCE_ACTION_FRONT_OBSTACLE_SAFETY)
     {
         Set_Motor_Speeds(0, 0);
         Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_FRONT_WALL_BRAKING);
@@ -2571,75 +2586,15 @@ static void Handle_Navigating(void)
         return;
     }
 
-    static uint8_t wall_diagonal_faded = 0;
-
-    if (!left_diagonal_wall_detected || !right_diagonal_wall_detected)
-    {
-        if (!left_diagonal_wall_detected && !right_diagonal_wall_detected)
-        {
-            wall_diagonal_faded = NO_WALL_FADED;
-            Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_DIAGONALS_LOST_DECISION);
-            Set_Robot_State(STATE_STRAIGHT_DRIVE_DESIDING);
-            return;
-        }
-        else if (!left_diagonal_wall_detected)
-        {
-            wall_diagonal_faded = LEFT_WALL_FADED;
-        }
-        else
-        {
-            wall_diagonal_faded = RIGHT_WALL_FADED;
-        }
-    }
-    else
-    {
-        wall_diagonal_faded = NO_WALL_FADED;
-    }
-
-    if (rear_tape_detected)
-    {
-        Update_Robot_Position();
-        Commit_Maze_State(false, true, true);
-
-        // 4. Evaluamos si veníamos esperando esta línea para tomar una decisión
-        if (wall_diagonal_faded)
-        {
-            rear_tape_detected = false;
-            wall_diagonal_faded = NO_WALL_FADED;
-            Handle_Deciding();
-            return;
-        }
-        else
-        {
-            // Si íbamos por un pasillo recto y no hay decisiones que tomar,
-            // IGUALMENTE debemos apagar la bandera para no sumar +10 posiciones en 100ms.
-            rear_tape_detected = false;
-        }
-    }
-
-    uint16_t current_left_base_speed = left_motor_base_speed;
-    uint16_t current_right_base_speed = right_motor_base_speed;
-
-    // Disminución de la velocidad al dejar de detectar pared en diagonal
-    current_left_base_speed = wall_diagonal_faded ? ((uint32_t)current_left_base_speed * 90) / 100 : current_left_base_speed;
-    current_right_base_speed = wall_diagonal_faded ? ((uint32_t)current_right_base_speed * 90) / 100 : current_right_base_speed;
-
-    AppNavInput input = {0};
-    AppNavOutput output = {0};
-
-    Build_AppNavInput_From_SensorSnapshot(control_step_dt_ms, &input);
-
-    if (App_Nav_ComputeWallFollowPwm(&input,
-                                     current_right_base_speed,
-                                     current_left_base_speed,
-                                     &output))
-    {
-        Set_Motor_Speeds(output.right_motor_pwm, output.left_motor_pwm);
-    }
-    else
+    if ((advance_state == APP_NAV_ADVANCE_ACTION_TIMEOUT) ||
+        (advance_state == APP_NAV_ADVANCE_ACTION_ERROR))
     {
         Set_Motor_Speeds(0, 0);
+        Set_Robot_State(STATE_IDLE);
+        return;
     }
+
+    Set_Motor_Speeds(0, 0);
 }
 
 /**
@@ -2804,7 +2759,7 @@ static void Set_Robot_State(RobotStateTypeDef new_state)
         robot_state = new_state;
         if (new_state == STATE_NAVIGATING)
         {
-            (void)App_Nav_StartWallFollowAdvance();
+            (void)App_Nav_StartAdvanceAction(APP_NAV_ADVANCE_ACTION_WALL_FOLLOW_AUTO_YAW_HOLD);
         }
         else if (new_state == STATE_SMOOTH_TURN_LEFT)
         {
