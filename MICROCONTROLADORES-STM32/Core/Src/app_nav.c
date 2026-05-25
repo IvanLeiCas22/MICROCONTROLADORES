@@ -1450,7 +1450,7 @@ bool App_Nav_StartAdvanceAction(AppNavAdvanceActionMode mode)
     app_nav_advance_action_mode = mode;
     app_nav_advance_action_state = APP_NAV_ADVANCE_ACTION_WAIT_LEAVE_REAR_TAPE;
     app_nav_advance_action_active = 1U;
-    app_nav_advance_was_rear_tape_detected = app_nav_debug.floor_rear_black;
+    app_nav_advance_was_rear_tape_detected = 0U;
     app_nav_advance_rear_tape_search_armed = 0U;
     app_nav_advance_yaw_hold_started = 0U;
 
@@ -1496,7 +1496,7 @@ AppNavAdvanceActionState App_Nav_TickAdvanceAction(const AppNavInput *input,
         return app_nav_advance_action_state;
     }
 
-    current_rear_tape = (app_nav_debug.floor_rear_black != 0U);
+    current_rear_tape = (input->floor_rear_black != 0U);
     front_avg_mm = (uint16_t)(((uint32_t)input->dist_front_left_mm +
                                (uint32_t)input->dist_front_right_mm) /
                               2U);

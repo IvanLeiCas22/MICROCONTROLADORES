@@ -1835,6 +1835,9 @@ static void Build_AppNavInput_From_SensorSnapshot(uint32_t dt_ms, AppNavInput *i
         input->adc_filtered[ch] = sensor_snapshot.adc_filtered[ch];
     }
 
+    input->floor_front_black = ((sensor_snapshot.detection_flags & SENSOR_DET_FLOOR_FRONT) != 0U) ? 1U : 0U;
+    input->floor_rear_black = ((sensor_snapshot.detection_flags & SENSOR_DET_FLOOR_REAR) != 0U) ? 1U : 0U;
+
     input->dist_right_lat_mm = sensor_snapshot.dist_right_lat_mm;
     input->dist_diagonal_right_mm = sensor_snapshot.dist_diagonal_right_mm;
     input->dist_front_right_mm = sensor_snapshot.dist_front_right_mm;
