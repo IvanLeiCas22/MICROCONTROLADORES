@@ -376,11 +376,6 @@ extern uint16_t pwm_max_value;
 #define WALL_BRAKING_TARGET_MM 20                   // Distancia (mm) objetivo para terminar el frenado.
 #define WALL_FADE_TICKS_DEFAULT 2                   // Ticks para desvanecer la detección de pared
 
-/* --- Cruise Control --- */
-#define MOTOR_KICK_START_SPEED_DEFAULT 2600  // Velocidad PWM para navegación en rectas
-#define ACCEL_MOTION_THRESHOLD_DEFAULT 1000  // Umbral de aceleración (raw) para detectar movimiento
-#define ACCEL_MOTION_CONFIRM_TICKS_DEFAULT 2 // Nº de ciclos de 10ms para confirmar movimiento
-
 /* --- Braking PID Controller --- */
 #define BRAKING_PID_KP_DEFAULT_X100 1000
 #define BRAKING_PID_KI_DEFAULT_X100 10

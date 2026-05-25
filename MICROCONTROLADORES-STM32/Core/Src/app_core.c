@@ -253,11 +253,6 @@ static volatile bool mpu_yaw_timing_initialized = false;
 static volatile uint32_t mpu_last_sample_cycle = 0;
 
 static volatile RobotStateTypeDef robot_state = STATE_IDLE;
-uint16_t motor_kick_start_speed;
-uint16_t accel_motion_threshold;
-uint8_t accel_motion_confirm_ticks;
-static bool kick_start_active = false;
-static uint8_t motion_confirm_counter = 0;
 
 // LABERINTO
 static bool pending_initial_cell_seed = false;
@@ -1131,8 +1126,6 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
                 if (menu_mode == MENU_MODE_GO_TO_B)
                 {
                     Set_Robot_State(STATE_NAVIGATING); // Aquí se inicia el movimiento
-                    kick_start_active = true;
-                    motion_confirm_counter = 0;
                     Reset_Robot_Position();
                 }
                 else
@@ -1175,19 +1168,12 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
         length = UNERBUS_CMD_ID_SIZE + UNERBUS_ROBOT_STATUS_SIZE;
         break;
     case CMD_SET_CRUISE_PARAMS:
-        motor_kick_start_speed = UNERBUS_GetUInt16(aBus);
-        accel_motion_threshold = UNERBUS_GetUInt16(aBus);
-        // Se recibe como u16 para alinear el paquete, pero se usa como u8.
-        accel_motion_confirm_ticks = (uint8_t)UNERBUS_GetUInt16(aBus);
+        (void)UNERBUS_GetUInt16(aBus);
+        (void)UNERBUS_GetUInt16(aBus);
+        (void)UNERBUS_GetUInt16(aBus);
         break;
     case CMD_GET_CRUISE_PARAMS:
-        uint8_t cruise_buffer[UNERBUS_CRUISE_PARAMS_SIZE];
-        cruise_buffer[0] = (uint8_t)(motor_kick_start_speed & 0xFF);
-        cruise_buffer[1] = (uint8_t)((motor_kick_start_speed >> 8) & 0xFF);
-        cruise_buffer[2] = (uint8_t)(accel_motion_threshold & 0xFF);
-        cruise_buffer[3] = (uint8_t)((accel_motion_threshold >> 8) & 0xFF);
-        cruise_buffer[4] = (uint8_t)(accel_motion_confirm_ticks);
-        cruise_buffer[5] = 0; // Padding para alinear a 16 bits
+        uint8_t cruise_buffer[UNERBUS_CRUISE_PARAMS_SIZE] = {0};
         UNERBUS_Write(aBus, cruise_buffer, UNERBUS_CRUISE_PARAMS_SIZE);
         length = UNERBUS_CMD_ID_SIZE + UNERBUS_CRUISE_PARAMS_SIZE;
         break;
@@ -1788,11 +1774,6 @@ void App_Core_Init(void)
     UNERBUS_Init(&unerbus_esp01_handle);
     UNERBUS_Init(&unerbus_pc_handle);
 
-    /* --- INICIALIZACIÓN DE PARÁMETROS DE CRUCERO --- */
-    motor_kick_start_speed = MOTOR_KICK_START_SPEED_DEFAULT;
-    accel_motion_threshold = ACCEL_MOTION_THRESHOLD_DEFAULT;
-    accel_motion_confirm_ticks = ACCEL_MOTION_CONFIRM_TICKS_DEFAULT;
-
     /* --- PORTABLE NAVIGATION BOUNDARY --- */
     App_Nav_Init(NULL);
 
@@ -2391,8 +2372,6 @@ static void Manage_Turn(void)
         {
             Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_PIVOT_DONE);
             Set_Robot_State(STATE_NAVIGATING);
-            kick_start_active = true;
-            motion_confirm_counter = 0;
         }
     }
     else if ((pivot_state == APP_NAV_PIVOT_ACTION_TIMEOUT) ||
@@ -2554,8 +2533,6 @@ static void Start_FindCells_Legacy_Mode(void)
 
     Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_START_FIND_CELLS);
     Set_Robot_State(STATE_NAVIGATING);
-    kick_start_active = true;
-    motion_confirm_counter = 0;
 }
 
 static void Seed_FindCells_Initial_Cell_IfPending(void)
@@ -2640,23 +2617,8 @@ static void Handle_Navigating(void)
         }
     }
 
-    // (Lógica de kick-start)
-    if (kick_start_active)
-    {
-        int16_t ax = sensor_snapshot.ax;
-        if (abs(ax) > accel_motion_threshold)
-            motion_confirm_counter++;
-        else
-            motion_confirm_counter = 0;
-        if (motion_confirm_counter >= accel_motion_confirm_ticks)
-        {
-            kick_start_active = false;
-            motion_confirm_counter = 0;
-        }
-    }
-
-    uint16_t current_left_base_speed = kick_start_active ? (left_motor_base_speed + motor_kick_start_speed) : left_motor_base_speed;
-    uint16_t current_right_base_speed = kick_start_active ? (right_motor_base_speed + motor_kick_start_speed) : right_motor_base_speed;
+    uint16_t current_left_base_speed = left_motor_base_speed;
+    uint16_t current_right_base_speed = right_motor_base_speed;
 
     // Disminución de la velocidad al dejar de detectar pared en diagonal
     current_left_base_speed = wall_diagonal_faded ? ((uint32_t)current_left_base_speed * 90) / 100 : current_left_base_speed;
@@ -2723,8 +2685,6 @@ static void Handle_Straight_Drive(bool have_to_decide)
             {
                 Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_STRAIGHT_REAR_TAPE_NAVIGATING);
                 Set_Robot_State(STATE_NAVIGATING);
-                kick_start_active = true;
-                motion_confirm_counter = 0;
             }
             return;
         }
@@ -2785,8 +2745,6 @@ static void Handle_Deciding(void)
         Nav_Debug_ClearYawTarget();
         Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_DECIDE_FRONT_NAVIGATING);
         Set_Robot_State(STATE_NAVIGATING);
-        /*             kick_start_active = true;
-                    motion_confirm_counter = 0; */
     }
     else if (action == APP_NAV_ACTION_GO_FRONT_STRAIGHT)
     {
@@ -2996,8 +2954,6 @@ static void Handle_Smooth_Turn(void)
         Set_Motor_Speeds(right_motor_base_speed, left_motor_base_speed);
         Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_SMOOTH_DONE);
         Set_Robot_State(STATE_NAVIGATING);
-        kick_start_active = true;
-        motion_confirm_counter = 0;
         return;
 
     case APP_NAV_SMOOTH_ACTION_DONE_WALL:
@@ -3007,8 +2963,6 @@ static void Handle_Smooth_Turn(void)
         Set_Motor_Speeds(right_motor_base_speed, left_motor_base_speed);
         Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_SMOOTH_DONE);
         Set_Robot_State(STATE_NAVIGATING);
-        kick_start_active = true;
-        motion_confirm_counter = 0;
         return;
 
     case APP_NAV_SMOOTH_ACTION_DONE_POST_YAW_REAR_TAPE:
@@ -3023,8 +2977,6 @@ static void Handle_Smooth_Turn(void)
         Set_Motor_Speeds(0, 0);
         Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_SMOOTH_DONE);
         Set_Robot_State(STATE_DECIDING);
-        kick_start_active = false;
-        motion_confirm_counter = 0;
         return;
 
     case APP_NAV_SMOOTH_ACTION_FRONT_WALL_SAFETY:
