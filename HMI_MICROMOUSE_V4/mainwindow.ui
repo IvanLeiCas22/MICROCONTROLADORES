@@ -3225,6 +3225,102 @@ QPushButton:checked {
                 </widget>
                </item>
                <item>
+                <widget class="QGroupBox" name="groupSupervisorInitialPose">
+                 <property name="title">
+                  <string>Pose inicial del robot</string>
+                 </property>
+                 <layout class="QVBoxLayout" name="verticalLayoutSupervisorInitialPose">
+                  <item>
+                   <layout class="QFormLayout" name="formLayoutSupervisorInitialPose">
+                    <item row="0" column="0">
+                     <widget class="QLabel" name="labelInitialCellX">
+                      <property name="text">
+                       <string>Celda X:</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item row="0" column="1">
+                     <widget class="QSpinBox" name="spinInitialCellX">
+                      <property name="maximum">
+                       <number>14</number>
+                      </property>
+                      <property name="value">
+                       <number>7</number>
+                      </property>
+                     </widget>
+                    </item>
+                    <item row="1" column="0">
+                     <widget class="QLabel" name="labelInitialCellY">
+                      <property name="text">
+                       <string>Celda Y:</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item row="1" column="1">
+                     <widget class="QSpinBox" name="spinInitialCellY">
+                      <property name="maximum">
+                       <number>14</number>
+                      </property>
+                      <property name="value">
+                       <number>7</number>
+                      </property>
+                     </widget>
+                    </item>
+                    <item row="2" column="0">
+                     <widget class="QLabel" name="labelInitialHeading">
+                      <property name="text">
+                       <string>OrientaciÃ³n:</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item row="2" column="1">
+                     <widget class="QComboBox" name="comboInitialHeading">
+                      <item>
+                       <property name="text">
+                        <string>Norte</string>
+                       </property>
+                      </item>
+                      <item>
+                       <property name="text">
+                        <string>Este</string>
+                       </property>
+                      </item>
+                      <item>
+                       <property name="text">
+                        <string>Sur</string>
+                       </property>
+                      </item>
+                      <item>
+                       <property name="text">
+                        <string>Oeste</string>
+                       </property>
+                      </item>
+                     </widget>
+                    </item>
+                   </layout>
+                  </item>
+                  <item>
+                   <layout class="QHBoxLayout" name="horizontalLayoutSupervisorInitialPose">
+                    <item>
+                     <widget class="QPushButton" name="btnSetSupervisorInitialPose">
+                      <property name="text">
+                       <string>Enviar pose inicial</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QPushButton" name="btnGetSupervisorInitialPose">
+                      <property name="text">
+                       <string>Obtener pose inicial</string>
+                      </property>
+                     </widget>
+                    </item>
+                   </layout>
+                  </item>
+                 </layout>
+                </widget>
+               </item>
+               <item>
                 <widget class="QGroupBox" name="groupBox_11">
                  <property name="title">
                   <string>Rotar mapa</string>

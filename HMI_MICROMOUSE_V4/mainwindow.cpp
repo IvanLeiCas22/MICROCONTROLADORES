@@ -36,6 +36,34 @@ constexpr quint8 PRIM_TEST_RESP_CONFIG = 0x81;
 constexpr int PRIM_TEST_STATUS_SIZE = 26;
 constexpr int PRIM_TEST_CONFIG_SIZE = 16;
 
+quint8 supervisorHeadingForComboIndex(int index) {
+  switch (index) {
+  case 1:
+    return static_cast<quint8>(HEADING_EAST);
+  case 2:
+    return static_cast<quint8>(HEADING_SOUTH);
+  case 3:
+    return static_cast<quint8>(HEADING_WEST);
+  case 0:
+  default:
+    return static_cast<quint8>(HEADING_NORTH);
+  }
+}
+
+int comboIndexForSupervisorHeading(quint8 heading) {
+  switch (heading) {
+  case HEADING_EAST:
+    return 1;
+  case HEADING_SOUTH:
+    return 2;
+  case HEADING_WEST:
+    return 3;
+  case HEADING_NORTH:
+  default:
+    return 0;
+  }
+}
+
 void setDetectionLabel(QLabel *label, bool active) {
   label->setText(active ? " " : "");
   label->setStyleSheet(
@@ -169,6 +197,8 @@ void MainWindow::on_navigationButtonClicked(QAbstractButton *button) {
   if (pageIndex == 4) {
     requestPrimitiveTestConfig();
     requestPrimitiveTestStatus();
+  } else if (pageIndex == 5) {
+    requestSupervisorInitialPose();
   }
 
   // El QButtonGroup ya se encarga de que solo un botón esté checked si
@@ -437,6 +467,10 @@ void MainWindow::onPacketReceived(quint8 command, const QByteArray &payload) {
   }
   case Unerbus::CommandId::CMD_GET_APPROACH_FRONT_WALL_TARGET: {
     updateApproachFrontWallTargetUI(payload);
+    break;
+  }
+  case Unerbus::CommandId::CMD_GET_SUPERVISOR_INITIAL_POSE: {
+    updateSupervisorInitialPoseUI(payload);
     break;
   }
   case Unerbus::CommandId::CMD_GET_BRAKING_MAX_SPEED: {
@@ -2831,6 +2865,56 @@ void MainWindow::requestMazeColumn(quint8 col) {
     stream.setByteOrder(QDataStream::LittleEndian);
     stream << col;
     sendUnerbusCommand(Unerbus::CommandId::CMD_SYNC_MAZE_COLUMN, payload);
+}
+
+void MainWindow::sendSupervisorInitialPose() {
+    QByteArray payload;
+    QDataStream stream(&payload, QIODevice::WriteOnly);
+    stream.setByteOrder(QDataStream::LittleEndian);
+
+    const quint8 x = static_cast<quint8>(ui->spinInitialCellX->value());
+    const quint8 y = static_cast<quint8>(ui->spinInitialCellY->value());
+    const quint8 heading =
+        supervisorHeadingForComboIndex(ui->comboInitialHeading->currentIndex());
+
+    stream << x << y << heading;
+    sendUnerbusCommand(Unerbus::CommandId::CMD_SET_SUPERVISOR_INITIAL_POSE,
+                       payload);
+}
+
+void MainWindow::requestSupervisorInitialPose() {
+    sendUnerbusCommand(Unerbus::CommandId::CMD_GET_SUPERVISOR_INITIAL_POSE);
+}
+
+void MainWindow::updateSupervisorInitialPoseUI(const QByteArray &payload) {
+    if (payload.size() < 3)
+        return;
+
+    QDataStream stream(payload);
+    stream.setByteOrder(QDataStream::LittleEndian);
+
+    quint8 x;
+    quint8 y;
+    quint8 heading;
+    stream >> x >> y >> heading;
+
+    if ((x >= MAZE_WIDTH) || (y >= MAZE_HEIGHT) ||
+        (heading > static_cast<quint8>(HEADING_WEST))) {
+        return;
+    }
+
+    ui->spinInitialCellX->setValue(static_cast<int>(x));
+    ui->spinInitialCellY->setValue(static_cast<int>(y));
+    ui->comboInitialHeading->setCurrentIndex(
+        comboIndexForSupervisorHeading(heading));
+}
+
+void MainWindow::on_btnSetSupervisorInitialPose_clicked() {
+    sendSupervisorInitialPose();
+}
+
+void MainWindow::on_btnGetSupervisorInitialPose_clicked() {
+    requestSupervisorInitialPose();
 }
 
 void MainWindow::setupPrimitiveTestPage()

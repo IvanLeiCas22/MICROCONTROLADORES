@@ -83,6 +83,8 @@ namespace Unerbus
         CMD_PRIMITIVE_TEST = 0x95,              // Banco de pruebas de primitivas
         CMD_SET_APPROACH_FRONT_WALL_TARGET = 0x96,
         CMD_GET_APPROACH_FRONT_WALL_TARGET = 0x97,
+        CMD_SET_SUPERVISOR_INITIAL_POSE = 0x98,
+        CMD_GET_SUPERVISOR_INITIAL_POSE = 0x99,
         CMD_OTHERS
     };
     Q_ENUM_NS(CommandId)

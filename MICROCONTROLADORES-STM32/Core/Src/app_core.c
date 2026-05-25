@@ -6,6 +6,7 @@
 #include "app_timebase.h"
 #include "app_timing.h"
 #include "app_nav.h"
+#include "app_nav_supervisor.h"
 
 #include <stdlib.h>
 #include <stdio.h>  // Para snprintf
@@ -223,6 +224,9 @@ uint16_t after_turn_wall_threshold_mm = 80;     // Umbral en mm para pared despu
 uint16_t wall_target_mm = 55;                   // Distancia objetivo en mm para seguimiento de pared
 uint16_t wall_braking_target_mm = 30;           // Distancia de parada objetivo
 uint16_t approach_front_wall_target_mm = APP_NAV_DEFAULT_APPROACH_FRONT_WALL_TARGET_MM;
+static uint8_t supervisor_initial_x = APP_MAZE_DEFAULT_START_X;
+static uint8_t supervisor_initial_y = APP_MAZE_DEFAULT_START_Y;
+static HeadingTypeDef supervisor_initial_heading = APP_MAZE_DEFAULT_START_HEADING;
 uint16_t braking_accel_stop_threshold = 2000;   // Umbral de aceleración para confirmar detención
 uint16_t max_pwm_correction = 4000;             // Corrección máxima del PID
 uint16_t turn_max_pwm = TURN_MAX_SPEED_DEFAULT;
@@ -1127,6 +1131,33 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
         UNERBUS_Write(aBus, approach_target_buffer, UNERBUS_APPROACH_FRONT_WALL_TARGET_SIZE);
         length = UNERBUS_CMD_ID_SIZE + UNERBUS_APPROACH_FRONT_WALL_TARGET_SIZE;
         break;
+    case CMD_SET_SUPERVISOR_INITIAL_POSE:
+    {
+        uint8_t requested_x = UNERBUS_GetUInt8(aBus);
+        uint8_t requested_y = UNERBUS_GetUInt8(aBus);
+        HeadingTypeDef requested_heading = (HeadingTypeDef)UNERBUS_GetUInt8(aBus);
+
+        if (App_Maze_IsValidPose(requested_x, requested_y, requested_heading))
+        {
+            supervisor_initial_x = requested_x;
+            supervisor_initial_y = requested_y;
+            supervisor_initial_heading = requested_heading;
+            (void)App_NavSupervisor_SetInitialPose(supervisor_initial_x,
+                                                   supervisor_initial_y,
+                                                   supervisor_initial_heading);
+        }
+        break;
+    }
+    case CMD_GET_SUPERVISOR_INITIAL_POSE:
+    {
+        uint8_t supervisor_pose_buffer[UNERBUS_SUPERVISOR_INITIAL_POSE_SIZE];
+        supervisor_pose_buffer[0] = supervisor_initial_x;
+        supervisor_pose_buffer[1] = supervisor_initial_y;
+        supervisor_pose_buffer[2] = (uint8_t)supervisor_initial_heading;
+        UNERBUS_Write(aBus, supervisor_pose_buffer, UNERBUS_SUPERVISOR_INITIAL_POSE_SIZE);
+        length = UNERBUS_CMD_ID_SIZE + UNERBUS_SUPERVISOR_INITIAL_POSE_SIZE;
+        break;
+    }
     case CMD_SET_APP_STATE:
         AppStateTypeDef new_state = (AppStateTypeDef)UNERBUS_GetUInt8(aBus);
         if (new_state == APP_STATE_RUNNING && app_state == APP_STATE_MENU)
@@ -1806,6 +1837,12 @@ void App_Core_Init(void)
     wall_target_mm = WALL_FOLLOW_TARGET_MM;
     wall_braking_target_mm = WALL_BRAKING_TARGET_MM;
     approach_front_wall_target_mm = APP_NAV_DEFAULT_APPROACH_FRONT_WALL_TARGET_MM;
+    supervisor_initial_x = APP_MAZE_DEFAULT_START_X;
+    supervisor_initial_y = APP_MAZE_DEFAULT_START_Y;
+    supervisor_initial_heading = APP_MAZE_DEFAULT_START_HEADING;
+    (void)App_NavSupervisor_SetInitialPose(supervisor_initial_x,
+                                           supervisor_initial_y,
+                                           supervisor_initial_heading);
 
     /* --- INICIALIZACIÓN DE CONFIGURACIONES PID RUNTIME --- */
     Init_Pid_Configs();

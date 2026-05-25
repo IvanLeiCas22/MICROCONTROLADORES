@@ -124,6 +124,10 @@ private slots:
 
   void on_btnSyncMaze_clicked();
 
+  void on_btnSetSupervisorInitialPose_clicked();
+
+  void on_btnGetSupervisorInitialPose_clicked();
+
   void on_btnPrimitiveStart_clicked();
 
   void on_btnPrimitiveStop_clicked();
@@ -266,6 +270,9 @@ private slots:
   void updateTurnTargetDps(const QByteArray &payload);
   void updateDelayTicksUI(const QByteArray &payload);
   void sendApproachFrontWallTarget();
+  void sendSupervisorInitialPose();
+  void requestSupervisorInitialPose();
+  void updateSupervisorInitialPoseUI(const QByteArray &payload);
   void setupPrimitiveTestPage();
   void requestPrimitiveTestStatus();
   void requestPrimitiveTestConfig();
