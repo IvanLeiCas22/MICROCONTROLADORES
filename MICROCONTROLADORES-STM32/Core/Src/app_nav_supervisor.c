@@ -16,6 +16,7 @@
 static AppNavSupervisorDebug app_nav_supervisor_debug;
 static int32_t app_nav_supervisor_action_yaw_reference_q16_deg;
 static uint8_t app_nav_supervisor_action_yaw_reference_valid;
+static uint8_t app_nav_supervisor_pivot_180_exit_requires_advance;
 static uint8_t app_nav_supervisor_initial_x;
 static uint8_t app_nav_supervisor_initial_y;
 static HeadingTypeDef app_nav_supervisor_initial_heading;
@@ -57,6 +58,11 @@ static void App_NavSupervisor_ClearActionYawReference(void)
 {
     app_nav_supervisor_action_yaw_reference_q16_deg = 0;
     app_nav_supervisor_action_yaw_reference_valid = 0U;
+}
+
+static void App_NavSupervisor_ClearPivotExitLatch(void)
+{
+    app_nav_supervisor_pivot_180_exit_requires_advance = 0U;
 }
 
 static int32_t App_NavSupervisor_NormalizeYawDeltaQ16(int64_t delta_q16_deg)
@@ -136,6 +142,7 @@ static AppNavSupervisorState App_NavSupervisor_SetError(uint8_t result)
 {
     App_NavSupervisor_StopActions();
     App_NavSupervisor_ClearActionYawReference();
+    App_NavSupervisor_ClearPivotExitLatch();
     App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_ERROR,
                                APP_NAV_SUPERVISOR_ACTION_NONE,
                                result);
@@ -349,6 +356,7 @@ static AppNavSupervisorState App_NavSupervisor_HandleApproachFrontWallForPivot(c
     case APP_NAV_APPROACH_FRONT_WALL_ACTION_DONE_FRONT_WALL:
         App_NavSupervisor_ClearOutput(output);
         App_Nav_StopApproachFrontWallAction();
+        app_nav_supervisor_pivot_180_exit_requires_advance = 1U;
 
         if (!App_NavSupervisor_StartPivot180(input))
         {
@@ -455,6 +463,19 @@ static AppNavSupervisorState App_NavSupervisor_HandlePivot(const AppNavInput *in
         App_Nav_StopPivotAction();
         App_NavSupervisor_ClearActionYawReference();
         App_NavSupervisor_UpdateMazeDebug();
+
+        if (app_nav_supervisor_pivot_180_exit_requires_advance != 0U)
+        {
+            App_NavSupervisor_ClearPivotExitLatch();
+
+            if (!App_NavSupervisor_StartAdvance(input))
+            {
+                return App_NavSupervisor_SetError(APP_NAV_SUPERVISOR_RESULT_START_FAILED);
+            }
+
+            return app_nav_supervisor_debug.state;
+        }
+
         App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_DECIDE,
                                    APP_NAV_SUPERVISOR_ACTION_NONE,
                                    APP_NAV_SUPERVISOR_RESULT_OK);
@@ -479,6 +500,7 @@ void App_NavSupervisor_Reset(void)
 {
     App_NavSupervisor_StopActions();
     App_NavSupervisor_ClearActionYawReference();
+    App_NavSupervisor_ClearPivotExitLatch();
 
     if (app_nav_supervisor_initial_pose_valid != 0U)
     {
@@ -540,6 +562,7 @@ bool App_NavSupervisor_Start(void)
 {
     App_NavSupervisor_StopActions();
     App_NavSupervisor_ClearActionYawReference();
+    App_NavSupervisor_ClearPivotExitLatch();
 
     app_nav_supervisor_debug.active = 1U;
     App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_DECIDE,
@@ -554,6 +577,7 @@ void App_NavSupervisor_Stop(void)
 {
     App_NavSupervisor_StopActions();
     App_NavSupervisor_ClearActionYawReference();
+    App_NavSupervisor_ClearPivotExitLatch();
 
     app_nav_supervisor_debug.active = 0U;
     App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_IDLE,
