@@ -184,12 +184,6 @@ typedef enum
     NAV_DBG_SMOOTH_FINISH_FRONT_WALL_SAFETY = 6
 } NavDebugSmoothFinishReason;
 
-typedef enum
-{
-    SMOOTH_TURN_PHASE_TURNING = 0,
-    SMOOTH_TURN_PHASE_POST_YAW_SEEK_REAR_TAPE = 1
-} SmoothTurnPhase;
-
 typedef struct
 {
     RobotStateTypeDef previous_robot_state;
@@ -268,15 +262,11 @@ static uint8_t motion_confirm_counter = 0;
 // LABERINTO
 static bool pending_initial_cell_seed = false;
 
-// Fase local del giro suave legacy: luego de alcanzar yaw objetivo,
-// avanza lento hasta confirmar la cinta trasera de la celda destino.
+// Valores legacy del post-yaw del giro suave. app_nav ejecuta la fase portable
+// y app_core conserva el mapeo de configuracion/runtime.
 #define SMOOTH_POST_YAW_SEEK_TIMEOUT_MS 1500U
 #define SMOOTH_POST_YAW_SEEK_TIMEOUT_TICKS \
     ((SMOOTH_POST_YAW_SEEK_TIMEOUT_MS + CONTROL_PERIOD_MS - 1U) / CONTROL_PERIOD_MS)
-
-static SmoothTurnPhase smooth_turn_phase = SMOOTH_TURN_PHASE_TURNING;
-static uint16_t smooth_post_yaw_ticks = 0;
-static int16_t smooth_post_yaw_target_deg = 0;
 
 //==============================================================================
 // PROTOTIPOS DE FUNCIONES PRIVADAS
@@ -498,6 +488,9 @@ static AppNavConfig Build_AppNavConfig_From_LegacyRuntime(void)
 
     cfg.turn_target_dps = turn_target_dps;
     cfg.pivot_turn_target_dps = pivot_turn_target_dps;
+    cfg.smooth_turn_completion_dead_zone_deg = TURN_COMPLETION_DEAD_ZONE;
+    cfg.smooth_rear_tape_min_yaw_deg = 45U;
+    cfg.smooth_post_yaw_seek_timeout_ticks = SMOOTH_POST_YAW_SEEK_TIMEOUT_TICKS;
 
     cfg.advance_pid_kp_q16 = pid_configs[PID_ROLE_CENTERING].kp;
     cfg.advance_pid_ki_q16 = pid_configs[PID_ROLE_CENTERING].ki;
@@ -2558,9 +2551,6 @@ static void Start_FindCells_Legacy_Mode(void)
     Nav_Debug_SetSmoothDirection(NAV_DBG_SMOOTH_DIR_NONE);
     Nav_Debug_SetSmoothFinishReason(NAV_DBG_SMOOTH_FINISH_NONE);
     Nav_Debug_ClearYawTarget();
-    smooth_turn_phase = SMOOTH_TURN_PHASE_TURNING;
-    smooth_post_yaw_ticks = 0;
-    smooth_post_yaw_target_deg = 0;
 
     Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_START_FIND_CELLS);
     Set_Robot_State(STATE_NAVIGATING);
@@ -2860,11 +2850,11 @@ static void Set_Robot_State(RobotStateTypeDef new_state)
         }
         else if (new_state == STATE_SMOOTH_TURN_LEFT)
         {
-            (void)App_Nav_StartSmoothTurn(APP_NAV_SMOOTH_TURN_LEFT);
+            (void)App_Nav_StartSmoothAction(APP_NAV_SMOOTH_ACTION_LEFT);
         }
         else if (new_state == STATE_SMOOTH_TURN_RIGHT)
         {
-            (void)App_Nav_StartSmoothTurn(APP_NAV_SMOOTH_TURN_RIGHT);
+            (void)App_Nav_StartSmoothAction(APP_NAV_SMOOTH_ACTION_RIGHT);
         }
         else if (new_state == STATE_STRAIGHT_DRIVE_DESIDING)
         {
@@ -2960,175 +2950,104 @@ static void Sync_Legacy_Perception_From_Snapshot(void)
  */
 static void Handle_Smooth_Turn(void)
 {
-    bool wall_detected = false;
     RobotStateTypeDef completed_turn_state = robot_state;
-
-    adc_rear_floor = sensor_snapshot.adc_filtered[SENSOR_FLOOR_REAR_CH];
-    bool current_rear_tape = ((sensor_snapshot.detection_flags & SENSOR_DET_FLOOR_REAR) != 0U);
-
-    // Si vemos blanco, el robot ha salido completamente de cualquier cinta previa
-    if (!current_rear_tape)
-    {
-        was_rear_tape_detected = false;
-    }
-    // Si vemos negro, no lo habíamos procesado, y ya giramos un umbral seguro (> 45)
-    else if (!was_rear_tape_detected && (abs(FIXED_TO_INT(current_yaw_fixed)) > 45))
-    {
-        rear_tape_detected = true;
-        was_rear_tape_detected = true; // Lo bloqueamos para que no se dispare repetidas veces
-    }
-
     int8_t heading_update = 0;
+    AppNavInput input = {0};
+    AppNavOutput output = {0};
+    AppNavSmoothActionState smooth_state;
 
     if (completed_turn_state == STATE_SMOOTH_TURN_LEFT)
     {
-        wall_detected = (dist_diagonal_left_mm < after_turn_wall_threshold_mm);
         heading_update = TURN_LEFT;
     }
     else if (completed_turn_state == STATE_SMOOTH_TURN_RIGHT)
     {
-        wall_detected = (dist_diagonal_right_mm < after_turn_wall_threshold_mm);
         heading_update = TURN_RIGHT;
     }
 
-    if (smooth_turn_phase == SMOOTH_TURN_PHASE_POST_YAW_SEEK_REAR_TAPE)
-    {
-        uint16_t front_avg_mm = (uint16_t)((dist_front_left_mm + dist_front_right_mm) / 2U);
-
-        if (rear_tape_detected)
-        {
-            Nav_Debug_SetSmoothFinishReason(NAV_DBG_SMOOTH_FINISH_POST_YAW_REAR_TAPE);
-
-            Update_Robot_Position();
-            Commit_Maze_State(heading_update, true, true);
-
-            rear_tape_detected = false;
-            was_rear_tape_detected = true;
-
-            smooth_turn_phase = SMOOTH_TURN_PHASE_TURNING;
-            smooth_post_yaw_ticks = 0;
-
-            Set_Motor_Speeds(0, 0);
-            Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_SMOOTH_DONE);
-            Set_Robot_State(STATE_DECIDING);
-            kick_start_active = false;
-            motion_confirm_counter = 0;
-            return;
-        }
-
-        if (front_avg_mm < wall_threshold_mm_braking_start)
-        {
-            Nav_Debug_SetSmoothFinishReason(NAV_DBG_SMOOTH_FINISH_FRONT_WALL_SAFETY);
-            Commit_Maze_State(heading_update, false, false);
-            smooth_turn_phase = SMOOTH_TURN_PHASE_TURNING;
-            smooth_post_yaw_ticks = 0;
-            Set_Motor_Speeds(0, 0);
-            Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_SMOOTH_DONE);
-            Set_Robot_State(STATE_IDLE);
-            return;
-        }
-
-        smooth_post_yaw_ticks++;
-        if (smooth_post_yaw_ticks >= SMOOTH_POST_YAW_SEEK_TIMEOUT_TICKS)
-        {
-            Nav_Debug_SetSmoothFinishReason(NAV_DBG_SMOOTH_FINISH_POST_YAW_TIMEOUT);
-            Commit_Maze_State(heading_update, false, false);
-            smooth_turn_phase = SMOOTH_TURN_PHASE_TURNING;
-            smooth_post_yaw_ticks = 0;
-            Set_Motor_Speeds(0, 0);
-            Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_SMOOTH_DONE);
-            Set_Robot_State(STATE_IDLE);
-            return;
-        }
-
-        AppNavInput input = {0};
-        AppNavOutput output = {0};
-
-        Build_AppNavInput_From_SensorSnapshot(control_step_dt_ms, &input);
-
-        if (App_Nav_ComputeYawHoldAdvancePwm(&input,
-                                             right_motor_base_speed,
-                                             left_motor_base_speed,
-                                             &output))
-        {
-            Set_Motor_Speeds(output.right_motor_pwm, output.left_motor_pwm);
-        }
-        else
-        {
-            Set_Motor_Speeds(0, 0);
-        }
-
-        return;
-    }
-
-    bool yaw_target_reached = (abs(FIXED_TO_INT(current_yaw_fixed)) >= (90 - TURN_COMPLETION_DEAD_ZONE));
-
-    if (rear_tape_detected || wall_detected || yaw_target_reached)
-    {
-        if (rear_tape_detected)
-        {
-            Nav_Debug_SetSmoothFinishReason(NAV_DBG_SMOOTH_FINISH_REAR_TAPE);
-
-            Update_Robot_Position();
-            Commit_Maze_State(heading_update, true, true);
-
-            rear_tape_detected = false;
-            was_rear_tape_detected = true;
-
-            smooth_turn_phase = SMOOTH_TURN_PHASE_TURNING;
-            smooth_post_yaw_ticks = 0;
-
-            Set_Motor_Speeds(right_motor_base_speed, left_motor_base_speed);
-            Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_SMOOTH_DONE);
-            Set_Robot_State(STATE_NAVIGATING);
-            kick_start_active = true;
-            motion_confirm_counter = 0;
-            return;
-        }
-
-        if (wall_detected)
-        {
-            Nav_Debug_SetSmoothFinishReason(NAV_DBG_SMOOTH_FINISH_WALL);
-            Commit_Maze_State(heading_update, false, false);
-
-            smooth_turn_phase = SMOOTH_TURN_PHASE_TURNING;
-            smooth_post_yaw_ticks = 0;
-
-            Set_Motor_Speeds(right_motor_base_speed, left_motor_base_speed);
-            Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_SMOOTH_DONE);
-            Set_Robot_State(STATE_NAVIGATING);
-            kick_start_active = true;
-            motion_confirm_counter = 0;
-            return;
-        }
-
-        // Yaw target alcanzado sin cinta trasera: no se considera fin físico.
-        // Se avanza lento manteniendo yaw hasta confirmar la cinta de la celda destino.
-        smooth_turn_phase = SMOOTH_TURN_PHASE_POST_YAW_SEEK_REAR_TAPE;
-        smooth_post_yaw_ticks = 0;
-        smooth_post_yaw_target_deg = (int16_t)FIXED_TO_INT(current_yaw_fixed);
-        Nav_Debug_SetSmoothFinishReason(NAV_DBG_SMOOTH_FINISH_YAW_TARGET);
-        Nav_Debug_SetYawTargetDeg(smooth_post_yaw_target_deg);
-        (void)App_Nav_StartYawHoldAdvance(current_yaw_fixed);
-
-        int16_t post_right_base = (int16_t)(right_motor_base_speed / 2U);
-        int16_t post_left_base = (int16_t)(left_motor_base_speed / 2U);
-        Set_Motor_Speeds(post_right_base, post_left_base);
-        return;
-    }
-
-    AppNavInput input = {0};
-    AppNavOutput output = {0};
-
     Build_AppNavInput_From_SensorSnapshot(control_step_dt_ms, &input);
+    smooth_state = App_Nav_TickSmoothAction(&input, &output);
 
-    if (App_Nav_ComputeSmoothTurnPwm(&input, &output))
+    if ((smooth_state == APP_NAV_SMOOTH_ACTION_TURNING) ||
+        (smooth_state == APP_NAV_SMOOTH_ACTION_POST_YAW_SEEK_REAR_TAPE))
     {
+        if (smooth_state == APP_NAV_SMOOTH_ACTION_POST_YAW_SEEK_REAR_TAPE)
+        {
+            AppNavDebug portable_debug = {0};
+            App_Nav_GetDebug(&portable_debug);
+            Nav_Debug_SetSmoothFinishReason(NAV_DBG_SMOOTH_FINISH_YAW_TARGET);
+            Nav_Debug_SetYawTargetDeg(portable_debug.yaw_target_deg);
+        }
         Set_Motor_Speeds(output.right_motor_pwm, output.left_motor_pwm);
+        return;
     }
-    else
+
+    switch (smooth_state)
     {
+    case APP_NAV_SMOOTH_ACTION_DONE_REAR_TAPE:
+        Nav_Debug_SetSmoothFinishReason(NAV_DBG_SMOOTH_FINISH_REAR_TAPE);
+
+        Update_Robot_Position();
+        Commit_Maze_State(heading_update, true, true);
+
+        rear_tape_detected = false;
+        was_rear_tape_detected = true;
+
+        Set_Motor_Speeds(right_motor_base_speed, left_motor_base_speed);
+        Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_SMOOTH_DONE);
+        Set_Robot_State(STATE_NAVIGATING);
+        kick_start_active = true;
+        motion_confirm_counter = 0;
+        return;
+
+    case APP_NAV_SMOOTH_ACTION_DONE_WALL:
+        Nav_Debug_SetSmoothFinishReason(NAV_DBG_SMOOTH_FINISH_WALL);
+        Commit_Maze_State(heading_update, false, false);
+
+        Set_Motor_Speeds(right_motor_base_speed, left_motor_base_speed);
+        Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_SMOOTH_DONE);
+        Set_Robot_State(STATE_NAVIGATING);
+        kick_start_active = true;
+        motion_confirm_counter = 0;
+        return;
+
+    case APP_NAV_SMOOTH_ACTION_DONE_POST_YAW_REAR_TAPE:
+        Nav_Debug_SetSmoothFinishReason(NAV_DBG_SMOOTH_FINISH_POST_YAW_REAR_TAPE);
+
+        Update_Robot_Position();
+        Commit_Maze_State(heading_update, true, true);
+
+        rear_tape_detected = false;
+        was_rear_tape_detected = true;
+
         Set_Motor_Speeds(0, 0);
+        Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_SMOOTH_DONE);
+        Set_Robot_State(STATE_DECIDING);
+        kick_start_active = false;
+        motion_confirm_counter = 0;
+        return;
+
+    case APP_NAV_SMOOTH_ACTION_FRONT_WALL_SAFETY:
+        Nav_Debug_SetSmoothFinishReason(NAV_DBG_SMOOTH_FINISH_FRONT_WALL_SAFETY);
+        Commit_Maze_State(heading_update, false, false);
+        Set_Motor_Speeds(0, 0);
+        Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_SMOOTH_DONE);
+        Set_Robot_State(STATE_IDLE);
+        return;
+
+    case APP_NAV_SMOOTH_ACTION_POST_YAW_TIMEOUT:
+        Nav_Debug_SetSmoothFinishReason(NAV_DBG_SMOOTH_FINISH_POST_YAW_TIMEOUT);
+        Commit_Maze_State(heading_update, false, false);
+        Set_Motor_Speeds(0, 0);
+        Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_SMOOTH_DONE);
+        Set_Robot_State(STATE_IDLE);
+        return;
+
+    case APP_NAV_SMOOTH_ACTION_IDLE:
+    case APP_NAV_SMOOTH_ACTION_ERROR:
+    default:
+        Set_Motor_Speeds(0, 0);
+        return;
     }
 }
 

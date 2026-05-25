@@ -68,6 +68,25 @@ typedef enum
 
 typedef enum
 {
+    APP_NAV_SMOOTH_ACTION_IDLE = 0,
+    APP_NAV_SMOOTH_ACTION_TURNING,
+    APP_NAV_SMOOTH_ACTION_POST_YAW_SEEK_REAR_TAPE,
+    APP_NAV_SMOOTH_ACTION_DONE_REAR_TAPE,
+    APP_NAV_SMOOTH_ACTION_DONE_WALL,
+    APP_NAV_SMOOTH_ACTION_DONE_POST_YAW_REAR_TAPE,
+    APP_NAV_SMOOTH_ACTION_FRONT_WALL_SAFETY,
+    APP_NAV_SMOOTH_ACTION_POST_YAW_TIMEOUT,
+    APP_NAV_SMOOTH_ACTION_ERROR
+} AppNavSmoothActionState;
+
+typedef enum
+{
+    APP_NAV_SMOOTH_ACTION_LEFT = 0,
+    APP_NAV_SMOOTH_ACTION_RIGHT
+} AppNavSmoothActionType;
+
+typedef enum
+{
     APP_NAV_PIVOT_ACTION_IDLE = 0,
     APP_NAV_PIVOT_ACTION_RUNNING,
     APP_NAV_PIVOT_ACTION_DONE,
@@ -160,6 +179,9 @@ typedef struct
 
     uint16_t turn_target_dps;
     uint16_t pivot_turn_target_dps;
+    uint16_t smooth_turn_completion_dead_zone_deg;
+    uint16_t smooth_rear_tape_min_yaw_deg;
+    uint16_t smooth_post_yaw_seek_timeout_ticks;
 
     int32_t advance_pid_kp_q16;
     int32_t advance_pid_ki_q16;

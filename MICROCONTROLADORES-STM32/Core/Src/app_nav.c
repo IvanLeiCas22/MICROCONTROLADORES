@@ -10,15 +10,21 @@ static PID_Controller_t app_nav_smooth_turn_pid;
 static PID_Controller_t app_nav_pivot_turn_pid;
 static PID_Controller_t app_nav_braking_pid;
 static AppNavSmoothTurnDirection app_nav_smooth_turn_direction;
+static AppNavSmoothActionType app_nav_smooth_action_type;
+static AppNavSmoothActionState app_nav_smooth_action_state;
 static AppNavPivotActionType app_nav_pivot_action_type;
 static AppNavPivotActionState app_nav_pivot_action_state;
 static int32_t app_nav_straight_yaw_target_q16_deg;
+static int16_t app_nav_smooth_post_yaw_target_deg;
 static int16_t app_nav_pivot_target_yaw_degrees;
 static int16_t app_nav_pivot_last_target_dps;
+static uint16_t app_nav_smooth_post_yaw_ticks;
 static uint32_t app_nav_pivot_elapsed_ms;
 static uint8_t app_nav_straight_active;
 static uint8_t app_nav_wall_follow_active;
 static uint8_t app_nav_smooth_turn_active;
+static uint8_t app_nav_smooth_action_active;
+static uint8_t app_nav_smooth_was_rear_tape_detected;
 static uint8_t app_nav_pivot_turn_active;
 static uint8_t app_nav_braking_active;
 static bool app_nav_enabled = false;
@@ -186,6 +192,27 @@ static void App_Nav_ClearPivotActionState(void)
     app_nav_pivot_elapsed_ms = 0U;
 }
 
+static void App_Nav_ClearSmoothActionState(void)
+{
+    app_nav_smooth_action_type = APP_NAV_SMOOTH_ACTION_LEFT;
+    app_nav_smooth_action_state = APP_NAV_SMOOTH_ACTION_IDLE;
+    app_nav_smooth_action_active = 0U;
+    app_nav_smooth_was_rear_tape_detected = 0U;
+    app_nav_smooth_post_yaw_ticks = 0U;
+    app_nav_smooth_post_yaw_target_deg = 0;
+}
+
+static void App_Nav_SetSmoothActionTerminal(AppNavSmoothActionState terminal_state)
+{
+    app_nav_smooth_action_active = 0U;
+    app_nav_smooth_turn_active = 0U;
+    app_nav_straight_active = 0U;
+    app_nav_smooth_action_state = terminal_state;
+    app_nav_smooth_post_yaw_ticks = 0U;
+    app_nav_debug.pwm_right_cmd = 0;
+    app_nav_debug.pwm_left_cmd = 0;
+}
+
 static bool App_Nav_GetPivotActionTargets(AppNavPivotActionType action,
                                           int16_t *target_yaw_degrees,
                                           int16_t *base_target_dps)
@@ -343,6 +370,7 @@ void App_Nav_Init(const AppNavConfig *config)
     app_nav_braking_active = 0U;
     app_nav_smooth_turn_direction = APP_NAV_SMOOTH_TURN_LEFT;
     app_nav_straight_yaw_target_q16_deg = 0;
+    App_Nav_ClearSmoothActionState();
     App_Nav_ClearPivotActionState();
     App_Nav_ApplyAdvancePidConfig(1U);
     App_Nav_ApplySmoothTurnPidConfig(1U);
@@ -385,6 +413,7 @@ void App_Nav_Reset(void)
     app_nav_braking_active = 0U;
     app_nav_smooth_turn_direction = APP_NAV_SMOOTH_TURN_LEFT;
     app_nav_straight_yaw_target_q16_deg = 0;
+    App_Nav_ClearSmoothActionState();
     App_Nav_ClearPivotActionState();
     PID_Reset(&app_nav_advance_pid);
     PID_Reset(&app_nav_smooth_turn_pid);
@@ -411,6 +440,7 @@ void App_Nav_Stop(void)
     app_nav_smooth_turn_active = 0U;
     app_nav_pivot_turn_active = 0U;
     app_nav_braking_active = 0U;
+    App_Nav_ClearSmoothActionState();
     App_Nav_ClearPivotActionState();
     app_nav_debug.mode = APP_NAV_MODE_IDLE;
     app_nav_debug.previous_state = app_nav_debug.state;
@@ -537,7 +567,8 @@ bool App_Nav_RecommendAction(uint32_t random_value,
     return true;
 }
 
-bool App_Nav_StartStraightDriveYawHold(int32_t yaw_target_q16_deg)
+static bool App_Nav_StartYawHoldAdvanceInternal(int32_t yaw_target_q16_deg,
+                                                uint8_t clear_smooth_action)
 {
     app_nav_straight_yaw_target_q16_deg = yaw_target_q16_deg;
     app_nav_straight_active = 1U;
@@ -545,6 +576,10 @@ bool App_Nav_StartStraightDriveYawHold(int32_t yaw_target_q16_deg)
     app_nav_smooth_turn_active = 0U;
     app_nav_pivot_turn_active = 0U;
     app_nav_braking_active = 0U;
+    if (clear_smooth_action != 0U)
+    {
+        App_Nav_ClearSmoothActionState();
+    }
     App_Nav_ClearPivotActionState();
 
     PID_Reset(&app_nav_advance_pid);
@@ -557,9 +592,14 @@ bool App_Nav_StartStraightDriveYawHold(int32_t yaw_target_q16_deg)
     return true;
 }
 
+bool App_Nav_StartStraightDriveYawHold(int32_t yaw_target_q16_deg)
+{
+    return App_Nav_StartYawHoldAdvanceInternal(yaw_target_q16_deg, 1U);
+}
+
 bool App_Nav_StartYawHoldAdvance(int32_t yaw_target_q16_deg)
 {
-    return App_Nav_StartStraightDriveYawHold(yaw_target_q16_deg);
+    return App_Nav_StartYawHoldAdvanceInternal(yaw_target_q16_deg, 1U);
 }
 
 bool App_Nav_ComputeYawHoldAdvancePwm(const AppNavInput *input,
@@ -667,6 +707,7 @@ bool App_Nav_StartWallFollowAdvance(void)
     app_nav_pivot_turn_active = 0U;
     app_nav_braking_active = 0U;
     app_nav_straight_yaw_target_q16_deg = 0;
+    App_Nav_ClearSmoothActionState();
     App_Nav_ClearPivotActionState();
 
     PID_Reset(&app_nav_advance_pid);
@@ -693,6 +734,7 @@ bool App_Nav_StartSmoothTurn(AppNavSmoothTurnDirection direction)
     app_nav_pivot_turn_active = 0U;
     app_nav_braking_active = 0U;
     app_nav_straight_yaw_target_q16_deg = 0;
+    App_Nav_ClearSmoothActionState();
     App_Nav_ClearPivotActionState();
 
     PID_Reset(&app_nav_smooth_turn_pid);
@@ -761,6 +803,215 @@ bool App_Nav_ComputeSmoothTurnPwm(const AppNavInput *input,
     return true;
 }
 
+void App_Nav_StopSmoothAction(void)
+{
+    app_nav_smooth_turn_active = 0U;
+    app_nav_straight_active = 0U;
+    App_Nav_ClearSmoothActionState();
+    PID_Reset(&app_nav_smooth_turn_pid);
+    PID_Reset(&app_nav_advance_pid);
+
+    app_nav_debug.pwm_right_cmd = 0;
+    app_nav_debug.pwm_left_cmd = 0;
+}
+
+bool App_Nav_StartSmoothAction(AppNavSmoothActionType action)
+{
+    AppNavSmoothTurnDirection direction;
+
+    if (action == APP_NAV_SMOOTH_ACTION_LEFT)
+    {
+        direction = APP_NAV_SMOOTH_TURN_LEFT;
+        app_nav_debug.smooth_direction = APP_NAV_SMOOTH_DIR_LEFT;
+    }
+    else if (action == APP_NAV_SMOOTH_ACTION_RIGHT)
+    {
+        direction = APP_NAV_SMOOTH_TURN_RIGHT;
+        app_nav_debug.smooth_direction = APP_NAV_SMOOTH_DIR_RIGHT;
+    }
+    else
+    {
+        app_nav_smooth_action_state = APP_NAV_SMOOTH_ACTION_ERROR;
+        return false;
+    }
+
+    if (!App_Nav_StartSmoothTurn(direction))
+    {
+        app_nav_smooth_action_state = APP_NAV_SMOOTH_ACTION_ERROR;
+        return false;
+    }
+
+    app_nav_smooth_action_type = action;
+    app_nav_smooth_action_state = APP_NAV_SMOOTH_ACTION_TURNING;
+    app_nav_smooth_action_active = 1U;
+    app_nav_smooth_was_rear_tape_detected = app_nav_debug.floor_rear_black;
+    app_nav_smooth_post_yaw_ticks = 0U;
+    app_nav_smooth_post_yaw_target_deg = 0;
+
+    app_nav_debug.smooth_finish_reason = APP_NAV_SMOOTH_FINISH_NONE;
+    app_nav_debug.pwm_right_cmd = 0;
+    app_nav_debug.pwm_left_cmd = 0;
+
+    return true;
+}
+
+AppNavSmoothActionState App_Nav_TickSmoothAction(const AppNavInput *input,
+                                                 AppNavOutput *output)
+{
+    int32_t yaw_deg;
+    bool current_rear_tape;
+    bool rear_tape_detected = false;
+    bool wall_detected = false;
+    int32_t yaw_completion_threshold;
+    bool yaw_target_reached;
+
+    App_Nav_ClearOutput(output);
+    app_nav_debug.pwm_right_cmd = 0;
+    app_nav_debug.pwm_left_cmd = 0;
+
+    if ((input == NULL) || (output == NULL))
+    {
+        app_nav_smooth_action_state = APP_NAV_SMOOTH_ACTION_ERROR;
+        return app_nav_smooth_action_state;
+    }
+
+    if (app_nav_smooth_action_state == APP_NAV_SMOOTH_ACTION_IDLE)
+    {
+        return APP_NAV_SMOOTH_ACTION_IDLE;
+    }
+
+    if ((app_nav_smooth_action_state == APP_NAV_SMOOTH_ACTION_DONE_REAR_TAPE) ||
+        (app_nav_smooth_action_state == APP_NAV_SMOOTH_ACTION_DONE_WALL) ||
+        (app_nav_smooth_action_state == APP_NAV_SMOOTH_ACTION_DONE_POST_YAW_REAR_TAPE) ||
+        (app_nav_smooth_action_state == APP_NAV_SMOOTH_ACTION_FRONT_WALL_SAFETY) ||
+        (app_nav_smooth_action_state == APP_NAV_SMOOTH_ACTION_POST_YAW_TIMEOUT) ||
+        (app_nav_smooth_action_state == APP_NAV_SMOOTH_ACTION_ERROR))
+    {
+        return app_nav_smooth_action_state;
+    }
+
+    if (app_nav_smooth_action_active == 0U)
+    {
+        app_nav_smooth_action_state = APP_NAV_SMOOTH_ACTION_ERROR;
+        return app_nav_smooth_action_state;
+    }
+
+    yaw_deg = FIXED_TO_INT(input->yaw_q16_deg);
+    current_rear_tape = (app_nav_debug.floor_rear_black != 0U);
+
+    if (!current_rear_tape)
+    {
+        app_nav_smooth_was_rear_tape_detected = 0U;
+    }
+    else if ((app_nav_smooth_was_rear_tape_detected == 0U) &&
+             (App_Nav_AbsInt32(yaw_deg) > (int32_t)app_nav_config.smooth_rear_tape_min_yaw_deg))
+    {
+        rear_tape_detected = true;
+        app_nav_smooth_was_rear_tape_detected = 1U;
+    }
+
+    if (app_nav_smooth_action_type == APP_NAV_SMOOTH_ACTION_LEFT)
+    {
+        wall_detected = (input->dist_diagonal_left_mm < app_nav_config.after_turn_wall_threshold_mm);
+    }
+    else if (app_nav_smooth_action_type == APP_NAV_SMOOTH_ACTION_RIGHT)
+    {
+        wall_detected = (input->dist_diagonal_right_mm < app_nav_config.after_turn_wall_threshold_mm);
+    }
+    else
+    {
+        App_Nav_SetSmoothActionTerminal(APP_NAV_SMOOTH_ACTION_ERROR);
+        return app_nav_smooth_action_state;
+    }
+
+    yaw_completion_threshold = 90 - (int32_t)app_nav_config.smooth_turn_completion_dead_zone_deg;
+    if (yaw_completion_threshold < 0)
+    {
+        yaw_completion_threshold = 0;
+    }
+    yaw_target_reached = (App_Nav_AbsInt32(yaw_deg) >= yaw_completion_threshold);
+
+    if (app_nav_smooth_action_state == APP_NAV_SMOOTH_ACTION_POST_YAW_SEEK_REAR_TAPE)
+    {
+        uint16_t front_avg_mm = (uint16_t)(((uint32_t)input->dist_front_left_mm +
+                                            (uint32_t)input->dist_front_right_mm) /
+                                           2U);
+
+        if (rear_tape_detected)
+        {
+            app_nav_debug.smooth_finish_reason = APP_NAV_SMOOTH_FINISH_POST_YAW_REAR_TAPE;
+            App_Nav_SetSmoothActionTerminal(APP_NAV_SMOOTH_ACTION_DONE_POST_YAW_REAR_TAPE);
+            return app_nav_smooth_action_state;
+        }
+
+        if (front_avg_mm < app_nav_config.wall_threshold_mm_braking_start)
+        {
+            app_nav_debug.smooth_finish_reason = APP_NAV_SMOOTH_FINISH_FRONT_WALL_SAFETY;
+            App_Nav_SetSmoothActionTerminal(APP_NAV_SMOOTH_ACTION_FRONT_WALL_SAFETY);
+            return app_nav_smooth_action_state;
+        }
+
+        app_nav_smooth_post_yaw_ticks++;
+        if (app_nav_smooth_post_yaw_ticks >= app_nav_config.smooth_post_yaw_seek_timeout_ticks)
+        {
+            app_nav_debug.smooth_finish_reason = APP_NAV_SMOOTH_FINISH_POST_YAW_TIMEOUT;
+            App_Nav_SetSmoothActionTerminal(APP_NAV_SMOOTH_ACTION_POST_YAW_TIMEOUT);
+            return app_nav_smooth_action_state;
+        }
+
+        if (!App_Nav_ComputeYawHoldAdvancePwm(input,
+                                              app_nav_config.right_motor_base_speed,
+                                              app_nav_config.left_motor_base_speed,
+                                              output))
+        {
+            App_Nav_SetSmoothActionTerminal(APP_NAV_SMOOTH_ACTION_ERROR);
+            return app_nav_smooth_action_state;
+        }
+
+        app_nav_smooth_action_state = APP_NAV_SMOOTH_ACTION_POST_YAW_SEEK_REAR_TAPE;
+        return app_nav_smooth_action_state;
+    }
+
+    if (rear_tape_detected)
+    {
+        app_nav_debug.smooth_finish_reason = APP_NAV_SMOOTH_FINISH_REAR_TAPE;
+        App_Nav_SetSmoothActionTerminal(APP_NAV_SMOOTH_ACTION_DONE_REAR_TAPE);
+        return app_nav_smooth_action_state;
+    }
+
+    if (wall_detected)
+    {
+        app_nav_debug.smooth_finish_reason = APP_NAV_SMOOTH_FINISH_WALL;
+        App_Nav_SetSmoothActionTerminal(APP_NAV_SMOOTH_ACTION_DONE_WALL);
+        return app_nav_smooth_action_state;
+    }
+
+    if (yaw_target_reached)
+    {
+        app_nav_smooth_action_state = APP_NAV_SMOOTH_ACTION_POST_YAW_SEEK_REAR_TAPE;
+        app_nav_smooth_post_yaw_ticks = 0U;
+        app_nav_smooth_post_yaw_target_deg = (int16_t)yaw_deg;
+        app_nav_debug.smooth_finish_reason = APP_NAV_SMOOTH_FINISH_YAW_TARGET;
+        app_nav_debug.yaw_target_deg = app_nav_smooth_post_yaw_target_deg;
+        (void)App_Nav_StartYawHoldAdvanceInternal(input->yaw_q16_deg, 0U);
+
+        output->right_motor_pwm = (int16_t)(app_nav_config.right_motor_base_speed);
+        output->left_motor_pwm = (int16_t)(app_nav_config.left_motor_base_speed);
+        app_nav_debug.pwm_right_cmd = output->right_motor_pwm;
+        app_nav_debug.pwm_left_cmd = output->left_motor_pwm;
+        return app_nav_smooth_action_state;
+    }
+
+    if (!App_Nav_ComputeSmoothTurnPwm(input, output))
+    {
+        App_Nav_SetSmoothActionTerminal(APP_NAV_SMOOTH_ACTION_ERROR);
+        return app_nav_smooth_action_state;
+    }
+
+    app_nav_smooth_action_state = APP_NAV_SMOOTH_ACTION_TURNING;
+    return app_nav_smooth_action_state;
+}
+
 bool App_Nav_StartPivotTurn(void)
 {
     app_nav_pivot_turn_active = 1U;
@@ -769,6 +1020,7 @@ bool App_Nav_StartPivotTurn(void)
     app_nav_smooth_turn_active = 0U;
     app_nav_braking_active = 0U;
     app_nav_straight_yaw_target_q16_deg = 0;
+    App_Nav_ClearSmoothActionState();
 
     PID_Reset(&app_nav_pivot_turn_pid);
 
@@ -953,6 +1205,7 @@ bool App_Nav_StartBraking(void)
     app_nav_smooth_turn_active = 0U;
     app_nav_pivot_turn_active = 0U;
     app_nav_straight_yaw_target_q16_deg = 0;
+    App_Nav_ClearSmoothActionState();
     App_Nav_ClearPivotActionState();
 
     PID_Reset(&app_nav_braking_pid);
