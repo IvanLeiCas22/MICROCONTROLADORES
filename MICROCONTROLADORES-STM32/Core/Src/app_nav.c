@@ -907,6 +907,8 @@ AppNavSmoothActionState App_Nav_TickSmoothAction(const AppNavInput *input,
         return app_nav_smooth_action_state;
     }
 
+    App_Nav_UpdatePerception(input);
+
     if (app_nav_smooth_action_state == APP_NAV_SMOOTH_ACTION_IDLE)
     {
         return APP_NAV_SMOOTH_ACTION_IDLE;
@@ -1475,6 +1477,8 @@ AppNavAdvanceActionState App_Nav_TickAdvanceAction(const AppNavInput *input,
         app_nav_advance_action_state = APP_NAV_ADVANCE_ACTION_ERROR;
         return app_nav_advance_action_state;
     }
+
+    App_Nav_UpdatePerception(input);
 
     if (app_nav_advance_action_state == APP_NAV_ADVANCE_ACTION_IDLE)
     {
