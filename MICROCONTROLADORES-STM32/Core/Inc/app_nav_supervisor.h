@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "app_maze_types.h"
 #include "app_nav_types.h"
 
 typedef enum
@@ -40,6 +41,12 @@ typedef struct
 
 void App_NavSupervisor_Init(void);
 void App_NavSupervisor_Reset(void);
+bool App_NavSupervisor_SetInitialPose(uint8_t x,
+                                      uint8_t y,
+                                      HeadingTypeDef heading);
+bool App_NavSupervisor_ResetWithInitialPose(uint8_t x,
+                                            uint8_t y,
+                                            HeadingTypeDef heading);
 bool App_NavSupervisor_Start(void);
 void App_NavSupervisor_Stop(void);
 AppNavSupervisorState App_NavSupervisor_Tick(const AppNavInput *input,

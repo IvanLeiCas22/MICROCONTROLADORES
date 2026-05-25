@@ -16,6 +16,10 @@
 static AppNavSupervisorDebug app_nav_supervisor_debug;
 static int32_t app_nav_supervisor_action_yaw_reference_q16_deg;
 static uint8_t app_nav_supervisor_action_yaw_reference_valid;
+static uint8_t app_nav_supervisor_initial_x;
+static uint8_t app_nav_supervisor_initial_y;
+static HeadingTypeDef app_nav_supervisor_initial_heading;
+static uint8_t app_nav_supervisor_initial_pose_valid;
 
 static void App_NavSupervisor_ClearOutput(AppNavOutput *output)
 {
@@ -38,6 +42,14 @@ static void App_NavSupervisor_StopActions(void)
     App_Nav_StopAdvanceAction();
     App_Nav_StopSmoothAction();
     App_Nav_StopPivotAction();
+}
+
+static void App_NavSupervisor_SetDefaultInitialPose(void)
+{
+    app_nav_supervisor_initial_x = APP_MAZE_DEFAULT_START_X;
+    app_nav_supervisor_initial_y = APP_MAZE_DEFAULT_START_Y;
+    app_nav_supervisor_initial_heading = APP_MAZE_DEFAULT_START_HEADING;
+    app_nav_supervisor_initial_pose_valid = 1U;
 }
 
 static void App_NavSupervisor_ClearActionYawReference(void)
@@ -390,20 +402,69 @@ static AppNavSupervisorState App_NavSupervisor_HandlePivot(const AppNavInput *in
 
 void App_NavSupervisor_Init(void)
 {
+    App_NavSupervisor_SetDefaultInitialPose();
     App_NavSupervisor_Reset();
 }
 
 void App_NavSupervisor_Reset(void)
 {
     App_NavSupervisor_StopActions();
-    App_Maze_ResetState();
     App_NavSupervisor_ClearActionYawReference();
+
+    if (app_nav_supervisor_initial_pose_valid != 0U)
+    {
+        if (!App_Maze_ResetStateWithPose(app_nav_supervisor_initial_x,
+                                         app_nav_supervisor_initial_y,
+                                         app_nav_supervisor_initial_heading))
+        {
+            App_NavSupervisor_SetDefaultInitialPose();
+            (void)App_Maze_ResetStateWithPose(app_nav_supervisor_initial_x,
+                                              app_nav_supervisor_initial_y,
+                                              app_nav_supervisor_initial_heading);
+        }
+    }
+    else
+    {
+        App_Maze_ResetState();
+    }
 
     app_nav_supervisor_debug.active = 0U;
     App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_IDLE,
                                APP_NAV_SUPERVISOR_ACTION_NONE,
                                APP_NAV_SUPERVISOR_RESULT_OK);
     App_NavSupervisor_UpdateMazeDebug();
+}
+
+bool App_NavSupervisor_SetInitialPose(uint8_t x,
+                                      uint8_t y,
+                                      HeadingTypeDef heading)
+{
+    if (!App_Maze_IsValidPose(x, y, heading))
+    {
+        return false;
+    }
+
+    app_nav_supervisor_initial_x = x;
+    app_nav_supervisor_initial_y = y;
+    app_nav_supervisor_initial_heading = heading;
+    app_nav_supervisor_initial_pose_valid = 1U;
+
+    return true;
+}
+
+bool App_NavSupervisor_ResetWithInitialPose(uint8_t x,
+                                            uint8_t y,
+                                            HeadingTypeDef heading)
+{
+    if (!App_NavSupervisor_SetInitialPose(x, y, heading))
+    {
+        App_NavSupervisor_SetDefaultInitialPose();
+        App_NavSupervisor_Reset();
+        return false;
+    }
+
+    App_NavSupervisor_Reset();
+    return true;
 }
 
 bool App_NavSupervisor_Start(void)

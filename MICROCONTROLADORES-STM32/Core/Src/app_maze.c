@@ -18,17 +18,58 @@ static const uint8_t wall_lut[4][3] = {
 static uint8_t maze_map[MAZE_WIDTH][MAZE_HEIGHT];
 static AppMazePosition_t current_pos;
 
+bool App_Maze_IsValidPose(uint8_t x, uint8_t y, HeadingTypeDef heading)
+{
+    if ((x >= MAZE_WIDTH) || (y >= MAZE_HEIGHT))
+    {
+        return false;
+    }
+
+    return ((heading == HEADING_NORTH) ||
+            (heading == HEADING_EAST) ||
+            (heading == HEADING_SOUTH) ||
+            (heading == HEADING_WEST));
+}
+
+bool App_Maze_SetRobotPose(uint8_t x, uint8_t y, HeadingTypeDef heading)
+{
+    if (!App_Maze_IsValidPose(x, y, heading))
+    {
+        return false;
+    }
+
+    current_pos.x = x;
+    current_pos.y = y;
+    current_pos.heading = heading;
+
+    return true;
+}
+
 void App_Maze_ResetRobotPosition(void)
 {
-    current_pos.x = 7;
-    current_pos.y = 7;
-    current_pos.heading = HEADING_NORTH;
+    (void)App_Maze_SetRobotPose(APP_MAZE_DEFAULT_START_X,
+                                APP_MAZE_DEFAULT_START_Y,
+                                APP_MAZE_DEFAULT_START_HEADING);
 }
 
 void App_Maze_ResetState(void)
 {
+    (void)App_Maze_ResetStateWithPose(APP_MAZE_DEFAULT_START_X,
+                                      APP_MAZE_DEFAULT_START_Y,
+                                      APP_MAZE_DEFAULT_START_HEADING);
+}
+
+bool App_Maze_ResetStateWithPose(uint8_t x, uint8_t y, HeadingTypeDef heading)
+{
     memset(maze_map, 0, sizeof(maze_map));
-    App_Maze_ResetRobotPosition();
+
+    if (!App_Maze_SetRobotPose(x, y, heading))
+    {
+        App_Maze_ResetRobotPosition();
+        return false;
+    }
+
+    return true;
 }
 
 void App_Maze_AdvanceRobotPosition(void)
