@@ -2581,14 +2581,6 @@ static void Handle_Navigating(void)
         return;
     }
 
-    if (advance_state == APP_NAV_ADVANCE_ACTION_FRONT_OBSTACLE_SAFETY)
-    {
-        Set_Motor_Speeds(0, 0);
-        Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_FRONT_WALL_BRAKING);
-        Set_Robot_State(STATE_BRAKING);
-        return;
-    }
-
     if ((advance_state == APP_NAV_ADVANCE_ACTION_TIMEOUT) ||
         (advance_state == APP_NAV_ADVANCE_ACTION_ERROR))
     {

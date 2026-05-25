@@ -92,7 +92,6 @@ typedef enum
     APP_NAV_ADVANCE_ACTION_RUNNING_WALL_FOLLOW,
     APP_NAV_ADVANCE_ACTION_RUNNING_YAW_HOLD,
     APP_NAV_ADVANCE_ACTION_DONE_REAR_TAPE,
-    APP_NAV_ADVANCE_ACTION_FRONT_OBSTACLE_SAFETY,
     APP_NAV_ADVANCE_ACTION_TIMEOUT,
     APP_NAV_ADVANCE_ACTION_ERROR
 } AppNavAdvanceActionState;
@@ -101,6 +100,16 @@ typedef enum
 {
     APP_NAV_ADVANCE_ACTION_WALL_FOLLOW_AUTO_YAW_HOLD = 0
 } AppNavAdvanceActionMode;
+
+typedef enum
+{
+    APP_NAV_APPROACH_FRONT_WALL_ACTION_IDLE = 0,
+    APP_NAV_APPROACH_FRONT_WALL_ACTION_RUNNING_WALL_FOLLOW,
+    APP_NAV_APPROACH_FRONT_WALL_ACTION_RUNNING_YAW_HOLD,
+    APP_NAV_APPROACH_FRONT_WALL_ACTION_DONE_FRONT_WALL,
+    APP_NAV_APPROACH_FRONT_WALL_ACTION_TIMEOUT,
+    APP_NAV_APPROACH_FRONT_WALL_ACTION_ERROR
+} AppNavApproachFrontWallActionState;
 
 typedef enum
 {
@@ -194,6 +203,7 @@ typedef struct
     uint16_t after_turn_wall_threshold_mm;
     uint16_t wall_target_mm;
     uint16_t wall_braking_target_mm;
+    uint16_t approach_front_wall_target_mm;
     uint16_t tape_detection_threshold_adc;
     uint16_t tape_hysteresis_adc;
 

@@ -39,6 +39,10 @@ bool App_Nav_StartAdvanceAction(AppNavAdvanceActionMode mode);
 AppNavAdvanceActionState App_Nav_TickAdvanceAction(const AppNavInput *input,
                                                    AppNavOutput *output);
 void App_Nav_StopAdvanceAction(void);
+bool App_Nav_StartApproachFrontWallAction(void);
+AppNavApproachFrontWallActionState App_Nav_TickApproachFrontWallAction(const AppNavInput *input,
+                                                                       AppNavOutput *output);
+void App_Nav_StopApproachFrontWallAction(void);
 bool App_Nav_StartSmoothTurn(AppNavSmoothTurnDirection direction);
 bool App_Nav_ComputeSmoothTurnPwm(const AppNavInput *input,
                                   AppNavOutput *output);

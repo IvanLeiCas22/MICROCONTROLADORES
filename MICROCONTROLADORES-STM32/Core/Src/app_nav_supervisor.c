@@ -40,6 +40,7 @@ static void App_NavSupervisor_ClearOutput(AppNavOutput *output)
 static void App_NavSupervisor_StopActions(void)
 {
     App_Nav_StopAdvanceAction();
+    App_Nav_StopApproachFrontWallAction();
     App_Nav_StopSmoothAction();
     App_Nav_StopPivotAction();
 }
@@ -165,6 +166,44 @@ static bool App_NavSupervisor_StartAdvance(const AppNavInput *input)
     return true;
 }
 
+static bool App_NavSupervisor_StartApproachFrontWallForPivot(const AppNavInput *input)
+{
+    if (!App_NavSupervisor_CaptureActionYawReference(input))
+    {
+        return false;
+    }
+
+    if (!App_Nav_StartApproachFrontWallAction())
+    {
+        App_NavSupervisor_ClearActionYawReference();
+        return false;
+    }
+
+    App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_RUN_APPROACH_FRONT_WALL_FOR_PIVOT,
+                               APP_NAV_SUPERVISOR_ACTION_APPROACH_FRONT_WALL_FOR_PIVOT,
+                               APP_NAV_SUPERVISOR_RESULT_OK);
+    return true;
+}
+
+static bool App_NavSupervisor_StartPivot180(const AppNavInput *input)
+{
+    if (!App_NavSupervisor_CaptureActionYawReference(input))
+    {
+        return false;
+    }
+
+    if (!App_Nav_StartPivotAction(APP_NAV_PIVOT_180_RIGHT))
+    {
+        App_NavSupervisor_ClearActionYawReference();
+        return false;
+    }
+
+    App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_RUN_PIVOT_180,
+                               APP_NAV_SUPERVISOR_ACTION_PIVOT_180,
+                               APP_NAV_SUPERVISOR_RESULT_OK);
+    return true;
+}
+
 static bool App_NavSupervisor_StartRecommendedAction(AppNavRecommendedAction action,
                                                      const AppNavInput *input)
 {
@@ -205,19 +244,7 @@ static bool App_NavSupervisor_StartRecommendedAction(AppNavRecommendedAction act
         return true;
 
     case APP_NAV_ACTION_GO_BACK:
-        if (!App_NavSupervisor_CaptureActionYawReference(input))
-        {
-            return false;
-        }
-        if (!App_Nav_StartPivotAction(APP_NAV_PIVOT_180_RIGHT))
-        {
-            App_NavSupervisor_ClearActionYawReference();
-            return false;
-        }
-        App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_RUN_PIVOT_180,
-                                   APP_NAV_SUPERVISOR_ACTION_PIVOT_180,
-                                   APP_NAV_SUPERVISOR_RESULT_OK);
-        return true;
+        return App_NavSupervisor_StartApproachFrontWallForPivot(input);
 
     case APP_NAV_ACTION_NONE:
     default:
@@ -287,10 +314,52 @@ static AppNavSupervisorState App_NavSupervisor_HandleAdvance(const AppNavInput *
                                    APP_NAV_SUPERVISOR_RESULT_OK);
         return app_nav_supervisor_debug.state;
 
-    case APP_NAV_ADVANCE_ACTION_FRONT_OBSTACLE_SAFETY:
     case APP_NAV_ADVANCE_ACTION_TIMEOUT:
     case APP_NAV_ADVANCE_ACTION_ERROR:
     case APP_NAV_ADVANCE_ACTION_IDLE:
+    default:
+        App_NavSupervisor_ClearOutput(output);
+        return App_NavSupervisor_SetError(APP_NAV_SUPERVISOR_RESULT_PRIMITIVE_ERROR);
+    }
+}
+
+static AppNavSupervisorState App_NavSupervisor_HandleApproachFrontWallForPivot(const AppNavInput *input,
+                                                                               AppNavOutput *output)
+{
+    AppNavInput action_input = {0};
+    AppNavApproachFrontWallActionState approach_state;
+
+    if (!App_NavSupervisor_BuildActionInput(input, &action_input))
+    {
+        App_NavSupervisor_ClearOutput(output);
+        return App_NavSupervisor_SetError(APP_NAV_SUPERVISOR_RESULT_PRIMITIVE_ERROR);
+    }
+
+    approach_state = App_Nav_TickApproachFrontWallAction(&action_input, output);
+
+    switch (approach_state)
+    {
+    case APP_NAV_APPROACH_FRONT_WALL_ACTION_RUNNING_WALL_FOLLOW:
+    case APP_NAV_APPROACH_FRONT_WALL_ACTION_RUNNING_YAW_HOLD:
+        App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_RUN_APPROACH_FRONT_WALL_FOR_PIVOT,
+                                   APP_NAV_SUPERVISOR_ACTION_APPROACH_FRONT_WALL_FOR_PIVOT,
+                                   APP_NAV_SUPERVISOR_RESULT_OK);
+        return app_nav_supervisor_debug.state;
+
+    case APP_NAV_APPROACH_FRONT_WALL_ACTION_DONE_FRONT_WALL:
+        App_NavSupervisor_ClearOutput(output);
+        App_Nav_StopApproachFrontWallAction();
+
+        if (!App_NavSupervisor_StartPivot180(input))
+        {
+            return App_NavSupervisor_SetError(APP_NAV_SUPERVISOR_RESULT_START_FAILED);
+        }
+
+        return app_nav_supervisor_debug.state;
+
+    case APP_NAV_APPROACH_FRONT_WALL_ACTION_TIMEOUT:
+    case APP_NAV_APPROACH_FRONT_WALL_ACTION_ERROR:
+    case APP_NAV_APPROACH_FRONT_WALL_ACTION_IDLE:
     default:
         App_NavSupervisor_ClearOutput(output);
         return App_NavSupervisor_SetError(APP_NAV_SUPERVISOR_RESULT_PRIMITIVE_ERROR);
@@ -521,6 +590,9 @@ AppNavSupervisorState App_NavSupervisor_Tick(const AppNavInput *input,
 
     case APP_NAV_SUPERVISOR_RUN_ADVANCE:
         return App_NavSupervisor_HandleAdvance(input, output);
+
+    case APP_NAV_SUPERVISOR_RUN_APPROACH_FRONT_WALL_FOR_PIVOT:
+        return App_NavSupervisor_HandleApproachFrontWallForPivot(input, output);
 
     case APP_NAV_SUPERVISOR_RUN_SMOOTH_LEFT:
     case APP_NAV_SUPERVISOR_RUN_SMOOTH_RIGHT:

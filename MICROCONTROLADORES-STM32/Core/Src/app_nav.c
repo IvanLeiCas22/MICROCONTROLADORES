@@ -11,6 +11,7 @@ static PID_Controller_t app_nav_pivot_turn_pid;
 static PID_Controller_t app_nav_braking_pid;
 static AppNavAdvanceActionMode app_nav_advance_action_mode;
 static AppNavAdvanceActionState app_nav_advance_action_state;
+static AppNavApproachFrontWallActionState app_nav_approach_front_wall_action_state;
 static AppNavSmoothTurnDirection app_nav_smooth_turn_direction;
 static AppNavSmoothActionType app_nav_smooth_action_type;
 static AppNavSmoothActionState app_nav_smooth_action_state;
@@ -28,6 +29,8 @@ static uint8_t app_nav_advance_action_active;
 static uint8_t app_nav_advance_was_rear_tape_detected;
 static uint8_t app_nav_advance_rear_tape_search_armed;
 static uint8_t app_nav_advance_yaw_hold_started;
+static uint8_t app_nav_approach_front_wall_action_active;
+static uint8_t app_nav_approach_front_wall_yaw_hold_started;
 static uint8_t app_nav_smooth_turn_active;
 static uint8_t app_nav_smooth_action_active;
 static uint8_t app_nav_smooth_was_rear_tape_detected;
@@ -208,12 +211,29 @@ static void App_Nav_ClearAdvanceActionState(void)
     app_nav_advance_yaw_hold_started = 0U;
 }
 
+static void App_Nav_ClearApproachFrontWallActionState(void)
+{
+    app_nav_approach_front_wall_action_state = APP_NAV_APPROACH_FRONT_WALL_ACTION_IDLE;
+    app_nav_approach_front_wall_action_active = 0U;
+    app_nav_approach_front_wall_yaw_hold_started = 0U;
+}
+
 static void App_Nav_SetAdvanceActionTerminal(AppNavAdvanceActionState terminal_state)
 {
     app_nav_advance_action_active = 0U;
     app_nav_wall_follow_active = 0U;
     app_nav_straight_active = 0U;
     app_nav_advance_action_state = terminal_state;
+    app_nav_debug.pwm_right_cmd = 0;
+    app_nav_debug.pwm_left_cmd = 0;
+}
+
+static void App_Nav_SetApproachFrontWallActionTerminal(AppNavApproachFrontWallActionState terminal_state)
+{
+    app_nav_approach_front_wall_action_active = 0U;
+    app_nav_wall_follow_active = 0U;
+    app_nav_straight_active = 0U;
+    app_nav_approach_front_wall_action_state = terminal_state;
     app_nav_debug.pwm_right_cmd = 0;
     app_nav_debug.pwm_left_cmd = 0;
 }
@@ -397,6 +417,7 @@ void App_Nav_Init(const AppNavConfig *config)
     app_nav_smooth_turn_direction = APP_NAV_SMOOTH_TURN_LEFT;
     app_nav_straight_yaw_target_q16_deg = 0;
     App_Nav_ClearAdvanceActionState();
+    App_Nav_ClearApproachFrontWallActionState();
     App_Nav_ClearSmoothActionState();
     App_Nav_ClearPivotActionState();
     App_Nav_ApplyAdvancePidConfig(1U);
@@ -441,6 +462,7 @@ void App_Nav_Reset(void)
     app_nav_smooth_turn_direction = APP_NAV_SMOOTH_TURN_LEFT;
     app_nav_straight_yaw_target_q16_deg = 0;
     App_Nav_ClearAdvanceActionState();
+    App_Nav_ClearApproachFrontWallActionState();
     App_Nav_ClearSmoothActionState();
     App_Nav_ClearPivotActionState();
     PID_Reset(&app_nav_advance_pid);
@@ -478,6 +500,7 @@ void App_Nav_Stop(void)
     app_nav_debug.pwm_right_cmd = 0;
     app_nav_debug.pwm_left_cmd = 0;
     app_nav_debug.transition_sequence++;
+    App_Nav_ClearApproachFrontWallActionState();
 }
 
 void App_Nav_Tick(const AppNavInput *input, AppNavOutput *output)
@@ -608,6 +631,7 @@ static bool App_Nav_StartYawHoldAdvanceInternal(int32_t yaw_target_q16_deg,
     if (clear_smooth_action != 0U)
     {
         App_Nav_ClearAdvanceActionState();
+        App_Nav_ClearApproachFrontWallActionState();
         App_Nav_ClearSmoothActionState();
     }
     App_Nav_ClearPivotActionState();
@@ -738,6 +762,7 @@ bool App_Nav_StartWallFollowAdvance(void)
     app_nav_braking_active = 0U;
     app_nav_straight_yaw_target_q16_deg = 0;
     App_Nav_ClearAdvanceActionState();
+    App_Nav_ClearApproachFrontWallActionState();
     App_Nav_ClearSmoothActionState();
     App_Nav_ClearPivotActionState();
 
@@ -766,6 +791,7 @@ bool App_Nav_StartSmoothTurn(AppNavSmoothTurnDirection direction)
     app_nav_braking_active = 0U;
     app_nav_straight_yaw_target_q16_deg = 0;
     App_Nav_ClearAdvanceActionState();
+    App_Nav_ClearApproachFrontWallActionState();
     App_Nav_ClearSmoothActionState();
     App_Nav_ClearPivotActionState();
 
@@ -1055,6 +1081,7 @@ bool App_Nav_StartPivotTurn(void)
     app_nav_braking_active = 0U;
     app_nav_straight_yaw_target_q16_deg = 0;
     App_Nav_ClearAdvanceActionState();
+    App_Nav_ClearApproachFrontWallActionState();
     App_Nav_ClearSmoothActionState();
 
     PID_Reset(&app_nav_pivot_turn_pid);
@@ -1241,6 +1268,7 @@ bool App_Nav_StartBraking(void)
     app_nav_pivot_turn_active = 0U;
     app_nav_straight_yaw_target_q16_deg = 0;
     App_Nav_ClearAdvanceActionState();
+    App_Nav_ClearApproachFrontWallActionState();
     App_Nav_ClearSmoothActionState();
     App_Nav_ClearPivotActionState();
 
@@ -1466,7 +1494,6 @@ AppNavAdvanceActionState App_Nav_TickAdvanceAction(const AppNavInput *input,
                                                    AppNavOutput *output)
 {
     bool current_rear_tape;
-    uint16_t front_avg_mm;
 
     App_Nav_ClearOutput(output);
     app_nav_debug.pwm_right_cmd = 0;
@@ -1486,7 +1513,6 @@ AppNavAdvanceActionState App_Nav_TickAdvanceAction(const AppNavInput *input,
     }
 
     if ((app_nav_advance_action_state == APP_NAV_ADVANCE_ACTION_DONE_REAR_TAPE) ||
-        (app_nav_advance_action_state == APP_NAV_ADVANCE_ACTION_FRONT_OBSTACLE_SAFETY) ||
         (app_nav_advance_action_state == APP_NAV_ADVANCE_ACTION_TIMEOUT) ||
         (app_nav_advance_action_state == APP_NAV_ADVANCE_ACTION_ERROR))
     {
@@ -1501,15 +1527,6 @@ AppNavAdvanceActionState App_Nav_TickAdvanceAction(const AppNavInput *input,
     }
 
     current_rear_tape = (input->floor_rear_black != 0U);
-    front_avg_mm = (uint16_t)(((uint32_t)input->dist_front_left_mm +
-                               (uint32_t)input->dist_front_right_mm) /
-                              2U);
-
-    if (front_avg_mm < app_nav_config.wall_threshold_mm_braking_start)
-    {
-        App_Nav_SetAdvanceActionTerminal(APP_NAV_ADVANCE_ACTION_FRONT_OBSTACLE_SAFETY);
-        return app_nav_advance_action_state;
-    }
 
     if (app_nav_advance_action_state == APP_NAV_ADVANCE_ACTION_WAIT_LEAVE_REAR_TAPE)
     {
@@ -1555,4 +1572,125 @@ AppNavAdvanceActionState App_Nav_TickAdvanceAction(const AppNavInput *input,
     }
 
     return app_nav_advance_action_state;
+}
+
+void App_Nav_StopApproachFrontWallAction(void)
+{
+    app_nav_wall_follow_active = 0U;
+    app_nav_straight_active = 0U;
+    App_Nav_ClearApproachFrontWallActionState();
+    PID_Reset(&app_nav_advance_pid);
+
+    app_nav_debug.pwm_right_cmd = 0;
+    app_nav_debug.pwm_left_cmd = 0;
+}
+
+bool App_Nav_StartApproachFrontWallAction(void)
+{
+    if (!App_Nav_StartWallFollowAdvance())
+    {
+        app_nav_approach_front_wall_action_state = APP_NAV_APPROACH_FRONT_WALL_ACTION_ERROR;
+        return false;
+    }
+
+    app_nav_approach_front_wall_action_state = APP_NAV_APPROACH_FRONT_WALL_ACTION_RUNNING_WALL_FOLLOW;
+    app_nav_approach_front_wall_action_active = 1U;
+    app_nav_approach_front_wall_yaw_hold_started = 0U;
+
+    app_nav_debug.pwm_right_cmd = 0;
+    app_nav_debug.pwm_left_cmd = 0;
+
+    return true;
+}
+
+AppNavApproachFrontWallActionState App_Nav_TickApproachFrontWallAction(const AppNavInput *input,
+                                                                       AppNavOutput *output)
+{
+    uint16_t front_avg_mm;
+
+    App_Nav_ClearOutput(output);
+    app_nav_debug.pwm_right_cmd = 0;
+    app_nav_debug.pwm_left_cmd = 0;
+
+    if ((input == NULL) || (output == NULL))
+    {
+        app_nav_approach_front_wall_action_state = APP_NAV_APPROACH_FRONT_WALL_ACTION_ERROR;
+        return app_nav_approach_front_wall_action_state;
+    }
+
+    App_Nav_UpdatePerception(input);
+
+    if (app_nav_approach_front_wall_action_state == APP_NAV_APPROACH_FRONT_WALL_ACTION_IDLE)
+    {
+        return APP_NAV_APPROACH_FRONT_WALL_ACTION_IDLE;
+    }
+
+    if ((app_nav_approach_front_wall_action_state == APP_NAV_APPROACH_FRONT_WALL_ACTION_DONE_FRONT_WALL) ||
+        (app_nav_approach_front_wall_action_state == APP_NAV_APPROACH_FRONT_WALL_ACTION_TIMEOUT) ||
+        (app_nav_approach_front_wall_action_state == APP_NAV_APPROACH_FRONT_WALL_ACTION_ERROR))
+    {
+        return app_nav_approach_front_wall_action_state;
+    }
+
+    if (app_nav_approach_front_wall_action_active == 0U)
+    {
+        App_Nav_SetApproachFrontWallActionTerminal(APP_NAV_APPROACH_FRONT_WALL_ACTION_ERROR);
+        return app_nav_approach_front_wall_action_state;
+    }
+
+    front_avg_mm = (uint16_t)(((uint32_t)input->dist_front_left_mm +
+                               (uint32_t)input->dist_front_right_mm) /
+                              2U);
+
+    if (front_avg_mm <= app_nav_config.approach_front_wall_target_mm)
+    {
+        App_Nav_SetApproachFrontWallActionTerminal(APP_NAV_APPROACH_FRONT_WALL_ACTION_DONE_FRONT_WALL);
+        return app_nav_approach_front_wall_action_state;
+    }
+
+    if ((app_nav_approach_front_wall_action_state == APP_NAV_APPROACH_FRONT_WALL_ACTION_RUNNING_YAW_HOLD) ||
+        (app_nav_approach_front_wall_yaw_hold_started != 0U))
+    {
+        if (app_nav_approach_front_wall_yaw_hold_started == 0U)
+        {
+            (void)App_Nav_StartYawHoldAdvanceInternal(input->yaw_q16_deg, 0U);
+            app_nav_approach_front_wall_yaw_hold_started = 1U;
+        }
+
+        if (!App_Nav_ComputeYawHoldAdvancePwm(input,
+                                              app_nav_config.right_motor_base_speed,
+                                              app_nav_config.left_motor_base_speed,
+                                              output))
+        {
+            App_Nav_SetApproachFrontWallActionTerminal(APP_NAV_APPROACH_FRONT_WALL_ACTION_ERROR);
+            return app_nav_approach_front_wall_action_state;
+        }
+
+        app_nav_approach_front_wall_action_state = APP_NAV_APPROACH_FRONT_WALL_ACTION_RUNNING_YAW_HOLD;
+        return app_nav_approach_front_wall_action_state;
+    }
+
+    if (App_Nav_ComputeWallFollowPwm(input,
+                                     app_nav_config.right_motor_base_speed,
+                                     app_nav_config.left_motor_base_speed,
+                                     output))
+    {
+        app_nav_approach_front_wall_action_state = APP_NAV_APPROACH_FRONT_WALL_ACTION_RUNNING_WALL_FOLLOW;
+        return app_nav_approach_front_wall_action_state;
+    }
+
+    (void)App_Nav_StartYawHoldAdvanceInternal(input->yaw_q16_deg, 0U);
+    app_nav_approach_front_wall_yaw_hold_started = 1U;
+
+    if (!App_Nav_ComputeYawHoldAdvancePwm(input,
+                                          app_nav_config.right_motor_base_speed,
+                                          app_nav_config.left_motor_base_speed,
+                                          output))
+    {
+        App_Nav_SetApproachFrontWallActionTerminal(APP_NAV_APPROACH_FRONT_WALL_ACTION_ERROR);
+        return app_nav_approach_front_wall_action_state;
+    }
+
+    app_nav_approach_front_wall_action_state = APP_NAV_APPROACH_FRONT_WALL_ACTION_RUNNING_YAW_HOLD;
+    return app_nav_approach_front_wall_action_state;
 }
