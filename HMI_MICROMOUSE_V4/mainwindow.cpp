@@ -35,6 +35,8 @@ constexpr quint8 PRIM_TEST_RESP_STATUS = 0x80;
 constexpr quint8 PRIM_TEST_RESP_CONFIG = 0x81;
 constexpr int PRIM_TEST_STATUS_SIZE = 26;
 constexpr int PRIM_TEST_CONFIG_SIZE = 16;
+constexpr quint8 SUPERVISOR_RUN_MODE_FIND_CELLS = 0x01;
+constexpr quint8 SUPERVISOR_RUN_MODE_GO_A_TO_B = 0x02;
 
 quint8 supervisorHeadingForComboIndex(int index) {
   switch (index) {
@@ -62,6 +64,11 @@ int comboIndexForSupervisorHeading(quint8 heading) {
   default:
     return 0;
   }
+}
+
+quint8 supervisorRunModeForComboIndex(int index) {
+  return (index == 1) ? SUPERVISOR_RUN_MODE_GO_A_TO_B
+                      : SUPERVISOR_RUN_MODE_FIND_CELLS;
 }
 
 void setDetectionLabel(QLabel *label, bool active) {
@@ -2915,6 +2922,20 @@ void MainWindow::on_btnSetSupervisorInitialPose_clicked() {
 
 void MainWindow::on_btnGetSupervisorInitialPose_clicked() {
     requestSupervisorInitialPose();
+}
+
+void MainWindow::on_btnStartSupervisorRun_clicked() {
+    QByteArray payload;
+    QDataStream stream(&payload, QIODevice::WriteOnly);
+    stream.setByteOrder(QDataStream::LittleEndian);
+
+    stream << supervisorRunModeForComboIndex(
+        ui->comboSupervisorRunMode->currentIndex());
+    sendUnerbusCommand(Unerbus::CommandId::CMD_START_SUPERVISOR_RUN, payload);
+}
+
+void MainWindow::on_btnStopSupervisorRun_clicked() {
+    sendUnerbusCommand(Unerbus::CommandId::CMD_STOP_SUPERVISOR_RUN);
 }
 
 void MainWindow::setupPrimitiveTestPage()

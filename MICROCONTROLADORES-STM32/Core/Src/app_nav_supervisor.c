@@ -21,6 +21,8 @@ static uint8_t app_nav_supervisor_initial_x;
 static uint8_t app_nav_supervisor_initial_y;
 static HeadingTypeDef app_nav_supervisor_initial_heading;
 static uint8_t app_nav_supervisor_initial_pose_valid;
+static AppNavSupervisorMission app_nav_supervisor_mission =
+    APP_NAV_SUPERVISOR_MISSION_FIND_CELLS;
 
 static void App_NavSupervisor_ClearOutput(AppNavOutput *output)
 {
@@ -548,6 +550,7 @@ static AppNavSupervisorState App_NavSupervisor_HandlePivot(const AppNavInput *in
 
 void App_NavSupervisor_Init(void)
 {
+    app_nav_supervisor_mission = APP_NAV_SUPERVISOR_MISSION_FIND_CELLS;
     App_NavSupervisor_SetDefaultInitialPose();
     App_NavSupervisor_Reset();
 }
@@ -614,11 +617,40 @@ bool App_NavSupervisor_ResetWithInitialPose(uint8_t x,
     return true;
 }
 
+bool App_NavSupervisor_SetMission(AppNavSupervisorMission mission)
+{
+    switch (mission)
+    {
+    case APP_NAV_SUPERVISOR_MISSION_FIND_CELLS:
+    case APP_NAV_SUPERVISOR_MISSION_GO_A_TO_B:
+        app_nav_supervisor_mission = mission;
+        return true;
+
+    default:
+        return false;
+    }
+}
+
+AppNavSupervisorMission App_NavSupervisor_GetMission(void)
+{
+    return app_nav_supervisor_mission;
+}
+
 bool App_NavSupervisor_Start(void)
 {
     App_NavSupervisor_StopActions();
     App_NavSupervisor_ClearActionYawReference();
     App_NavSupervisor_ClearPivotExitLatch();
+
+    if (app_nav_supervisor_mission != APP_NAV_SUPERVISOR_MISSION_FIND_CELLS)
+    {
+        app_nav_supervisor_debug.active = 0U;
+        App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_ERROR,
+                                   APP_NAV_SUPERVISOR_ACTION_NONE,
+                                   APP_NAV_SUPERVISOR_RESULT_UNSUPPORTED_ACTION);
+        App_NavSupervisor_UpdateMazeDebug();
+        return false;
+    }
 
     app_nav_supervisor_debug.active = 1U;
     App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_START_INITIAL_ADVANCE,

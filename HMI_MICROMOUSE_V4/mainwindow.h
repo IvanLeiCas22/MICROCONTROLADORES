@@ -128,6 +128,10 @@ private slots:
 
   void on_btnGetSupervisorInitialPose_clicked();
 
+  void on_btnStartSupervisorRun_clicked();
+
+  void on_btnStopSupervisorRun_clicked();
+
   void on_btnPrimitiveStart_clicked();
 
   void on_btnPrimitiveStop_clicked();

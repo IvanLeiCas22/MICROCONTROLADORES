@@ -32,6 +32,12 @@ typedef enum
     APP_NAV_SUPERVISOR_ACTION_PIVOT_180
 } AppNavSupervisorAction;
 
+typedef enum
+{
+    APP_NAV_SUPERVISOR_MISSION_FIND_CELLS = 0,
+    APP_NAV_SUPERVISOR_MISSION_GO_A_TO_B
+} AppNavSupervisorMission;
+
 typedef struct
 {
     AppNavSupervisorState state;
@@ -52,6 +58,8 @@ bool App_NavSupervisor_SetInitialPose(uint8_t x,
 bool App_NavSupervisor_ResetWithInitialPose(uint8_t x,
                                             uint8_t y,
                                             HeadingTypeDef heading);
+bool App_NavSupervisor_SetMission(AppNavSupervisorMission mission);
+AppNavSupervisorMission App_NavSupervisor_GetMission(void);
 bool App_NavSupervisor_Start(void);
 void App_NavSupervisor_Stop(void);
 AppNavSupervisorState App_NavSupervisor_Tick(const AppNavInput *input,

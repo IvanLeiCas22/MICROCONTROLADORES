@@ -250,6 +250,7 @@ uint16_t adc_front_floor = 0;
 uint8_t wall_fade_ticks = WALL_FADE_TICKS_DEFAULT;
 static SensorSnapshotTypeDef sensor_snapshot;
 static PrimitiveTestContextTypeDef primitive_test;
+static bool supervisor_run_active = false;
 
 static volatile int32_t current_yaw_fixed = 0; // Yaw angle in Q16.16 fixed-point (degrees)
 static volatile uint16_t gyro_sensitivity_x10 = GYRO_SENSITIVITY_X10_500DPS;
@@ -351,6 +352,9 @@ static void PrimitiveTest_WriteStatus(uint8_t *buffer);
 static void PrimitiveTest_WriteSmoothConfig(uint8_t *buffer);
 static void PrimitiveTest_SetSmoothConfigFromPayload(struct UNERBUSHandle *aBus);
 static uint8_t PrimitiveTest_HandleCommand(struct UNERBUSHandle *aBus);
+static bool Start_Supervisor_Run(MenuModeTypeDef requested_mode);
+static void Stop_Supervisor_Run(void);
+static void Tick_Supervisor_Run(uint32_t dt_ms);
 
 //==============================================================================
 // IMPLEMENTACIÓN DE WRAPPERS DE CALLBACKS HAL
@@ -1158,8 +1162,33 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
         length = UNERBUS_CMD_ID_SIZE + UNERBUS_SUPERVISOR_INITIAL_POSE_SIZE;
         break;
     }
+    case CMD_START_SUPERVISOR_RUN:
+    {
+        MenuModeTypeDef requested_mode = (MenuModeTypeDef)UNERBUS_GetUInt8(aBus);
+        (void)Start_Supervisor_Run(requested_mode);
+        break;
+    }
+    case CMD_STOP_SUPERVISOR_RUN:
+        Stop_Supervisor_Run();
+        break;
     case CMD_SET_APP_STATE:
         AppStateTypeDef new_state = (AppStateTypeDef)UNERBUS_GetUInt8(aBus);
+        if (new_state == APP_STATE_RUNNING)
+        {
+            if (app_state == APP_STATE_MENU)
+            {
+                (void)Start_Supervisor_Run(menu_mode);
+            }
+            break;
+        }
+        if (new_state == APP_STATE_MENU)
+        {
+            if (app_state == APP_STATE_RUNNING)
+            {
+                Stop_Supervisor_Run();
+            }
+            break;
+        }
         if (new_state == APP_STATE_RUNNING && app_state == APP_STATE_MENU)
         {
             // Transición de MENU a RUNNING
@@ -1691,6 +1720,51 @@ static void ManageButtonEvents(void)
         UNERBUS_WriteByte(&unerbus_pc_handle, (uint8_t)button_event);
         UNERBUS_Send(&unerbus_pc_handle, CMD_GET_BUTTON_STATE, UNERBUS_CMD_ID_SIZE + UNERBUS_BUTTON_EVENT_SIZE);
 
+        if (app_state != APP_STATE_RUNNING)
+        {
+            if (button_event == EVENT_PRESS_RELEASED)
+            {
+                if (menu_mode == MENU_MODE_IDLE)
+                {
+                    menu_mode = MENU_MODE_FIND_CELLS;
+                }
+                else if (menu_mode == MENU_MODE_FIND_CELLS)
+                {
+                    menu_mode = MENU_MODE_GO_TO_B;
+                }
+                else
+                {
+                    menu_mode = MENU_MODE_IDLE;
+                }
+
+                temporary_heartbeat = HEARTBEAT_BTN_SHORT_PRESS;
+                temporary_heartbeat_ticks = 5;
+                Update_Display_Content();
+                SSD_UPDATE_REQUEST = true;
+            }
+            else if (button_event == EVENT_LONG_PRESS_RELEASED)
+            {
+                temporary_heartbeat = HEARTBEAT_BTN_LONG_PRESS;
+                temporary_heartbeat_ticks = 10;
+
+                if ((menu_mode == MENU_MODE_FIND_CELLS) ||
+                    (menu_mode == MENU_MODE_GO_TO_B))
+                {
+                    (void)Start_Supervisor_Run(menu_mode);
+                }
+            }
+
+            return;
+        }
+
+        if (button_event == EVENT_LONG_PRESS_RELEASED)
+        {
+            Stop_Supervisor_Run();
+            temporary_heartbeat = HEARTBEAT_BTN_LONG_PRESS;
+            temporary_heartbeat_ticks = 10;
+            return;
+        }
+
         if (app_state == APP_STATE_MENU)
         {
             switch (button_event)
@@ -1999,6 +2073,11 @@ static void PrimitiveTest_StartSmooth(uint8_t variant)
         return;
     }
 
+    if (supervisor_run_active)
+    {
+        Stop_Supervisor_Run();
+    }
+
     direction = (variant == PRIM_TEST_SMOOTH_LEFT) ? APP_NAV_SMOOTH_TURN_LEFT : APP_NAV_SMOOTH_TURN_RIGHT;
 
     if (!App_Nav_StartSmoothTurn(direction))
@@ -2251,6 +2330,109 @@ static uint8_t PrimitiveTest_HandleCommand(struct UNERBUSHandle *aBus)
     }
 }
 
+static bool Start_Supervisor_Run(MenuModeTypeDef requested_mode)
+{
+    Set_Motor_Speeds(0, 0);
+    PrimitiveTest_Stop();
+    App_NavSupervisor_Stop();
+    App_Nav_StopAdvanceAction();
+    App_Nav_StopSmoothAction();
+    App_Nav_StopPivotAction();
+    App_Nav_StopApproachFrontWallAction();
+
+    supervisor_run_active = false;
+    Set_Robot_State(STATE_IDLE);
+
+    if (requested_mode == MENU_MODE_FIND_CELLS)
+    {
+        if (!App_NavSupervisor_SetMission(APP_NAV_SUPERVISOR_MISSION_FIND_CELLS))
+        {
+            return false;
+        }
+
+        if (!App_NavSupervisor_ResetWithInitialPose(supervisor_initial_x,
+                                                   supervisor_initial_y,
+                                                   supervisor_initial_heading))
+        {
+            Set_Motor_Speeds(0, 0);
+            return false;
+        }
+
+        if (!App_NavSupervisor_Start())
+        {
+            Set_Motor_Speeds(0, 0);
+            return false;
+        }
+
+        supervisor_run_active = true;
+        app_state = APP_STATE_RUNNING;
+        menu_mode = MENU_MODE_FIND_CELLS;
+        Set_Robot_State(STATE_IDLE);
+        Update_Display_Content();
+        SSD_UPDATE_REQUEST = true;
+        return true;
+    }
+
+    if (requested_mode == MENU_MODE_GO_TO_B)
+    {
+        (void)App_NavSupervisor_SetMission(APP_NAV_SUPERVISOR_MISSION_GO_A_TO_B);
+        menu_mode = MENU_MODE_GO_TO_B;
+        app_state = APP_STATE_MENU;
+        Set_Motor_Speeds(0, 0);
+        Update_Display_Content();
+        SSD_UPDATE_REQUEST = true;
+        return false;
+    }
+
+    menu_mode = MENU_MODE_IDLE;
+    app_state = APP_STATE_MENU;
+    Set_Motor_Speeds(0, 0);
+    Update_Display_Content();
+    SSD_UPDATE_REQUEST = true;
+    return false;
+}
+
+static void Stop_Supervisor_Run(void)
+{
+    App_NavSupervisor_Stop();
+    App_Nav_StopAdvanceAction();
+    App_Nav_StopSmoothAction();
+    App_Nav_StopPivotAction();
+    App_Nav_StopApproachFrontWallAction();
+    Set_Motor_Speeds(0, 0);
+
+    supervisor_run_active = false;
+    app_state = APP_STATE_MENU;
+    menu_mode = MENU_MODE_IDLE;
+    Set_Robot_State(STATE_IDLE);
+    Nav_Debug_ClearYawTarget();
+    Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_STOP_TO_MENU);
+    Update_Display_Content();
+    SSD_UPDATE_REQUEST = true;
+}
+
+static void Tick_Supervisor_Run(uint32_t dt_ms)
+{
+    AppNavInput input = {0};
+    AppNavOutput output = {0};
+    AppNavSupervisorState supervisor_state;
+
+    Build_AppNavInput_From_SensorSnapshot(dt_ms, &input);
+    supervisor_state = App_NavSupervisor_Tick(&input, &output);
+    Set_Motor_Speeds(output.right_motor_pwm, output.left_motor_pwm);
+
+    if ((supervisor_state == APP_NAV_SUPERVISOR_ERROR) ||
+        (supervisor_state == APP_NAV_SUPERVISOR_IDLE))
+    {
+        Set_Motor_Speeds(0, 0);
+        supervisor_run_active = false;
+        app_state = APP_STATE_MENU;
+        Set_Robot_State(STATE_IDLE);
+        Update_Display_Content();
+        SSD_UPDATE_REQUEST = true;
+    }
+}
+
 static void Run_Control_Step(uint32_t dt_ms)
 {
     control_step_dt_ms = dt_ms;
@@ -2262,6 +2444,12 @@ static void Run_Control_Step(uint32_t dt_ms)
     if (primitive_test.active)
     {
         PrimitiveTest_Tick(dt_ms);
+        return;
+    }
+
+    if (supervisor_run_active)
+    {
+        Tick_Supervisor_Run(dt_ms);
         return;
     }
 

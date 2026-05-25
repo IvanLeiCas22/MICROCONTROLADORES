@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>1000</width>
-    <height>1195</height>
+    <height>1229</height>
    </rect>
   </property>
   <property name="font">
@@ -345,7 +345,7 @@ QPushButton:checked {
     <item>
      <widget class="QStackedWidget" name="stackedScreens">
       <property name="currentIndex">
-       <number>2</number>
+       <number>5</number>
       </property>
       <widget class="QWidget" name="pageHome">
        <layout class="QVBoxLayout" name="verticalLayout_2">
@@ -3162,7 +3162,7 @@ QPushButton:checked {
                <item>
                 <widget class="QGroupBox" name="groupBox_9">
                  <property name="sizePolicy">
-                  <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+                  <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
                    <horstretch>0</horstretch>
                    <verstretch>0</verstretch>
                   </sizepolicy>
@@ -3269,7 +3269,7 @@ QPushButton:checked {
                     <item row="2" column="0">
                      <widget class="QLabel" name="labelInitialHeading">
                       <property name="text">
-                       <string>OrientaciÃ³n:</string>
+                       <string>Orientación:</string>
                       </property>
                      </widget>
                     </item>
@@ -3312,6 +3312,47 @@ QPushButton:checked {
                      <widget class="QPushButton" name="btnGetSupervisorInitialPose">
                       <property name="text">
                        <string>Obtener pose inicial</string>
+                      </property>
+                     </widget>
+                    </item>
+                   </layout>
+                  </item>
+                 </layout>
+                </widget>
+               </item>
+               <item>
+                <widget class="QGroupBox" name="groupSupervisorRun">
+                 <property name="title">
+                  <string>Run del laberinto</string>
+                 </property>
+                 <layout class="QVBoxLayout" name="verticalLayoutSupervisorRun">
+                  <item>
+                   <widget class="QComboBox" name="comboSupervisorRunMode">
+                    <item>
+                     <property name="text">
+                      <string>Buscar celdas</string>
+                     </property>
+                    </item>
+                    <item>
+                     <property name="text">
+                      <string>Ir A-&gt;B</string>
+                     </property>
+                    </item>
+                   </widget>
+                  </item>
+                  <item>
+                   <layout class="QHBoxLayout" name="horizontalLayoutSupervisorRun">
+                    <item>
+                     <widget class="QPushButton" name="btnStartSupervisorRun">
+                      <property name="text">
+                       <string>Iniciar run</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QPushButton" name="btnStopSupervisorRun">
+                      <property name="text">
+                       <string>Detener run</string>
                       </property>
                      </widget>
                     </item>
@@ -3371,7 +3412,7 @@ QPushButton:checked {
                  <property name="title">
                   <string>Casillas especiales</string>
                  </property>
-                 <layout class="QVBoxLayout" name="verticalLayout_26">
+                 <layout class="QVBoxLayout" name="verticalLayout_26" stretch="0,0">
                   <item>
                    <widget class="QRadioButton" name="radioPointerNormal">
                     <property name="text">
@@ -3383,25 +3424,29 @@ QPushButton:checked {
                    </widget>
                   </item>
                   <item>
-                   <widget class="QRadioButton" name="radioPointerStart">
-                    <property name="text">
-                     <string>Fijar inicio</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item>
-                   <widget class="QRadioButton" name="radioPointerGoal">
-                    <property name="text">
-                     <string>Fijar destino</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item>
-                   <widget class="QRadioButton" name="radioPointerSpecial">
-                    <property name="text">
-                     <string>Fijar especiales</string>
-                    </property>
-                   </widget>
+                   <layout class="QHBoxLayout" name="horizontalLayout_30">
+                    <item>
+                     <widget class="QRadioButton" name="radioPointerStart">
+                      <property name="text">
+                       <string>Fijar inicio</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QRadioButton" name="radioPointerGoal">
+                      <property name="text">
+                       <string>Fijar destino</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QRadioButton" name="radioPointerSpecial">
+                      <property name="text">
+                       <string>Fijar especiales</string>
+                      </property>
+                     </widget>
+                    </item>
+                   </layout>
                   </item>
                  </layout>
                 </widget>
@@ -3445,19 +3490,6 @@ QPushButton:checked {
                </item>
               </layout>
              </widget>
-            </item>
-            <item>
-             <spacer name="verticalSpacer_5">
-              <property name="orientation">
-               <enum>Qt::Orientation::Vertical</enum>
-              </property>
-              <property name="sizeHint" stdset="0">
-               <size>
-                <width>20</width>
-                <height>40</height>
-               </size>
-              </property>
-             </spacer>
             </item>
            </layout>
           </item>
