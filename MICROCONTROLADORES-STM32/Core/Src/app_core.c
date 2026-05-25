@@ -222,6 +222,7 @@ uint16_t wall_threshold_mm_side = 100;          // Umbral en mm para detectar pa
 uint16_t after_turn_wall_threshold_mm = 80;     // Umbral en mm para pared después de un giro
 uint16_t wall_target_mm = 55;                   // Distancia objetivo en mm para seguimiento de pared
 uint16_t wall_braking_target_mm = 30;           // Distancia de parada objetivo
+uint16_t approach_front_wall_target_mm = APP_NAV_DEFAULT_APPROACH_FRONT_WALL_TARGET_MM;
 uint16_t braking_accel_stop_threshold = 2000;   // Umbral de aceleración para confirmar detención
 uint16_t max_pwm_correction = 4000;             // Corrección máxima del PID
 uint16_t turn_max_pwm = TURN_MAX_SPEED_DEFAULT;
@@ -479,6 +480,7 @@ static AppNavConfig Build_AppNavConfig_From_LegacyRuntime(void)
     cfg.after_turn_wall_threshold_mm = after_turn_wall_threshold_mm;
     cfg.wall_target_mm = wall_target_mm;
     cfg.wall_braking_target_mm = wall_braking_target_mm;
+    cfg.approach_front_wall_target_mm = approach_front_wall_target_mm;
     cfg.tape_detection_threshold_adc = tape_detection_threshold_adc;
 
     cfg.turn_target_dps = turn_target_dps;
@@ -1105,6 +1107,25 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
         target_buffer[3] = (uint8_t)((tape_detection_threshold_adc >> 8) & 0xFF);
         UNERBUS_Write(aBus, target_buffer, UNERBUS_WALL_TARGET_ADC_SIZE);
         length = UNERBUS_CMD_ID_SIZE + UNERBUS_WALL_TARGET_ADC_SIZE;
+        break;
+    case CMD_SET_APPROACH_FRONT_WALL_TARGET:
+        approach_front_wall_target_mm = UNERBUS_GetUInt16(aBus);
+        if (approach_front_wall_target_mm < APPROACH_FRONT_WALL_TARGET_MIN_MM)
+        {
+            approach_front_wall_target_mm = APPROACH_FRONT_WALL_TARGET_MIN_MM;
+        }
+        else if (approach_front_wall_target_mm > APPROACH_FRONT_WALL_TARGET_MAX_MM)
+        {
+            approach_front_wall_target_mm = APPROACH_FRONT_WALL_TARGET_MAX_MM;
+        }
+        Sync_AppNavConfig_From_LegacyRuntime();
+        break;
+    case CMD_GET_APPROACH_FRONT_WALL_TARGET:
+        uint8_t approach_target_buffer[UNERBUS_APPROACH_FRONT_WALL_TARGET_SIZE];
+        approach_target_buffer[0] = (uint8_t)(approach_front_wall_target_mm & 0xFF);
+        approach_target_buffer[1] = (uint8_t)((approach_front_wall_target_mm >> 8) & 0xFF);
+        UNERBUS_Write(aBus, approach_target_buffer, UNERBUS_APPROACH_FRONT_WALL_TARGET_SIZE);
+        length = UNERBUS_CMD_ID_SIZE + UNERBUS_APPROACH_FRONT_WALL_TARGET_SIZE;
         break;
     case CMD_SET_APP_STATE:
         AppStateTypeDef new_state = (AppStateTypeDef)UNERBUS_GetUInt8(aBus);
@@ -1784,6 +1805,7 @@ void App_Core_Init(void)
     wall_threshold_mm_braking_start = WALL_PRESENCE_THRESHOLD_MM_BRAKING_START;
     wall_target_mm = WALL_FOLLOW_TARGET_MM;
     wall_braking_target_mm = WALL_BRAKING_TARGET_MM;
+    approach_front_wall_target_mm = APP_NAV_DEFAULT_APPROACH_FRONT_WALL_TARGET_MM;
 
     /* --- INICIALIZACIÓN DE CONFIGURACIONES PID RUNTIME --- */
     Init_Pid_Configs();

@@ -256,6 +256,7 @@ private slots:
   void updateCruiseParamsUI(const QByteArray &payload);
   void updatePidBrakingUI(const QByteArray &payload);
   void updateBrakingParamsUI(const QByteArray &payload);
+  void updateApproachFrontWallTargetUI(const QByteArray &payload);
   void updateBrakingMaxSpeedUI(const QByteArray &payload);
   void updateBrakingMinSpeedUI(const QByteArray &payload);
   void updateBrakingDeadZoneUI(const QByteArray &payload);
@@ -264,6 +265,7 @@ private slots:
   void updateTurnSpeedPID(const QByteArray &payload);
   void updateTurnTargetDps(const QByteArray &payload);
   void updateDelayTicksUI(const QByteArray &payload);
+  void sendApproachFrontWallTarget();
   void setupPrimitiveTestPage();
   void requestPrimitiveTestStatus();
   void requestPrimitiveTestConfig();

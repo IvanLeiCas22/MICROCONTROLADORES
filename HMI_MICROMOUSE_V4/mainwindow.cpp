@@ -435,6 +435,10 @@ void MainWindow::onPacketReceived(quint8 command, const QByteArray &payload) {
     updateBrakingParamsUI(payload);
     break;
   }
+  case Unerbus::CommandId::CMD_GET_APPROACH_FRONT_WALL_TARGET: {
+    updateApproachFrontWallTargetUI(payload);
+    break;
+  }
   case Unerbus::CommandId::CMD_GET_BRAKING_MAX_SPEED: {
     updateBrakingMaxSpeedUI(payload);
     break;
@@ -1453,6 +1457,9 @@ void MainWindow::setupConfigPage() {
   connect(ui->btnSetBaseMotorsSpeeds, &QPushButton::clicked, this,
           &MainWindow::on_btnSetBaseMotorsSpeeds_clicked);
 
+  ui->editApproachFrontWallTargetMm->setValidator(
+      new QIntValidator(10, 150, this));
+
   populateMpuConfigComboBoxes();
 }
 
@@ -2062,6 +2069,10 @@ void MainWindow::on_btnGetPidBrakingConfig_clicked() {
   QTimer::singleShot(400, this, [this]() {
     sendUnerbusCommand(Unerbus::CommandId::CMD_GET_BRAKING_DEAD_ZONE);
   });
+  QTimer::singleShot(500, this, [this]() {
+    sendUnerbusCommand(
+        Unerbus::CommandId::CMD_GET_APPROACH_FRONT_WALL_TARGET);
+  });
 }
 
 /**
@@ -2122,6 +2133,10 @@ void MainWindow::on_btnSetPidBrakingConfig_clicked() {
     stream << static_cast<quint16>(ui->editBrakingDeadZone->text().toUShort());
     sendUnerbusCommand(Unerbus::CommandId::CMD_SET_BRAKING_DEAD_ZONE, payload);
   });
+
+  // 6. Enviar distancia frontal de aproximaciÃ³n para pivot de callejÃ³n.
+  QTimer::singleShot(500, this,
+                     &MainWindow::sendApproachFrontWallTarget);
 }
 
 /**
@@ -2160,6 +2175,36 @@ void MainWindow::updateBrakingParamsUI(const QByteArray &payload) {
 /**
  * @brief Actualiza la UI con la velocidad máxima de frenado.
  */
+void MainWindow::sendApproachFrontWallTarget() {
+  quint16 target = ui->editApproachFrontWallTargetMm->text().toUShort();
+  if (target < 10U)
+    target = 10U;
+  else if (target > 150U)
+    target = 150U;
+
+  ui->editApproachFrontWallTargetMm->setText(QString::number(target));
+
+  QByteArray payload;
+  QDataStream stream(&payload, QIODevice::WriteOnly);
+  stream.setByteOrder(QDataStream::LittleEndian);
+  stream << target;
+  sendUnerbusCommand(Unerbus::CommandId::CMD_SET_APPROACH_FRONT_WALL_TARGET,
+                     payload);
+}
+
+void MainWindow::updateApproachFrontWallTargetUI(const QByteArray &payload) {
+  if (payload.size() < 2)
+    return;
+
+  QDataStream stream(payload);
+  stream.setByteOrder(QDataStream::LittleEndian);
+
+  quint16 target_mm;
+  stream >> target_mm;
+
+  ui->editApproachFrontWallTargetMm->setText(QString::number(target_mm));
+}
+
 void MainWindow::updateBrakingMaxSpeedUI(const QByteArray &payload) {
   if (payload.size() < 2)
     return;

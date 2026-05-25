@@ -81,6 +81,8 @@ namespace Unerbus
         CMD_SYNC_MAZE_COLUMN = 0x93,            // Sincronizar 1 columna entera del laberinto
         CMD_GET_NAV_DEBUG_STATUS = 0x94,        // Leer telemetría mínima de navegación legacy
         CMD_PRIMITIVE_TEST = 0x95,              // Banco de pruebas de primitivas
+        CMD_SET_APPROACH_FRONT_WALL_TARGET = 0x96,
+        CMD_GET_APPROACH_FRONT_WALL_TARGET = 0x97,
         CMD_OTHERS
     };
     Q_ENUM_NS(CommandId)

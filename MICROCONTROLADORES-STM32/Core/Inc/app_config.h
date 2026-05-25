@@ -137,6 +137,8 @@ typedef enum
     CMD_SYNC_MAZE_COLUMN = 0x93,            // Sincronizar 1 columna entera del laberinto
     CMD_GET_NAV_DEBUG_STATUS = 0x94,        // Leer telemetría mínima de navegación legacy
     CMD_PRIMITIVE_TEST = 0x95,              // Banco de pruebas de primitivas
+    CMD_SET_APPROACH_FRONT_WALL_TARGET = 0x96,
+    CMD_GET_APPROACH_FRONT_WALL_TARGET = 0x97,
     CMD_OTHERS
 
 } CommandIdTypeDef;
@@ -270,6 +272,10 @@ extern uint16_t pwm_max_value;
 #define UNERBUS_DELAY_TICKS_SIZE (sizeof(uint8_t))          // Número de ticks de retardo como uint8_t
 #define UNERBUS_MAZE_CELL_UPDATE_SIZE APP_MAZE_CELL_UPDATE_PAYLOAD_SIZE // x, y, walls, heading
 #define UNERBUS_NAV_DEBUG_STATUS_SIZE 28U
+#define UNERBUS_APPROACH_FRONT_WALL_TARGET_SIZE (sizeof(uint16_t))
+
+#define APPROACH_FRONT_WALL_TARGET_MIN_MM 10U
+#define APPROACH_FRONT_WALL_TARGET_MAX_MM 150U
 
 #define PRIM_TEST_STOP 0U
 #define PRIM_TEST_START 1U
