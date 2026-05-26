@@ -237,7 +237,10 @@ static bool App_NavSupervisor_StartAdvanceWithState(const AppNavInput *input,
     if ((action != APP_NAV_SUPERVISOR_ACTION_INITIAL_ADVANCE) &&
         App_Maze_IsCurrentCellSpecial())
     {
-        rear_tape_profile = APP_NAV_REAR_TAPE_PROFILE_SPECIAL_CELL;
+        rear_tape_profile =
+            (app_nav_supervisor_pivot_180_exit_requires_advance != 0U)
+                ? APP_NAV_REAR_TAPE_PROFILE_SPECIAL_CELL_AFTER_PIVOT
+                : APP_NAV_REAR_TAPE_PROFILE_SPECIAL_CELL;
     }
 
     if (!App_Nav_StartAdvanceActionWithRearTapeProfile(APP_NAV_ADVANCE_ACTION_WALL_FOLLOW_AUTO_YAW_HOLD,
@@ -622,13 +625,12 @@ static AppNavSupervisorState App_NavSupervisor_HandlePivot(const AppNavInput *in
 
         if (app_nav_supervisor_pivot_180_exit_requires_advance != 0U)
         {
-            App_NavSupervisor_ClearPivotExitLatch();
-
             if (!App_NavSupervisor_StartAdvance(input))
             {
                 return App_NavSupervisor_SetError(APP_NAV_SUPERVISOR_RESULT_START_FAILED);
             }
 
+            App_NavSupervisor_ClearPivotExitLatch();
             return app_nav_supervisor_debug.state;
         }
 
