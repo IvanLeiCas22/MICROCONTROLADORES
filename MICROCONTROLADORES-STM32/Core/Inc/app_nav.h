@@ -49,6 +49,8 @@ bool App_Nav_StartSmoothTurn(AppNavSmoothTurnDirection direction);
 bool App_Nav_ComputeSmoothTurnPwm(const AppNavInput *input,
                                   AppNavOutput *output);
 bool App_Nav_StartSmoothAction(AppNavSmoothActionType action);
+bool App_Nav_StartSmoothActionWithRearTapeProfile(AppNavSmoothActionType action,
+                                                  AppNavRearTapeProfile rear_tape_profile);
 AppNavSmoothActionState App_Nav_TickSmoothAction(const AppNavInput *input,
                                                  AppNavOutput *output);
 void App_Nav_StopSmoothAction(void);
