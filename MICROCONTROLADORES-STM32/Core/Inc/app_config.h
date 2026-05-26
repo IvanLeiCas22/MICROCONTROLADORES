@@ -48,8 +48,6 @@ typedef enum
     MENU_MODE_IDLE,
     MENU_MODE_FIND_CELLS,
     MENU_MODE_GO_TO_B,
-    MENU_MODE_MANUAL_CONTROL,
-    MENU_MODE_DRIVE_STRAIGHT,
     MENU_MODE_COUNT // Mantener este último para ciclar fácilmente
 } MenuModeTypeDef;
 
@@ -135,7 +133,7 @@ typedef enum
     CMD_SET_DELAY_TICKS = 0X91,             // Configurar el número de ticks de retardo
     CMD_UPDATE_MAZE_CELL = 0x92,            // (STM32 -> Qt) Enviar actualización de info de celda
     CMD_SYNC_MAZE_COLUMN = 0x93,            // Sincronizar 1 columna entera del laberinto
-    CMD_GET_NAV_DEBUG_STATUS = 0x94,        // Leer telemetría mínima de navegación legacy
+    CMD_GET_NAV_DEBUG_STATUS = 0x94,        // Leer telemetría mínima de navegación
     CMD_PRIMITIVE_TEST = 0x95,              // Banco de pruebas de primitivas
     CMD_SET_APPROACH_FRONT_WALL_TARGET = 0x96,
     CMD_GET_APPROACH_FRONT_WALL_TARGET = 0x97,

@@ -8,7 +8,6 @@
 #include "app_nav.h"
 #include "app_nav_supervisor.h"
 
-#include <stdlib.h>
 #include <stdio.h>  // Para snprintf
 
 #include "usbd_cdc_if.h"
@@ -236,17 +235,6 @@ uint16_t braking_max_pwm_offset = BRAKING_MAX_SPEED_DEFAULT; // PWM máximo de f
 uint16_t braking_min_speed = BRAKING_MIN_SPEED_DEFAULT;
 uint16_t braking_dead_zone = BRAKING_DEAD_ZONE_DEFAULT;
 
-bool left_wall_detected = false, right_wall_detected = false, front_wall_detected = false,
-     left_diagonal_wall_detected = false, right_diagonal_wall_detected = false, rear_tape_detected = false,
-     front_tape_detected = false, was_rear_tape_detected = false;
-uint16_t dist_diagonal_left_mm = 0;
-uint16_t dist_diagonal_right_mm = 0;
-uint16_t dist_front_left_mm = 0;
-uint16_t dist_front_right_mm = 0;
-uint16_t dist_left_lat_mm = 0;
-uint16_t dist_right_lat_mm = 0;
-uint16_t adc_rear_floor = 0;
-uint16_t adc_front_floor = 0;
 uint8_t wall_fade_ticks = WALL_FADE_TICKS_DEFAULT;
 static SensorSnapshotTypeDef sensor_snapshot;
 static PrimitiveTestContextTypeDef primitive_test;
@@ -259,9 +247,6 @@ static volatile bool mpu_yaw_timing_initialized = false;
 static volatile uint32_t mpu_last_sample_cycle = 0;
 
 static volatile RobotStateTypeDef robot_state = STATE_IDLE;
-
-// LABERINTO
-static bool pending_initial_cell_seed = false;
 
 // Valores legacy del post-yaw del giro suave. app_nav ejecuta la fase portable
 // y app_core conserva el mapeo de configuracion/runtime.
@@ -304,38 +289,18 @@ static void Reset_Yaw_Tracking(void);
 static void Integrate_Yaw_From_Gyro(int16_t gz_calibrated);
 static void Set_Motor_Speeds(int16_t right_speed, int16_t left_speed);
 
-static void Handle_Idle(void);
-static void Reset_Robot_Position(void);
-static void Reset_Maze_State(void);
-static void Start_FindCells_Legacy_Mode(void);
-static void Seed_FindCells_Initial_Cell_IfPending(void);
-static void Current_Cell_Mapping(void);
-static void Send_Maze_Cell_Update(void);
-static void Update_Robot_Heading(int8_t turn_direction);
-static void Handle_Navigating(void);
-static void Handle_Braking(void);
-static void Handle_Deciding();
-static void Manage_Turn(void);
-void Turn_Start(int16_t angle_degrees);
 static void ADC_Filter_Task(void);
 static void ADC_LUT_Precompute(void);
 static int32_t Get_Filtered_ADC_Value(uint8_t channel);
 static void Set_Robot_State(RobotStateTypeDef new_state);
 static void Update_Display_Content(void);
 static int32_t ADC_To_Distance_mm(uint16_t adc_value);
-static void Sync_Legacy_Perception_From_Snapshot(void);
-static void Handle_Straight_Drive(bool have_to_decide);
-static void Modes_State_Machine(void);
 static void Update_Navigation_Perception(void);
-static void Commit_Maze_State(int8_t heading_update, bool update_cell, bool send_update);
 static void Init_Pid_Configs(void);
 static void Set_Pid_Gains_From_U16(PID_Role_t role, uint16_t kp_x100, uint16_t ki_x100, uint16_t kd_x100);
 static void Write_Pid_Gains_To_Buffer(PID_Role_t role, uint8_t *buffer);
 static void Write_Nav_Debug_Status_To_Buffer(uint8_t *buffer);
 static void Nav_Debug_SetTransitionReason(NavDebugTransitionReason reason);
-static void Nav_Debug_SetSmoothDirection(NavDebugSmoothDirection direction);
-static void Nav_Debug_SetSmoothFinishReason(NavDebugSmoothFinishReason reason);
-static void Nav_Debug_SetYawTargetDeg(int16_t target_deg);
 static void Nav_Debug_ClearYawTarget(void);
 static int32_t Gain_Hundredths_To_Fixed(uint16_t gain_x100);
 static uint16_t Fixed_To_Gain_Hundredths(int32_t gain_fixed);
@@ -625,12 +590,18 @@ static void Write_Nav_Debug_Status_To_Buffer(uint8_t *buffer)
     uint8_t nav_flags = 0;
     int16_t yaw_deg = (int16_t)FIXED_TO_INT(current_yaw_fixed);
 
-    if (rear_tape_detected)
+    if ((sensor_snapshot.detection_flags & SENSOR_DET_FLOOR_REAR) != 0U)
+    {
         nav_flags |= 0x01U;
-    if (front_tape_detected)
+    }
+    if ((sensor_snapshot.detection_flags & SENSOR_DET_FLOOR_FRONT) != 0U)
+    {
         nav_flags |= 0x02U;
-    if (front_wall_detected)
+    }
+    if ((sensor_snapshot.detection_flags & SENSOR_DET_WALL_FRONT) != 0U)
+    {
         nav_flags |= 0x04U;
+    }
 
     buffer[idx++] = (uint8_t)robot_state;
     buffer[idx++] = (uint8_t)nav_debug.previous_robot_state;
@@ -674,21 +645,6 @@ static void Nav_Debug_SetTransitionReason(NavDebugTransitionReason reason)
     {
         nav_debug.pending_transition_reason = (uint8_t)reason;
     }
-}
-
-static void Nav_Debug_SetSmoothDirection(NavDebugSmoothDirection direction)
-{
-    nav_debug.smooth_direction = (uint8_t)direction;
-}
-
-static void Nav_Debug_SetSmoothFinishReason(NavDebugSmoothFinishReason reason)
-{
-    nav_debug.smooth_finish_reason = (uint8_t)reason;
-}
-
-static void Nav_Debug_SetYawTargetDeg(int16_t target_deg)
-{
-    nav_debug.yaw_target_deg = target_deg;
 }
 
 static void Nav_Debug_ClearYawTarget(void)
@@ -1028,8 +984,8 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
         break;
     case CMD_TURN_DEGREES:
         // Recibe un ángulo de 16 bits con signo
-        int16_t angle = (int16_t)UNERBUS_GetUInt16(aBus);
-        Turn_Start(angle);
+        (void)UNERBUS_GetUInt16(aBus);
+        Set_Motor_Speeds(0, 0);
         break;
     case CMD_SET_TURN_PID_GAINS: // Configurar Kp, Ki, Kd del PID de giro
         // Se esperan 3 valores uint16_t: Kp*100, Ki*100, Kd*100
@@ -1172,71 +1128,37 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
         Stop_Supervisor_Run();
         break;
     case CMD_SET_APP_STATE:
+    {
         AppStateTypeDef new_state = (AppStateTypeDef)UNERBUS_GetUInt8(aBus);
         if (new_state == APP_STATE_RUNNING)
         {
-            if (app_state == APP_STATE_MENU)
-            {
-                (void)Start_Supervisor_Run(menu_mode);
-            }
+            (void)Start_Supervisor_Run(menu_mode);
             break;
         }
         if (new_state == APP_STATE_MENU)
         {
-            if (app_state == APP_STATE_RUNNING)
-            {
-                Stop_Supervisor_Run();
-            }
+            Stop_Supervisor_Run();
             break;
         }
-        if (new_state == APP_STATE_RUNNING && app_state == APP_STATE_MENU)
-        {
-            // Transición de MENU a RUNNING
-            app_state = APP_STATE_RUNNING;
-            // Resetear yaw para un inicio limpio
-            if (menu_mode == MENU_MODE_FIND_CELLS)
-            {
-                Start_FindCells_Legacy_Mode();
-            }
-            else
-            {
-                Reset_Yaw_Tracking();
-
-                // Iniciar la máquina de estados del robot si el modo es activo.
-                // Esto replica el comportamiento del botón físico.
-                if (menu_mode == MENU_MODE_GO_TO_B)
-                {
-                    Set_Robot_State(STATE_NAVIGATING); // Aquí se inicia el movimiento
-                    Reset_Robot_Position();
-                }
-                else
-                {
-                    Set_Robot_State(STATE_IDLE); // Para modos que no inician movimiento
-                }
-            }
-        }
-        else if (new_state == APP_STATE_MENU && app_state == APP_STATE_RUNNING)
-        {
-            // Transición de RUNNING a MENU
-            app_state = APP_STATE_MENU;
-            PrimitiveTest_Stop();
-            Set_Motor_Speeds(0, 0); // Detener motores por seguridad
-            Nav_Debug_ClearYawTarget();
-            Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_STOP_TO_MENU);
-            Set_Robot_State(STATE_IDLE);
-        }
-        Update_Display_Content();
-        SSD_UPDATE_REQUEST = true;
         break;
+    }
     case CMD_GET_APP_STATE:
         UNERBUS_WriteByte(aBus, (uint8_t)app_state);
         length = UNERBUS_CMD_ID_SIZE + UNERBUS_APP_STATE_SIZE;
         break;
     case CMD_SET_MENU_MODE:
-        menu_mode = (MenuModeTypeDef)UNERBUS_GetUInt8(aBus);
+    {
+        MenuModeTypeDef requested_mode = (MenuModeTypeDef)UNERBUS_GetUInt8(aBus);
+        if ((requested_mode == MENU_MODE_IDLE) ||
+            (requested_mode == MENU_MODE_FIND_CELLS) ||
+            (requested_mode == MENU_MODE_GO_TO_B))
+        {
+            menu_mode = requested_mode;
+        }
         Update_Display_Content();
         SSD_UPDATE_REQUEST = true;
         break;
+    }
     case CMD_GET_MENU_MODE:
         UNERBUS_WriteByte(aBus, (uint8_t)menu_mode);
         length = UNERBUS_CMD_ID_SIZE + UNERBUS_MENU_MODE_SIZE;
@@ -1468,9 +1390,6 @@ void Do100ms(void)
             case MENU_MODE_GO_TO_B:
                 heartbeat_counter = HEARTBEAT_MENU_GO_TO_B;
                 break;
-            case MENU_MODE_MANUAL_CONTROL:
-                heartbeat_counter = HEARTBEAT_MENU_MANUAL_CONTROL;
-                break;
             default:
                 heartbeat_counter = HEARTBEAT_IDLE;
                 break;
@@ -1488,9 +1407,6 @@ void Do100ms(void)
                 break;
             case MENU_MODE_GO_TO_B:
                 heartbeat_counter = HEARTBEAT_RUNNING_GO_TO_B;
-                break;
-            case MENU_MODE_MANUAL_CONTROL:
-                heartbeat_counter = HEARTBEAT_RUNNING_MANUAL_CONTROL;
                 break;
             default:
                 heartbeat_counter = HEARTBEAT_IDLE;
@@ -1764,62 +1680,6 @@ static void ManageButtonEvents(void)
             temporary_heartbeat_ticks = 10;
             return;
         }
-
-        if (app_state == APP_STATE_MENU)
-        {
-            switch (button_event)
-            {
-            case EVENT_PRESS_RELEASED: // Pulsación corta: ciclar menú
-                menu_mode = (MenuModeTypeDef)((menu_mode + 1) % MENU_MODE_COUNT);
-                temporary_heartbeat = HEARTBEAT_BTN_SHORT_PRESS;
-                temporary_heartbeat_ticks = 5; // Duracion del feedback: 5 ticks de 100 ms.
-                Update_Display_Content();
-                SSD_UPDATE_REQUEST = true;
-                break;
-            case EVENT_LONG_PRESS_RELEASED: // Pulsación larga: seleccionar y correr
-                app_state = APP_STATE_RUNNING;
-                temporary_heartbeat = HEARTBEAT_BTN_LONG_PRESS;
-                temporary_heartbeat_ticks = 10; // Duración del feedback (10 * 100ms = 1s)
-
-                if (menu_mode == MENU_MODE_FIND_CELLS)
-                {
-                    Start_FindCells_Legacy_Mode();
-                }
-                else
-                {
-                    // Resetear yaw y estados al iniciar un modo
-                    Reset_Yaw_Tracking();
-                    Set_Robot_State(STATE_IDLE);
-
-                    if (menu_mode == MENU_MODE_DRIVE_STRAIGHT)
-                    {
-                        Set_Robot_State(STATE_STRAIGHT_DRIVE);
-                        (void)App_Nav_StartStraightDriveYawHold(current_yaw_fixed);
-                    }
-                }
-                break;
-            default:
-                break;
-            }
-        }
-        else // APP_STATE_RUNNING
-        {
-            // En modo ejecución, una pulsación larga detiene y vuelve al menú
-            if (button_event == EVENT_LONG_PRESS_RELEASED)
-            {
-                app_state = APP_STATE_MENU;
-                PrimitiveTest_Stop();
-                Nav_Debug_ClearYawTarget();
-                Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_STOP_TO_MENU);
-                Set_Robot_State(STATE_IDLE);
-                Set_Motor_Speeds(0, 0); // Detener motores
-                temporary_heartbeat = HEARTBEAT_BTN_LONG_PRESS;
-                temporary_heartbeat_ticks = 10;
-                // La llamada a Set_Robot_State ya activa la flag,
-                // pero el cambio de app_state también requiere actualizar el display.
-                Update_Display_Content();
-            }
-        }
     }
 }
 
@@ -1925,8 +1785,6 @@ void App_Core_Init(void)
 
     Sync_AppNavConfig_From_LegacyRuntime();
 
-    srand(1); // Inicializa la semilla para rand()
-
     /* Buttons*/
     Button_Init(&h_user_button, Read_User_Button, NULL);
 
@@ -2031,7 +1889,6 @@ static void Apply_Portable_Nav_Perception_To_Snapshot(void)
 
     App_Nav_GetDebug(&debug);
     sensor_snapshot.detection_flags = Build_DetectionFlags_From_AppNavDebug(&debug);
-    Sync_Legacy_Perception_From_Snapshot();
 }
 
 static int32_t PrimitiveTest_GetYawDegX10(void)
@@ -2453,7 +2310,7 @@ static void Run_Control_Step(uint32_t dt_ms)
         return;
     }
 
-    Modes_State_Machine();
+    Set_Motor_Speeds(0, 0);
 }
 
 void App_Core_Loop(void)
@@ -2507,128 +2364,6 @@ void App_Core_Loop(void)
 
     UNERBUS_Task(&unerbus_esp01_handle);
     UNERBUS_Task(&unerbus_pc_handle);
-}
-
-/**
- * @brief Inicia un giro de un ángulo específico en grados.
- * @param angle_degrees Ángulo de giro. Positivo para la derecha, negativo para la izquierda.
- */
-void Turn_Start(int16_t angle_degrees)
-{
-    if ((robot_state == STATE_NAVIGATING || robot_state == STATE_DECIDING) ||
-        (robot_state == STATE_IDLE && menu_mode == MENU_MODE_MANUAL_CONTROL))
-    {
-        // Preparamos el giro portable y el ángulo acumulado.
-        AppNavPivotActionType action;
-        bool has_portable_action = true;
-
-        if (angle_degrees == 90)
-        {
-            action = APP_NAV_PIVOT_RIGHT_90;
-        }
-        else if (angle_degrees == -90)
-        {
-            action = APP_NAV_PIVOT_LEFT_90;
-        }
-        else if (angle_degrees == 180)
-        {
-            action = APP_NAV_PIVOT_180_RIGHT;
-        }
-        else if (angle_degrees == -180)
-        {
-            action = APP_NAV_PIVOT_180_LEFT;
-        }
-        else
-        {
-            has_portable_action = false;
-        }
-
-        if (has_portable_action)
-        {
-            (void)App_Nav_StartPivotAction(action);
-        }
-        else
-        {
-            (void)App_Nav_StartPivotTurn();
-        }
-        Reset_Yaw_Tracking(); // Reseteamos la medición de ángulo para un giro relativo.
-
-        // Asignar el estado de giro correcto
-        if (angle_degrees == 90)
-        {
-            Nav_Debug_SetYawTargetDeg(90);
-            Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_TURN_START);
-            Set_Robot_State(STATE_TURNING_RIGHT);
-        }
-        else if (angle_degrees == -90)
-        {
-            Nav_Debug_SetYawTargetDeg(-90);
-            Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_TURN_START);
-            Set_Robot_State(STATE_TURNING_LEFT);
-        }
-        else if (angle_degrees == 180)
-        {
-            Nav_Debug_SetYawTargetDeg(180);
-            Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_TURN_START);
-            Set_Robot_State(STATE_TURN_AROUND_RIGHT);
-        }
-        else if (angle_degrees == -180)
-        {
-            Nav_Debug_SetYawTargetDeg(-180);
-            Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_TURN_START);
-            Set_Robot_State(STATE_TURN_AROUND_LEFT);
-        }
-    }
-}
-
-// Actualiza la orientación luego de un giro.
-// turn_direction: 1 (Giro Derecha), -1 (Giro Izquierda), 2 (Media Vuelta)
-static void Update_Robot_Heading(int8_t turn_direction)
-{
-    App_Maze_UpdateRobotHeading((TurnTypeDef)turn_direction);
-}
-
-/**
- * @brief Gestiona el estado de giro del robot y delega el PWM de pivote en app_nav.
- */
-static void Manage_Turn(void)
-{
-    AppNavInput input = {0};
-    AppNavOutput output = {0};
-    AppNavPivotActionState pivot_state;
-
-    Build_AppNavInput_From_SensorSnapshot(control_step_dt_ms, &input);
-    pivot_state = App_Nav_TickPivotAction(&input, &output);
-
-    if (pivot_state == APP_NAV_PIVOT_ACTION_RUNNING)
-    {
-        Set_Motor_Speeds(output.right_motor_pwm, output.left_motor_pwm);
-        return;
-    }
-
-    Set_Motor_Speeds(0, 0);
-
-    if (pivot_state == APP_NAV_PIVOT_ACTION_DONE)
-    {
-        Commit_Maze_State(TURN_AROUND, false, true);
-
-        if (menu_mode == MENU_MODE_MANUAL_CONTROL)
-        {
-            Nav_Debug_ClearYawTarget();
-            Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_PIVOT_DONE);
-            Set_Robot_State(STATE_IDLE);
-        }
-        else
-        {
-            Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_PIVOT_DONE);
-            Set_Robot_State(STATE_NAVIGATING);
-        }
-    }
-    else if ((pivot_state == APP_NAV_PIVOT_ACTION_TIMEOUT) ||
-             (pivot_state == APP_NAV_PIVOT_ACTION_ERROR))
-    {
-        App_Nav_StopPivotAction();
-    }
 }
 
 /**
@@ -2711,11 +2446,6 @@ static void Update_Gyro_Scaler(void)
     }
 }
 
-static void Handle_Idle(void)
-{
-    Set_Motor_Speeds(0, 0); // Asegurarse de que los motores estén parados
-}
-
 /**
  * @brief Procesa las muestras pendientes del ring buffer y actualiza el promedio móvil por canal.
  *        Ejecutar frecuentemente en el lazo principal.
@@ -2733,259 +2463,6 @@ static int32_t Get_Filtered_ADC_Value(uint8_t channel)
     return (int32_t)App_Sensors_GetFilteredAdcValue(channel);
 }
 
-// Actualiza la posición (x, y) asumiendo que el robot avanzó 1 celda hacia el frente
-static void Update_Robot_Position(void)
-{
-    App_Maze_AdvanceRobotPosition();
-}
-
-static void Current_Cell_Mapping(void)
-{
-    App_Maze_MapCurrentCell(front_wall_detected, right_wall_detected, left_wall_detected);
-}
-
-static void Send_Maze_Cell_Update(void)
-{
-    uint8_t payload[APP_MAZE_CELL_UPDATE_PAYLOAD_SIZE];
-    uint8_t payload_len = App_Maze_WriteCurrentCellUpdatePayload(payload);
-
-    if (payload_len != 0U)
-    {
-        UNERBUS_Write(&unerbus_esp01_handle, payload, payload_len);
-        UNERBUS_Send(&unerbus_esp01_handle,
-                     CMD_UPDATE_MAZE_CELL,
-                     (uint8_t)(UNERBUS_CMD_ID_SIZE + payload_len));
-    }
-}
-
-static void Reset_Robot_Position(void)
-{
-    App_Maze_ResetRobotPosition();
-}
-
-static void Reset_Maze_State(void)
-{
-    App_Maze_ResetState();
-}
-
-static void Start_FindCells_Legacy_Mode(void)
-{
-    Reset_Yaw_Tracking();
-
-    Reset_Maze_State();
-    pending_initial_cell_seed = true;
-
-    rear_tape_detected = false;
-    was_rear_tape_detected = false;
-    Nav_Debug_SetSmoothDirection(NAV_DBG_SMOOTH_DIR_NONE);
-    Nav_Debug_SetSmoothFinishReason(NAV_DBG_SMOOTH_FINISH_NONE);
-    Nav_Debug_ClearYawTarget();
-
-    Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_START_FIND_CELLS);
-    Set_Robot_State(STATE_NAVIGATING);
-}
-
-static void Seed_FindCells_Initial_Cell_IfPending(void)
-{
-    if (!pending_initial_cell_seed)
-    {
-        return;
-    }
-
-    Commit_Maze_State(false, true, true);
-    pending_initial_cell_seed = false;
-}
-
-static void Handle_Navigating(void)
-{
-    AppNavInput input = {0};
-    AppNavOutput output = {0};
-    AppNavAdvanceActionState advance_state;
-
-    Build_AppNavInput_From_SensorSnapshot(control_step_dt_ms, &input);
-    advance_state = App_Nav_TickAdvanceAction(&input, &output);
-
-    if ((advance_state == APP_NAV_ADVANCE_ACTION_WAIT_LEAVE_REAR_TAPE) ||
-        (advance_state == APP_NAV_ADVANCE_ACTION_RUNNING_WALL_FOLLOW) ||
-        (advance_state == APP_NAV_ADVANCE_ACTION_RUNNING_YAW_HOLD))
-    {
-        Set_Motor_Speeds(output.right_motor_pwm, output.left_motor_pwm);
-        return;
-    }
-
-    if (advance_state == APP_NAV_ADVANCE_ACTION_DONE_REAR_TAPE)
-    {
-        Set_Motor_Speeds(0, 0);
-        Update_Robot_Position();
-        Commit_Maze_State(false, true, true);
-        rear_tape_detected = false;
-        was_rear_tape_detected = false;
-        Handle_Deciding();
-        if (robot_state == STATE_NAVIGATING)
-        {
-            (void)App_Nav_StartAdvanceAction(APP_NAV_ADVANCE_ACTION_WALL_FOLLOW_AUTO_YAW_HOLD);
-        }
-        return;
-    }
-
-    if ((advance_state == APP_NAV_ADVANCE_ACTION_TIMEOUT) ||
-        (advance_state == APP_NAV_ADVANCE_ACTION_ERROR))
-    {
-        Set_Motor_Speeds(0, 0);
-        Set_Robot_State(STATE_IDLE);
-        return;
-    }
-
-    Set_Motor_Speeds(0, 0);
-}
-
-/**
- * @brief Maneja el estado de avance recto delegando el yaw-hold en app_nav.
- *        Se detiene si detecta un obstáculo frontal.
- */
-static void Handle_Straight_Drive(bool have_to_decide)
-{
-    if (menu_mode == MENU_MODE_DRIVE_STRAIGHT)
-    {
-        front_wall_detected = (dist_front_left_mm < wall_threshold_mm_braking_start || dist_front_right_mm < wall_threshold_mm_braking_start);
-        if (front_wall_detected)
-        {
-            Set_Motor_Speeds(0, 0);
-            app_state = APP_STATE_MENU;  // Volver al menú
-            Set_Robot_State(STATE_IDLE); // Volver al estado de espera
-            return;
-        }
-    }
-    else
-    {
-        adc_rear_floor = sensor_snapshot.adc_filtered[SENSOR_FLOOR_REAR_CH];
-        bool current_rear_tape = ((sensor_snapshot.detection_flags & SENSOR_DET_FLOOR_REAR) != 0U);
-        if (current_rear_tape && !was_rear_tape_detected)
-        {
-            rear_tape_detected = true;
-        }
-        was_rear_tape_detected = current_rear_tape;
-
-        if (rear_tape_detected)
-        {
-            if (have_to_decide)
-            {
-                rear_tape_detected = false;
-                was_rear_tape_detected = true; // Bloqueamos para no volver a disparar en la misma cinta
-
-                Update_Robot_Position();
-                Commit_Maze_State(0, true, true);
-
-                Handle_Deciding();
-            }
-            else
-            {
-                Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_STRAIGHT_REAR_TAPE_NAVIGATING);
-                Set_Robot_State(STATE_NAVIGATING);
-            }
-            return;
-        }
-    }
-
-    AppNavInput input = {0};
-    AppNavOutput output = {0};
-
-    Build_AppNavInput_From_SensorSnapshot(control_step_dt_ms, &input);
-
-    if (App_Nav_ComputeStraightDrivePwm(&input, &output))
-    {
-        Set_Motor_Speeds(output.right_motor_pwm, output.left_motor_pwm);
-    }
-    else
-    {
-        Set_Motor_Speeds(0, 0);
-    }
-}
-
-static void Handle_Deciding(void)
-{
-    AppNavRecommendedAction action = APP_NAV_ACTION_NONE;
-
-    if (!App_Nav_RecommendAction((uint32_t)rand(), &action) ||
-        (action == APP_NAV_ACTION_NONE))
-    {
-        Set_Motor_Speeds(0, 0);
-        Set_Robot_State(STATE_IDLE);
-        return;
-    }
-
-    if (action == APP_NAV_ACTION_GO_BACK)
-    {
-        Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_DECIDE_DEAD_END);
-        Turn_Start(180);
-    }
-    else if (action == APP_NAV_ACTION_SMOOTH_LEFT)
-    {
-        Nav_Debug_SetSmoothDirection(NAV_DBG_SMOOTH_DIR_LEFT);
-        Nav_Debug_SetSmoothFinishReason(NAV_DBG_SMOOTH_FINISH_NONE);
-        Nav_Debug_SetYawTargetDeg(90);
-        Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_DECIDE_SMOOTH_LEFT);
-        Set_Robot_State(STATE_SMOOTH_TURN_LEFT);
-        Reset_Yaw_Tracking();
-    }
-    else if (action == APP_NAV_ACTION_SMOOTH_RIGHT)
-    {
-        Nav_Debug_SetSmoothDirection(NAV_DBG_SMOOTH_DIR_RIGHT);
-        Nav_Debug_SetSmoothFinishReason(NAV_DBG_SMOOTH_FINISH_NONE);
-        Nav_Debug_SetYawTargetDeg(90);
-        Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_DECIDE_SMOOTH_RIGHT);
-        Set_Robot_State(STATE_SMOOTH_TURN_RIGHT);
-        Reset_Yaw_Tracking();
-    }
-    else if (action == APP_NAV_ACTION_GO_FRONT_NAVIGATING)
-    {
-        Nav_Debug_ClearYawTarget();
-        Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_DECIDE_FRONT_NAVIGATING);
-        Set_Robot_State(STATE_NAVIGATING);
-    }
-    else if (action == APP_NAV_ACTION_GO_FRONT_STRAIGHT)
-    {
-        Nav_Debug_SetYawTargetDeg((int16_t)FIXED_TO_INT(current_yaw_fixed));
-        Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_DECIDE_FRONT_STRAIGHT);
-        Set_Robot_State(STATE_STRAIGHT_DRIVE);
-        (void)App_Nav_StartStraightDriveYawHold(current_yaw_fixed);
-    }
-}
-
-static void Handle_Braking(void)
-{
-    // 1. Leer y convertir sensores frontales a mm
-    uint16_t dist_front_avg_mm = (uint16_t)((sensor_snapshot.dist_front_left_mm +
-                                             sensor_snapshot.dist_front_right_mm) /
-                                            2U);
-
-    // 2. Comprobar si el frenado ha terminado
-    int16_t ax = sensor_snapshot.ax;
-
-    // La condición de parada usa el error absoluto en mm y la aceleración
-    if (abs(dist_front_avg_mm - wall_braking_target_mm) < braking_dead_zone && abs(ax) < braking_accel_stop_threshold)
-    {
-        Set_Motor_Speeds(0, 0);
-        Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_BRAKING_DONE);
-        Set_Robot_State(STATE_DECIDING);
-        return;
-    }
-
-    AppNavInput input = {0};
-    AppNavOutput output = {0};
-
-    Build_AppNavInput_From_SensorSnapshot(control_step_dt_ms, &input);
-
-    if (App_Nav_ComputeBrakingPwm(&input, &output))
-    {
-        Set_Motor_Speeds(output.right_motor_pwm, output.left_motor_pwm);
-    }
-    else
-    {
-        Set_Motor_Speeds(0, 0);
-    }
-}
-
 /**
  * @brief  Establece un nuevo estado para el robot y solicita una actualización del display.
  * @param  new_state El nuevo estado del robot.
@@ -2999,26 +2476,6 @@ static void Set_Robot_State(RobotStateTypeDef new_state)
         nav_debug.last_transition_reason = nav_debug.pending_transition_reason;
         nav_debug.transition_sequence++;
         robot_state = new_state;
-        if (new_state == STATE_NAVIGATING)
-        {
-            (void)App_Nav_StartAdvanceAction(APP_NAV_ADVANCE_ACTION_WALL_FOLLOW_AUTO_YAW_HOLD);
-        }
-        else if (new_state == STATE_SMOOTH_TURN_LEFT)
-        {
-            (void)App_Nav_StartSmoothAction(APP_NAV_SMOOTH_ACTION_LEFT);
-        }
-        else if (new_state == STATE_SMOOTH_TURN_RIGHT)
-        {
-            (void)App_Nav_StartSmoothAction(APP_NAV_SMOOTH_ACTION_RIGHT);
-        }
-        else if (new_state == STATE_STRAIGHT_DRIVE_DESIDING)
-        {
-            (void)App_Nav_StartStraightDriveYawHold(current_yaw_fixed);
-        }
-        else if (new_state == STATE_BRAKING)
-        {
-            (void)App_Nav_StartBraking();
-        }
         // SSD_UPDATE_REQUEST = true;
     }
 
@@ -3034,8 +2491,6 @@ static void Update_Display_Content(void)
     char text_line1[22];
     char text_line2[22];
     char text_line3[22];
-    char text_line4[22];
-    char text_line5[22];
 
     SSD1306_Clear(&hssd);
 
@@ -3044,15 +2499,11 @@ static void Update_Display_Content(void)
         snprintf(text_line1, sizeof(text_line1), "%s Idle", (menu_mode == MENU_MODE_IDLE) ? ">" : " ");
         snprintf(text_line2, sizeof(text_line2), "%s Find Cells", (menu_mode == MENU_MODE_FIND_CELLS) ? ">" : " ");
         snprintf(text_line3, sizeof(text_line3), "%s Go A->B", (menu_mode == MENU_MODE_GO_TO_B) ? ">" : " ");
-        snprintf(text_line4, sizeof(text_line4), "%s Manual", (menu_mode == MENU_MODE_MANUAL_CONTROL) ? ">" : " ");
-        snprintf(text_line5, sizeof(text_line5), "%s Drive Straight", (menu_mode == MENU_MODE_DRIVE_STRAIGHT) ? ">" : " ");
 
         SSD1306_DrawText(&hssd, 0, 0, "--- MENU ---", SSD1306_TEXT_ALIGN_LEFT);
         SSD1306_DrawText(&hssd, 0, 10, text_line1, SSD1306_TEXT_ALIGN_LEFT);
         SSD1306_DrawText(&hssd, 0, 20, text_line2, SSD1306_TEXT_ALIGN_LEFT);
         SSD1306_DrawText(&hssd, 0, 30, text_line3, SSD1306_TEXT_ALIGN_LEFT);
-        SSD1306_DrawText(&hssd, 0, 40, text_line4, SSD1306_TEXT_ALIGN_LEFT);
-        SSD1306_DrawText(&hssd, 0, 50, text_line5, SSD1306_TEXT_ALIGN_LEFT);
     }
 }
 
@@ -3078,128 +2529,6 @@ static int32_t ADC_To_Distance_mm(uint16_t adc_value)
     return (int32_t)App_Sensors_ConvertAdcToDistanceMm(adc_value);
 }
 
-static void Sync_Legacy_Perception_From_Snapshot(void)
-{
-    uint8_t flags = sensor_snapshot.detection_flags;
-
-    dist_diagonal_left_mm = sensor_snapshot.dist_diagonal_left_mm;
-    dist_diagonal_right_mm = sensor_snapshot.dist_diagonal_right_mm;
-    dist_front_left_mm = sensor_snapshot.dist_front_left_mm;
-    dist_front_right_mm = sensor_snapshot.dist_front_right_mm;
-    dist_left_lat_mm = sensor_snapshot.dist_left_lat_mm;
-    dist_right_lat_mm = sensor_snapshot.dist_right_lat_mm;
-    adc_front_floor = sensor_snapshot.adc_filtered[SENSOR_FLOOR_FRONT_CH];
-    adc_rear_floor = sensor_snapshot.adc_filtered[SENSOR_FLOOR_REAR_CH];
-
-    front_wall_detected = ((flags & SENSOR_DET_WALL_FRONT) != 0U);
-    left_wall_detected = ((flags & SENSOR_DET_WALL_LEFT) != 0U);
-    right_wall_detected = ((flags & SENSOR_DET_WALL_RIGHT) != 0U);
-    left_diagonal_wall_detected = ((flags & SENSOR_DET_WALL_DIAG_LEFT) != 0U);
-    right_diagonal_wall_detected = ((flags & SENSOR_DET_WALL_DIAG_RIGHT) != 0U);
-    front_tape_detected = ((flags & SENSOR_DET_FLOOR_FRONT) != 0U);
-}
-
-/**
- * @brief Maneja el estado de giro suave en intersecciones.
- *
- */
-static void Handle_Smooth_Turn(void)
-{
-    RobotStateTypeDef completed_turn_state = robot_state;
-    int8_t heading_update = 0;
-    AppNavInput input = {0};
-    AppNavOutput output = {0};
-    AppNavSmoothActionState smooth_state;
-
-    if (completed_turn_state == STATE_SMOOTH_TURN_LEFT)
-    {
-        heading_update = TURN_LEFT;
-    }
-    else if (completed_turn_state == STATE_SMOOTH_TURN_RIGHT)
-    {
-        heading_update = TURN_RIGHT;
-    }
-
-    Build_AppNavInput_From_SensorSnapshot(control_step_dt_ms, &input);
-    smooth_state = App_Nav_TickSmoothAction(&input, &output);
-
-    if ((smooth_state == APP_NAV_SMOOTH_ACTION_TURNING) ||
-        (smooth_state == APP_NAV_SMOOTH_ACTION_POST_YAW_SEEK_REAR_TAPE))
-    {
-        if (smooth_state == APP_NAV_SMOOTH_ACTION_POST_YAW_SEEK_REAR_TAPE)
-        {
-            AppNavDebug portable_debug = {0};
-            App_Nav_GetDebug(&portable_debug);
-            Nav_Debug_SetSmoothFinishReason(NAV_DBG_SMOOTH_FINISH_YAW_TARGET);
-            Nav_Debug_SetYawTargetDeg(portable_debug.yaw_target_deg);
-        }
-        Set_Motor_Speeds(output.right_motor_pwm, output.left_motor_pwm);
-        return;
-    }
-
-    switch (smooth_state)
-    {
-    case APP_NAV_SMOOTH_ACTION_DONE_REAR_TAPE:
-        Nav_Debug_SetSmoothFinishReason(NAV_DBG_SMOOTH_FINISH_REAR_TAPE);
-
-        Update_Robot_Position();
-        Commit_Maze_State(heading_update, true, true);
-
-        rear_tape_detected = false;
-        was_rear_tape_detected = true;
-
-        Set_Motor_Speeds(right_motor_base_speed, left_motor_base_speed);
-        Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_SMOOTH_DONE);
-        Set_Robot_State(STATE_NAVIGATING);
-        return;
-
-    case APP_NAV_SMOOTH_ACTION_DONE_WALL:
-        Nav_Debug_SetSmoothFinishReason(NAV_DBG_SMOOTH_FINISH_WALL);
-        Commit_Maze_State(heading_update, false, false);
-
-        Set_Motor_Speeds(right_motor_base_speed, left_motor_base_speed);
-        Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_SMOOTH_DONE);
-        Set_Robot_State(STATE_NAVIGATING);
-        return;
-
-    case APP_NAV_SMOOTH_ACTION_DONE_POST_YAW_REAR_TAPE:
-        Nav_Debug_SetSmoothFinishReason(NAV_DBG_SMOOTH_FINISH_POST_YAW_REAR_TAPE);
-
-        Update_Robot_Position();
-        Commit_Maze_State(heading_update, true, true);
-
-        rear_tape_detected = false;
-        was_rear_tape_detected = true;
-
-        Set_Motor_Speeds(0, 0);
-        Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_SMOOTH_DONE);
-        Set_Robot_State(STATE_DECIDING);
-        return;
-
-    case APP_NAV_SMOOTH_ACTION_FRONT_WALL_SAFETY:
-        Nav_Debug_SetSmoothFinishReason(NAV_DBG_SMOOTH_FINISH_FRONT_WALL_SAFETY);
-        Commit_Maze_State(heading_update, false, false);
-        Set_Motor_Speeds(0, 0);
-        Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_SMOOTH_DONE);
-        Set_Robot_State(STATE_IDLE);
-        return;
-
-    case APP_NAV_SMOOTH_ACTION_POST_YAW_TIMEOUT:
-        Nav_Debug_SetSmoothFinishReason(NAV_DBG_SMOOTH_FINISH_POST_YAW_TIMEOUT);
-        Commit_Maze_State(heading_update, false, false);
-        Set_Motor_Speeds(0, 0);
-        Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_SMOOTH_DONE);
-        Set_Robot_State(STATE_IDLE);
-        return;
-
-    case APP_NAV_SMOOTH_ACTION_IDLE:
-    case APP_NAV_SMOOTH_ACTION_ERROR:
-    default:
-        Set_Motor_Speeds(0, 0);
-        return;
-    }
-}
-
 static void Update_Navigation_Perception(void)
 {
     for (uint8_t ch = 0; ch < ADC_CHANNELS; ch++)
@@ -3216,116 +2545,4 @@ static void Update_Navigation_Perception(void)
 
     MPU6050_GetCalibratedData(&hmpu, &sensor_snapshot.ax, &sensor_snapshot.ay, &sensor_snapshot.az, &sensor_snapshot.gx, &sensor_snapshot.gy, &sensor_snapshot.gz);
     sensor_snapshot.yaw_fixed = current_yaw_fixed;
-}
-
-static void Commit_Maze_State(int8_t heading_update, bool update_cell, bool send_update)
-{
-    if (heading_update != 0)
-    {
-        Update_Robot_Heading(heading_update);
-    }
-
-    if (update_cell)
-    {
-        Current_Cell_Mapping();
-    }
-
-    if (send_update)
-    {
-        Send_Maze_Cell_Update();
-    }
-}
-
-
-static void Modes_State_Machine(void)
-{
-    // Maquina de estados del robot
-    if (app_state == APP_STATE_RUNNING)
-    {
-        switch (menu_mode)
-        {
-        case MENU_MODE_FIND_CELLS:
-            Seed_FindCells_Initial_Cell_IfPending();
-
-            // Ejecutar la lógica de resolución de laberintos
-            switch (robot_state)
-            {
-            case STATE_NAVIGATING:
-                Handle_Navigating();
-                break;
-            case STATE_BRAKING:
-                Handle_Braking();
-                break;
-            case STATE_DECIDING:
-                Handle_Deciding();
-                break;
-            case STATE_LEFT_WALL_FADE:
-            case STATE_RIGHT_WALL_FADE:
-            case STATE_STRAIGHT_DRIVE:
-                Handle_Straight_Drive(false);
-                break;
-            case STATE_STRAIGHT_DRIVE_DESIDING:
-                Handle_Straight_Drive(true);
-                break;
-            case STATE_TURNING_LEFT:
-            case STATE_TURNING_RIGHT:
-            case STATE_TURN_AROUND_LEFT:
-            case STATE_TURN_AROUND_RIGHT:
-                Manage_Turn();
-                break;
-            case STATE_SMOOTH_TURN_LEFT:
-            case STATE_SMOOTH_TURN_RIGHT:
-                Handle_Smooth_Turn();
-                break;
-            default:
-                Handle_Idle();
-                break;
-            }
-        	break;
-        case MENU_MODE_MANUAL_CONTROL:
-            // En modo manual, solo gestionamos los giros.
-            // El control de motores se hace directamente por comandos.
-            switch (robot_state)
-            {
-            case STATE_TURNING_LEFT:
-            case STATE_TURNING_RIGHT:
-            case STATE_TURN_AROUND_LEFT:
-            case STATE_TURN_AROUND_RIGHT:
-                Manage_Turn();
-                break;
-            case STATE_IDLE:
-            default:
-                // No hacer nada, permite que los comandos externos
-                // controlen los motores sin que Handle_Idle() los detenga.
-                break;
-            }
-            break;
-        case MENU_MODE_DRIVE_STRAIGHT:
-            switch (robot_state)
-            {
-            case STATE_BRAKING:
-                Handle_Braking();
-                break;
-            case STATE_STRAIGHT_DRIVE:
-                Handle_Straight_Drive(false);
-                break;
-            default:
-                // No hacer nada, permite que los comandos externos
-                // controlen los motores sin que Handle_Idle() los detenga.
-                break;
-            }
-            break;
-        case MENU_MODE_IDLE:
-        case MENU_MODE_GO_TO_B:
-        default:
-            // Para otros modos, por ahora, solo estar en reposo.
-            Handle_Idle();
-            break;
-        }
-    }
-    else // APP_STATE_MENU
-    {
-        // En el menú, los motores siempre están parados.
-        Handle_Idle();
-    }
 }
