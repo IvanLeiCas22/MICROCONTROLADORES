@@ -10,6 +10,10 @@
 #define APP_NAV_SUPERVISOR_RESULT_START_FAILED 2U
 #define APP_NAV_SUPERVISOR_RESULT_PRIMITIVE_ERROR 3U
 #define APP_NAV_SUPERVISOR_RESULT_UNSUPPORTED_ACTION 4U
+#define APP_NAV_SUPERVISOR_RESULT_FIND_CELLS_COMPLETE 5U
+
+#define APP_NAV_SUPERVISOR_SPECIAL_TARGET_COUNT 3U
+
 #define APP_NAV_SUPERVISOR_YAW_180_Q16 ((int64_t)180 << 16)
 #define APP_NAV_SUPERVISOR_YAW_360_Q16 ((int64_t)360 << 16)
 
@@ -17,6 +21,7 @@ static AppNavSupervisorDebug app_nav_supervisor_debug;
 static int32_t app_nav_supervisor_action_yaw_reference_q16_deg;
 static uint8_t app_nav_supervisor_action_yaw_reference_valid;
 static uint8_t app_nav_supervisor_pivot_180_exit_requires_advance;
+static uint8_t app_nav_supervisor_special_found_count;
 static uint8_t app_nav_supervisor_initial_x;
 static uint8_t app_nav_supervisor_initial_y;
 static HeadingTypeDef app_nav_supervisor_initial_heading;
@@ -163,6 +168,54 @@ static AppNavSupervisorState App_NavSupervisor_SetError(uint8_t result)
                                APP_NAV_SUPERVISOR_ACTION_NONE,
                                result);
     return app_nav_supervisor_debug.state;
+}
+
+static AppNavSupervisorState App_NavSupervisor_FinishFindCells(AppNavOutput *output)
+{
+    App_NavSupervisor_ClearOutput(output);
+    App_NavSupervisor_StopActions();
+    App_NavSupervisor_ClearActionYawReference();
+    App_NavSupervisor_ClearPivotExitLatch();
+
+    app_nav_supervisor_debug.active = 0U;
+
+    App_NavSupervisor_UpdateMazeDebug();
+    App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_IDLE,
+                               APP_NAV_SUPERVISOR_ACTION_NONE,
+                               APP_NAV_SUPERVISOR_RESULT_FIND_CELLS_COMPLETE);
+
+    return app_nav_supervisor_debug.state;
+}
+
+static bool App_NavSupervisor_CheckSpecialAtConfirmedCellEntry(const AppNavInput *input)
+{
+    if (app_nav_supervisor_mission != APP_NAV_SUPERVISOR_MISSION_FIND_CELLS)
+    {
+        return false;
+    }
+
+    if (input == NULL)
+    {
+        return false;
+    }
+
+    if ((input->floor_front_black == 0U) ||
+        (input->floor_rear_black == 0U))
+    {
+        return false;
+    }
+
+    if (App_Maze_MarkCurrentCellSpecial())
+    {
+        if (app_nav_supervisor_special_found_count < 255U)
+        {
+            app_nav_supervisor_special_found_count++;
+        }
+
+        App_NavSupervisor_UpdateMazeDebug();
+    }
+
+    return (app_nav_supervisor_special_found_count >= APP_NAV_SUPERVISOR_SPECIAL_TARGET_COUNT);
 }
 
 static TurnTypeDef App_NavSupervisor_SmoothTurnForState(AppNavSupervisorState state)
@@ -386,6 +439,12 @@ static AppNavSupervisorState App_NavSupervisor_HandleAdvanceWithState(const AppN
     case APP_NAV_ADVANCE_ACTION_DONE_REAR_TAPE:
         App_NavSupervisor_ClearOutput(output);
         App_Maze_AdvanceRobotPosition();
+
+        if (App_NavSupervisor_CheckSpecialAtConfirmedCellEntry(input))
+        {
+            return App_NavSupervisor_FinishFindCells(output);
+        }
+
         App_Nav_StopAdvanceAction();
         App_NavSupervisor_ClearActionYawReference();
         App_NavSupervisor_UpdateMazeDebug();
@@ -495,6 +554,12 @@ static AppNavSupervisorState App_NavSupervisor_HandleSmooth(const AppNavInput *i
         App_NavSupervisor_ClearOutput(output);
         App_Maze_UpdateRobotHeading(turn);
         App_Maze_AdvanceRobotPosition();
+
+        if (App_NavSupervisor_CheckSpecialAtConfirmedCellEntry(input))
+        {
+            return App_NavSupervisor_FinishFindCells(output);
+        }
+
         App_Nav_StopSmoothAction();
         App_NavSupervisor_ClearActionYawReference();
         App_NavSupervisor_UpdateMazeDebug();
@@ -593,6 +658,7 @@ void App_NavSupervisor_Reset(void)
     App_NavSupervisor_StopActions();
     App_NavSupervisor_ClearActionYawReference();
     App_NavSupervisor_ClearPivotExitLatch();
+    app_nav_supervisor_special_found_count = 0U;
 
     if (app_nav_supervisor_initial_pose_valid != 0U)
     {
@@ -722,9 +788,13 @@ AppNavSupervisorState App_NavSupervisor_Tick(const AppNavInput *input,
 
     if (app_nav_supervisor_debug.active == 0U)
     {
-        App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_IDLE,
-                                   APP_NAV_SUPERVISOR_ACTION_NONE,
-                                   APP_NAV_SUPERVISOR_RESULT_OK);
+        if (app_nav_supervisor_debug.state != APP_NAV_SUPERVISOR_IDLE)
+        {
+            App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_IDLE,
+                                       APP_NAV_SUPERVISOR_ACTION_NONE,
+                                       APP_NAV_SUPERVISOR_RESULT_OK);
+        }
+
         return app_nav_supervisor_debug.state;
     }
 
