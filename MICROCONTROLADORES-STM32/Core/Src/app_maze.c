@@ -145,6 +145,29 @@ void App_Maze_MapCurrentCell(bool front_wall_detected, bool right_wall_detected,
     }
 }
 
+bool App_Maze_MarkCurrentCellSpecial(void)
+{
+    uint8_t *cell = &maze_map[current_pos.x][current_pos.y];
+
+    if ((*cell & CELL_SPECIAL) != 0U)
+    {
+        return false;
+    }
+
+    *cell |= (CELL_VISITED | CELL_SPECIAL);
+    return true;
+}
+
+bool App_Maze_IsCurrentCellSpecial(void)
+{
+    return ((maze_map[current_pos.x][current_pos.y] & CELL_SPECIAL) != 0U);
+}
+
+uint8_t App_Maze_GetCurrentCellData(void)
+{
+    return maze_map[current_pos.x][current_pos.y];
+}
+
 uint8_t App_Maze_WriteCurrentCellUpdatePayload(uint8_t *buffer)
 {
     if (buffer == NULL)
