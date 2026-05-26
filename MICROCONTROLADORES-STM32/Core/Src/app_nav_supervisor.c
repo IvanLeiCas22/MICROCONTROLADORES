@@ -262,34 +262,58 @@ static bool App_NavSupervisor_StartRecommendedAction(AppNavRecommendedAction act
         return App_NavSupervisor_StartAdvance(input);
 
     case APP_NAV_ACTION_SMOOTH_LEFT:
+    {
+        AppNavRearTapeProfile rear_tape_profile = APP_NAV_REAR_TAPE_PROFILE_NORMAL_CELL;
+
         if (!App_NavSupervisor_CaptureActionYawReference(input))
         {
             return false;
         }
-        if (!App_Nav_StartSmoothAction(APP_NAV_SMOOTH_ACTION_LEFT))
+
+        if (App_Maze_IsCurrentCellSpecial())
+        {
+            rear_tape_profile = APP_NAV_REAR_TAPE_PROFILE_SPECIAL_CELL;
+        }
+
+        if (!App_Nav_StartSmoothActionWithRearTapeProfile(APP_NAV_SMOOTH_ACTION_LEFT,
+                                                          rear_tape_profile))
         {
             App_NavSupervisor_ClearActionYawReference();
             return false;
         }
+
         App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_RUN_SMOOTH_LEFT,
                                    APP_NAV_SUPERVISOR_ACTION_SMOOTH_LEFT,
                                    APP_NAV_SUPERVISOR_RESULT_OK);
         return true;
+    }
 
     case APP_NAV_ACTION_SMOOTH_RIGHT:
+    {
+        AppNavRearTapeProfile rear_tape_profile = APP_NAV_REAR_TAPE_PROFILE_NORMAL_CELL;
+
         if (!App_NavSupervisor_CaptureActionYawReference(input))
         {
             return false;
         }
-        if (!App_Nav_StartSmoothAction(APP_NAV_SMOOTH_ACTION_RIGHT))
+
+        if (App_Maze_IsCurrentCellSpecial())
+        {
+            rear_tape_profile = APP_NAV_REAR_TAPE_PROFILE_SPECIAL_CELL;
+        }
+
+        if (!App_Nav_StartSmoothActionWithRearTapeProfile(APP_NAV_SMOOTH_ACTION_RIGHT,
+                                                          rear_tape_profile))
         {
             App_NavSupervisor_ClearActionYawReference();
             return false;
         }
+
         App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_RUN_SMOOTH_RIGHT,
                                    APP_NAV_SUPERVISOR_ACTION_SMOOTH_RIGHT,
                                    APP_NAV_SUPERVISOR_RESULT_OK);
         return true;
+    }
 
     case APP_NAV_ACTION_GO_BACK:
         return App_NavSupervisor_StartApproachFrontWallForPivot(input);
