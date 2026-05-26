@@ -174,12 +174,21 @@ static bool App_NavSupervisor_StartAdvanceWithState(const AppNavInput *input,
                                                     AppNavSupervisorState state,
                                                     AppNavSupervisorAction action)
 {
+    AppNavRearTapeProfile rear_tape_profile = APP_NAV_REAR_TAPE_PROFILE_NORMAL_CELL;
+
     if (!App_NavSupervisor_CaptureActionYawReference(input))
     {
         return false;
     }
 
-    if (!App_Nav_StartAdvanceAction(APP_NAV_ADVANCE_ACTION_WALL_FOLLOW_AUTO_YAW_HOLD))
+    if ((action != APP_NAV_SUPERVISOR_ACTION_INITIAL_ADVANCE) &&
+        App_Maze_IsCurrentCellSpecial())
+    {
+        rear_tape_profile = APP_NAV_REAR_TAPE_PROFILE_SPECIAL_CELL;
+    }
+
+    if (!App_Nav_StartAdvanceActionWithRearTapeProfile(APP_NAV_ADVANCE_ACTION_WALL_FOLLOW_AUTO_YAW_HOLD,
+                                                       rear_tape_profile))
     {
         App_NavSupervisor_ClearActionYawReference();
         return false;

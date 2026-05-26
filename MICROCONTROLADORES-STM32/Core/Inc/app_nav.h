@@ -36,6 +36,8 @@ bool App_Nav_ComputeWallFollowPwm(const AppNavInput *input,
                                   uint16_t left_base_pwm,
                                   AppNavOutput *output);
 bool App_Nav_StartAdvanceAction(AppNavAdvanceActionMode mode);
+bool App_Nav_StartAdvanceActionWithRearTapeProfile(AppNavAdvanceActionMode mode,
+                                                   AppNavRearTapeProfile rear_tape_profile);
 AppNavAdvanceActionState App_Nav_TickAdvanceAction(const AppNavInput *input,
                                                    AppNavOutput *output);
 void App_Nav_StopAdvanceAction(void);

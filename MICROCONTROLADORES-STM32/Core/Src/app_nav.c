@@ -3,6 +3,14 @@
 
 #include <string.h>
 
+typedef enum
+{
+    APP_NAV_REAR_TAPE_GATE_WAIT_LEAVE_ENTRY_BLACK = 0,
+    APP_NAV_REAR_TAPE_GATE_WAIT_SPECIAL_PATCH_BLACK,
+    APP_NAV_REAR_TAPE_GATE_WAIT_LEAVE_SPECIAL_PATCH,
+    APP_NAV_REAR_TAPE_GATE_ARMED_FOR_EXIT_TAPE
+} AppNavRearTapeGateState;
+
 static AppNavConfig app_nav_config;
 static AppNavDebug app_nav_debug;
 static PID_Controller_t app_nav_advance_pid;
@@ -11,6 +19,8 @@ static PID_Controller_t app_nav_pivot_turn_pid;
 static PID_Controller_t app_nav_braking_pid;
 static AppNavAdvanceActionMode app_nav_advance_action_mode;
 static AppNavAdvanceActionState app_nav_advance_action_state;
+static AppNavRearTapeProfile app_nav_advance_rear_tape_profile;
+static AppNavRearTapeGateState app_nav_advance_rear_tape_gate_state;
 static AppNavApproachFrontWallActionState app_nav_approach_front_wall_action_state;
 static AppNavSmoothTurnDirection app_nav_smooth_turn_direction;
 static AppNavSmoothActionType app_nav_smooth_action_type;
@@ -205,6 +215,8 @@ static void App_Nav_ClearAdvanceActionState(void)
 {
     app_nav_advance_action_mode = APP_NAV_ADVANCE_ACTION_WALL_FOLLOW_AUTO_YAW_HOLD;
     app_nav_advance_action_state = APP_NAV_ADVANCE_ACTION_IDLE;
+    app_nav_advance_rear_tape_profile = APP_NAV_REAR_TAPE_PROFILE_NORMAL_CELL;
+    app_nav_advance_rear_tape_gate_state = APP_NAV_REAR_TAPE_GATE_WAIT_LEAVE_ENTRY_BLACK;
     app_nav_advance_action_active = 0U;
     app_nav_advance_was_rear_tape_detected = 0U;
     app_nav_advance_rear_tape_search_armed = 0U;
@@ -226,6 +238,13 @@ static void App_Nav_SetAdvanceActionTerminal(AppNavAdvanceActionState terminal_s
     app_nav_advance_action_state = terminal_state;
     app_nav_debug.pwm_right_cmd = 0;
     app_nav_debug.pwm_left_cmd = 0;
+}
+
+static void App_Nav_SetAdvanceActionRunningState(void)
+{
+    app_nav_advance_action_state = (app_nav_advance_yaw_hold_started != 0U)
+                                       ? APP_NAV_ADVANCE_ACTION_RUNNING_YAW_HOLD
+                                       : APP_NAV_ADVANCE_ACTION_RUNNING_WALL_FOLLOW;
 }
 
 static void App_Nav_SetApproachFrontWallActionTerminal(AppNavApproachFrontWallActionState terminal_state)
@@ -1465,7 +1484,21 @@ void App_Nav_StopAdvanceAction(void)
 
 bool App_Nav_StartAdvanceAction(AppNavAdvanceActionMode mode)
 {
+    return App_Nav_StartAdvanceActionWithRearTapeProfile(mode,
+                                                         APP_NAV_REAR_TAPE_PROFILE_NORMAL_CELL);
+}
+
+bool App_Nav_StartAdvanceActionWithRearTapeProfile(AppNavAdvanceActionMode mode,
+                                                   AppNavRearTapeProfile rear_tape_profile)
+{
     if (mode != APP_NAV_ADVANCE_ACTION_WALL_FOLLOW_AUTO_YAW_HOLD)
+    {
+        app_nav_advance_action_state = APP_NAV_ADVANCE_ACTION_ERROR;
+        return false;
+    }
+
+    if ((rear_tape_profile != APP_NAV_REAR_TAPE_PROFILE_NORMAL_CELL) &&
+        (rear_tape_profile != APP_NAV_REAR_TAPE_PROFILE_SPECIAL_CELL))
     {
         app_nav_advance_action_state = APP_NAV_ADVANCE_ACTION_ERROR;
         return false;
@@ -1479,6 +1512,8 @@ bool App_Nav_StartAdvanceAction(AppNavAdvanceActionMode mode)
 
     app_nav_advance_action_mode = mode;
     app_nav_advance_action_state = APP_NAV_ADVANCE_ACTION_WAIT_LEAVE_REAR_TAPE;
+    app_nav_advance_rear_tape_profile = rear_tape_profile;
+    app_nav_advance_rear_tape_gate_state = APP_NAV_REAR_TAPE_GATE_WAIT_LEAVE_ENTRY_BLACK;
     app_nav_advance_action_active = 1U;
     app_nav_advance_was_rear_tape_detected = 0U;
     app_nav_advance_rear_tape_search_armed = 0U;
@@ -1528,41 +1563,89 @@ AppNavAdvanceActionState App_Nav_TickAdvanceAction(const AppNavInput *input,
 
     current_rear_tape = (input->floor_rear_black != 0U);
 
-    if (app_nav_advance_action_state == APP_NAV_ADVANCE_ACTION_WAIT_LEAVE_REAR_TAPE)
+    switch (app_nav_advance_rear_tape_gate_state)
     {
+    case APP_NAV_REAR_TAPE_GATE_WAIT_LEAVE_ENTRY_BLACK:
         if (current_rear_tape)
         {
             app_nav_advance_was_rear_tape_detected = 1U;
+
             if (!App_Nav_ComputeAdvanceActionPwm(input, output))
             {
                 App_Nav_SetAdvanceActionTerminal(APP_NAV_ADVANCE_ACTION_ERROR);
                 return app_nav_advance_action_state;
             }
+
             app_nav_advance_action_state = APP_NAV_ADVANCE_ACTION_WAIT_LEAVE_REAR_TAPE;
             return app_nav_advance_action_state;
         }
 
-        app_nav_advance_rear_tape_search_armed = 1U;
         app_nav_advance_was_rear_tape_detected = 0U;
-        app_nav_advance_action_state = (app_nav_advance_yaw_hold_started != 0U)
-                                           ? APP_NAV_ADVANCE_ACTION_RUNNING_YAW_HOLD
-                                           : APP_NAV_ADVANCE_ACTION_RUNNING_WALL_FOLLOW;
-    }
 
-    if (current_rear_tape)
-    {
-        if ((app_nav_advance_rear_tape_search_armed != 0U) &&
-            (app_nav_advance_was_rear_tape_detected == 0U))
+        if (app_nav_advance_rear_tape_profile == APP_NAV_REAR_TAPE_PROFILE_SPECIAL_CELL)
         {
-            App_Nav_SetAdvanceActionTerminal(APP_NAV_ADVANCE_ACTION_DONE_REAR_TAPE);
-            return app_nav_advance_action_state;
+            app_nav_advance_rear_tape_gate_state = APP_NAV_REAR_TAPE_GATE_WAIT_SPECIAL_PATCH_BLACK;
+        }
+        else
+        {
+            app_nav_advance_rear_tape_gate_state = APP_NAV_REAR_TAPE_GATE_ARMED_FOR_EXIT_TAPE;
+            app_nav_advance_rear_tape_search_armed = 1U;
         }
 
-        app_nav_advance_was_rear_tape_detected = 1U;
-    }
-    else
-    {
-        app_nav_advance_was_rear_tape_detected = 0U;
+        App_Nav_SetAdvanceActionRunningState();
+        break;
+
+    case APP_NAV_REAR_TAPE_GATE_WAIT_SPECIAL_PATCH_BLACK:
+        if (current_rear_tape)
+        {
+            app_nav_advance_was_rear_tape_detected = 1U;
+            app_nav_advance_rear_tape_gate_state = APP_NAV_REAR_TAPE_GATE_WAIT_LEAVE_SPECIAL_PATCH;
+        }
+        else
+        {
+            app_nav_advance_was_rear_tape_detected = 0U;
+        }
+
+        App_Nav_SetAdvanceActionRunningState();
+        break;
+
+    case APP_NAV_REAR_TAPE_GATE_WAIT_LEAVE_SPECIAL_PATCH:
+        if (current_rear_tape)
+        {
+            app_nav_advance_was_rear_tape_detected = 1U;
+        }
+        else
+        {
+            app_nav_advance_was_rear_tape_detected = 0U;
+            app_nav_advance_rear_tape_search_armed = 1U;
+            app_nav_advance_rear_tape_gate_state = APP_NAV_REAR_TAPE_GATE_ARMED_FOR_EXIT_TAPE;
+        }
+
+        App_Nav_SetAdvanceActionRunningState();
+        break;
+
+    case APP_NAV_REAR_TAPE_GATE_ARMED_FOR_EXIT_TAPE:
+        if (current_rear_tape)
+        {
+            if (app_nav_advance_was_rear_tape_detected == 0U)
+            {
+                App_Nav_SetAdvanceActionTerminal(APP_NAV_ADVANCE_ACTION_DONE_REAR_TAPE);
+                return app_nav_advance_action_state;
+            }
+
+            app_nav_advance_was_rear_tape_detected = 1U;
+        }
+        else
+        {
+            app_nav_advance_was_rear_tape_detected = 0U;
+        }
+
+        App_Nav_SetAdvanceActionRunningState();
+        break;
+
+    default:
+        App_Nav_SetAdvanceActionTerminal(APP_NAV_ADVANCE_ACTION_ERROR);
+        return app_nav_advance_action_state;
     }
 
     if (!App_Nav_ComputeAdvanceActionPwm(input, output))
