@@ -140,6 +140,7 @@ static void App_NavSupervisor_UpdateMazeDebug(void)
         app_nav_supervisor_debug.maze_y = 0U;
         app_nav_supervisor_debug.maze_cell = 0U;
         app_nav_supervisor_debug.maze_heading = 0U;
+        app_nav_supervisor_debug.special_found_count = app_nav_supervisor_special_found_count;
         return;
     }
 
@@ -147,6 +148,7 @@ static void App_NavSupervisor_UpdateMazeDebug(void)
     app_nav_supervisor_debug.maze_y = payload[1];
     app_nav_supervisor_debug.maze_cell = payload[2];
     app_nav_supervisor_debug.maze_heading = payload[3];
+    app_nav_supervisor_debug.special_found_count = app_nav_supervisor_special_found_count;
 }
 
 static void App_NavSupervisor_MapCurrentCellFromInput(const AppNavInput *input)
@@ -681,6 +683,7 @@ void App_NavSupervisor_Reset(void)
     App_NavSupervisor_ClearActionYawReference();
     App_NavSupervisor_ClearPivotExitLatch();
     app_nav_supervisor_special_found_count = 0U;
+    app_nav_supervisor_debug.special_found_count = 0U;
 
     if (app_nav_supervisor_initial_pose_valid != 0U)
     {

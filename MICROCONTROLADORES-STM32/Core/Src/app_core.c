@@ -369,6 +369,7 @@ static void Init_Pid_Configs(void);
 static void Set_Pid_Gains_From_U16(PID_Role_t role, uint16_t kp_x100, uint16_t ki_x100, uint16_t kd_x100);
 static void Write_Pid_Gains_To_Buffer(PID_Role_t role, uint8_t *buffer);
 static void Write_Nav_Debug_Status_To_Buffer(uint8_t *buffer);
+static void Write_Supervisor_Debug_Status_To_Buffer(uint8_t *buffer);
 static void Nav_Debug_SetTransitionReason(NavDebugTransitionReason reason);
 static void Nav_Debug_ClearYawTarget(void);
 static int32_t Gain_Hundredths_To_Fixed(uint16_t gain_x100);
@@ -715,6 +716,28 @@ static void Write_Nav_Debug_Status_To_Buffer(uint8_t *buffer)
 
     buffer[idx++] = (uint8_t)(nav_debug.transition_sequence & 0xFFU);
     buffer[idx++] = (uint8_t)((nav_debug.transition_sequence >> 8) & 0xFFU);
+}
+
+static void Write_Supervisor_Debug_Status_To_Buffer(uint8_t *buffer)
+{
+    AppNavSupervisorDebug debug;
+
+    if (buffer == NULL)
+    {
+        return;
+    }
+
+    App_NavSupervisor_GetDebug(&debug);
+
+    buffer[0] = (uint8_t)debug.state;
+    buffer[1] = (uint8_t)debug.current_action;
+    buffer[2] = debug.active;
+    buffer[3] = debug.last_result;
+    buffer[4] = debug.maze_x;
+    buffer[5] = debug.maze_y;
+    buffer[6] = debug.maze_heading;
+    buffer[7] = debug.maze_cell;
+    buffer[8] = debug.special_found_count;
 }
 
 static void Nav_Debug_SetTransitionReason(NavDebugTransitionReason reason)
@@ -1194,6 +1217,15 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
         supervisor_pose_buffer[2] = (uint8_t)supervisor_initial_heading;
         UNERBUS_Write(aBus, supervisor_pose_buffer, UNERBUS_SUPERVISOR_INITIAL_POSE_SIZE);
         length = UNERBUS_CMD_ID_SIZE + UNERBUS_SUPERVISOR_INITIAL_POSE_SIZE;
+        break;
+    }
+    case CMD_GET_SUPERVISOR_DEBUG_STATUS:
+    {
+        uint8_t supervisor_debug_buffer[UNERBUS_SUPERVISOR_DEBUG_STATUS_SIZE];
+
+        Write_Supervisor_Debug_Status_To_Buffer(supervisor_debug_buffer);
+        UNERBUS_Write(aBus, supervisor_debug_buffer, UNERBUS_SUPERVISOR_DEBUG_STATUS_SIZE);
+        length = UNERBUS_CMD_ID_SIZE + UNERBUS_SUPERVISOR_DEBUG_STATUS_SIZE;
         break;
     }
     case CMD_START_SUPERVISOR_RUN:

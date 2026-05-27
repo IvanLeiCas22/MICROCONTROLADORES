@@ -106,6 +106,11 @@ typedef struct
     uint8_t maze_y;
     uint8_t maze_heading;
     uint8_t maze_cell;
+
+    /*
+     * Number of unique CELL_SPECIAL cells detected during FIND_CELLS.
+     */
+    uint8_t special_found_count;
 } AppNavSupervisorDebug;
 
 void App_NavSupervisor_Init(void);
