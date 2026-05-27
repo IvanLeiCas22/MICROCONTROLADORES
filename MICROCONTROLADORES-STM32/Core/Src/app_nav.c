@@ -50,6 +50,9 @@ static uint8_t app_nav_pivot_turn_active;
 static uint8_t app_nav_braking_active;
 static bool app_nav_enabled = false;
 
+static bool App_Nav_StartYawHoldAdvanceInternal(int32_t yaw_target_q16_deg,
+                                                uint8_t clear_smooth_action);
+
 /* Mirrors the legacy ADC channel order without depending on app_config.h. */
 typedef enum
 {
@@ -280,6 +283,25 @@ static void App_Nav_SetSmoothActionTerminal(AppNavSmoothActionState terminal_sta
     app_nav_smooth_post_yaw_ticks = 0U;
     app_nav_debug.pwm_right_cmd = 0;
     app_nav_debug.pwm_left_cmd = 0;
+}
+
+static void App_Nav_EnterSmoothPostYawSeek(const AppNavInput *input,
+                                           AppNavOutput *output,
+                                           int32_t yaw_deg,
+                                           AppNavSmoothFinishReason finish_reason)
+{
+    app_nav_smooth_action_state = APP_NAV_SMOOTH_ACTION_POST_YAW_SEEK_REAR_TAPE;
+    app_nav_smooth_post_yaw_ticks = 0U;
+    app_nav_smooth_post_yaw_target_deg = (int16_t)yaw_deg;
+    app_nav_debug.smooth_finish_reason = finish_reason;
+    app_nav_debug.yaw_target_deg = app_nav_smooth_post_yaw_target_deg;
+
+    (void)App_Nav_StartYawHoldAdvanceInternal(input->yaw_q16_deg, 0U);
+
+    output->right_motor_pwm = (int16_t)(app_nav_config.right_motor_base_speed);
+    output->left_motor_pwm = (int16_t)(app_nav_config.left_motor_base_speed);
+    app_nav_debug.pwm_right_cmd = output->right_motor_pwm;
+    app_nav_debug.pwm_left_cmd = output->left_motor_pwm;
 }
 
 static bool App_Nav_UpdateSmoothRearTapeGate(bool current_rear_tape,
@@ -1148,33 +1170,19 @@ AppNavSmoothActionState App_Nav_TickSmoothAction(const AppNavInput *input,
 
     if (wall_detected)
     {
-        app_nav_smooth_action_state = APP_NAV_SMOOTH_ACTION_POST_YAW_SEEK_REAR_TAPE;
-        app_nav_smooth_post_yaw_ticks = 0U;
-        app_nav_smooth_post_yaw_target_deg = (int16_t)yaw_deg;
-        app_nav_debug.smooth_finish_reason = APP_NAV_SMOOTH_FINISH_WALL;
-        app_nav_debug.yaw_target_deg = app_nav_smooth_post_yaw_target_deg;
-        (void)App_Nav_StartYawHoldAdvanceInternal(input->yaw_q16_deg, 0U);
-
-        output->right_motor_pwm = (int16_t)(app_nav_config.right_motor_base_speed);
-        output->left_motor_pwm = (int16_t)(app_nav_config.left_motor_base_speed);
-        app_nav_debug.pwm_right_cmd = output->right_motor_pwm;
-        app_nav_debug.pwm_left_cmd = output->left_motor_pwm;
+        App_Nav_EnterSmoothPostYawSeek(input,
+                                       output,
+                                       yaw_deg,
+                                       APP_NAV_SMOOTH_FINISH_WALL);
         return app_nav_smooth_action_state;
     }
 
     if (yaw_target_reached)
     {
-        app_nav_smooth_action_state = APP_NAV_SMOOTH_ACTION_POST_YAW_SEEK_REAR_TAPE;
-        app_nav_smooth_post_yaw_ticks = 0U;
-        app_nav_smooth_post_yaw_target_deg = (int16_t)yaw_deg;
-        app_nav_debug.smooth_finish_reason = APP_NAV_SMOOTH_FINISH_YAW_TARGET;
-        app_nav_debug.yaw_target_deg = app_nav_smooth_post_yaw_target_deg;
-        (void)App_Nav_StartYawHoldAdvanceInternal(input->yaw_q16_deg, 0U);
-
-        output->right_motor_pwm = (int16_t)(app_nav_config.right_motor_base_speed);
-        output->left_motor_pwm = (int16_t)(app_nav_config.left_motor_base_speed);
-        app_nav_debug.pwm_right_cmd = output->right_motor_pwm;
-        app_nav_debug.pwm_left_cmd = output->left_motor_pwm;
+        App_Nav_EnterSmoothPostYawSeek(input,
+                                       output,
+                                       yaw_deg,
+                                       APP_NAV_SMOOTH_FINISH_YAW_TARGET);
         return app_nav_smooth_action_state;
     }
 
