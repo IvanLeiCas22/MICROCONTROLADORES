@@ -3126,7 +3126,7 @@ QPushButton:checked {
                   <item>
                    <widget class="QPushButton" name="btnSimReset">
                     <property name="text">
-                     <string>Reset laberinto</string>
+                     <string>Reset vista local</string>
                     </property>
                    </widget>
                   </item>
