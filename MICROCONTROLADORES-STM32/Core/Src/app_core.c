@@ -386,6 +386,7 @@ static void PrimitiveTest_WriteSmoothConfig(uint8_t *buffer);
 static void PrimitiveTest_SetSmoothConfigFromPayload(struct UNERBUSHandle *aBus);
 static uint8_t PrimitiveTest_SendStatus(struct UNERBUSHandle *aBus);
 static uint8_t PrimitiveTest_SendSmoothConfig(struct UNERBUSHandle *aBus);
+static void PrimitiveTest_SetRejected(uint8_t result);
 static uint8_t PrimitiveTest_HandleCommand(struct UNERBUSHandle *aBus);
 static void Stop_Portable_Nav_Actions(void);
 static void Supervisor_Run_SetInactiveMenuState(void);
@@ -2194,6 +2195,12 @@ static void PrimitiveTest_SetSmoothConfigFromPayload(struct UNERBUSHandle *aBus)
     Sync_AppNavConfig_From_LegacyRuntime();
 }
 
+static void PrimitiveTest_SetRejected(uint8_t result)
+{
+    primitive_test.state = PRIM_TEST_STATE_REJECTED;
+    primitive_test.result = result;
+}
+
 static uint8_t PrimitiveTest_HandleCommand(struct UNERBUSHandle *aBus)
 {
     uint8_t subcmd = UNERBUS_GetUInt8(aBus);
@@ -2220,8 +2227,7 @@ static uint8_t PrimitiveTest_HandleCommand(struct UNERBUSHandle *aBus)
             primitive_test.active = false;
             primitive_test.test_type = test_type;
             primitive_test.variant = variant;
-            primitive_test.state = PRIM_TEST_STATE_REJECTED;
-            primitive_test.result = PRIM_TEST_RESULT_UNSUPPORTED;
+            PrimitiveTest_SetRejected(PRIM_TEST_RESULT_UNSUPPORTED);
         }
 
         return PrimitiveTest_SendStatus(aBus);
@@ -2242,8 +2248,7 @@ static uint8_t PrimitiveTest_HandleCommand(struct UNERBUSHandle *aBus)
         }
 
         primitive_test.test_type = test_type;
-        primitive_test.state = PRIM_TEST_STATE_REJECTED;
-        primitive_test.result = PRIM_TEST_RESULT_UNSUPPORTED;
+        PrimitiveTest_SetRejected(PRIM_TEST_RESULT_UNSUPPORTED);
         return PrimitiveTest_SendStatus(aBus);
     }
     case PRIM_TEST_GET_CONFIG:
@@ -2256,15 +2261,13 @@ static uint8_t PrimitiveTest_HandleCommand(struct UNERBUSHandle *aBus)
         }
 
         primitive_test.test_type = test_type;
-        primitive_test.state = PRIM_TEST_STATE_REJECTED;
-        primitive_test.result = PRIM_TEST_RESULT_UNSUPPORTED;
+        PrimitiveTest_SetRejected(PRIM_TEST_RESULT_UNSUPPORTED);
         return PrimitiveTest_SendStatus(aBus);
     }
     default:
     {
-        primitive_test.state = PRIM_TEST_STATE_REJECTED;
-        primitive_test.result = PRIM_TEST_RESULT_INVALID;
-        return PrimitiveTest_SendStatus(aBus);
+    	PrimitiveTest_SetRejected(PRIM_TEST_RESULT_INVALID);
+    	return PrimitiveTest_SendStatus(aBus);
     }
     }
 }
