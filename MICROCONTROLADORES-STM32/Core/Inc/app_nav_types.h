@@ -7,6 +7,13 @@
 #define APP_NAV_ADC_CHANNEL_COUNT 8U
 #define APP_NAV_YAW_TARGET_UNAVAILABLE ((int16_t)32767)
 
+/*
+ * Legacy app_nav-level mode debug.
+ *
+ * The active FIND_CELLS / GO_A_TO_B mission owner is app_nav_supervisor, not
+ * app_nav. These values are kept for AppNavDebug compatibility and should not
+ * be used to drive mission sequencing.
+ */
 typedef enum
 {
     APP_NAV_MODE_IDLE = 0,
@@ -16,6 +23,17 @@ typedef enum
     APP_NAV_MODE_GO_TO_B
 } AppNavMode;
 
+/*
+ * Legacy app_nav-level state debug.
+ *
+ * Primitive actions expose their own states:
+ * - AppNavAdvanceActionState
+ * - AppNavSmoothActionState
+ * - AppNavPivotActionState
+ * - AppNavApproachFrontWallActionState
+ *
+ * Mission-level state is exposed by AppNavSupervisorState.
+ */
 typedef enum
 {
     APP_NAV_STATE_IDLE = 0,
@@ -33,6 +51,12 @@ typedef enum
     APP_NAV_STATE_ERROR
 } AppNavState;
 
+/*
+ * Legacy app_nav-level transition debug.
+ *
+ * The old app_nav mission state machine has been removed. These values remain
+ * only for compatibility with AppNavDebug layout and old diagnostic naming.
+ */
 typedef enum
 {
     APP_NAV_TRANSITION_NONE = 0,
@@ -272,12 +296,24 @@ typedef struct
 
 typedef struct
 {
+    /*
+     * Legacy app_nav-level debug fields.
+     *
+     * The live mission state should be read from AppNavSupervisorDebug.
+     * app_nav currently reports IDLE here while still exporting perception,
+     * controller and primitive debug data below.
+     */
     AppNavMode mode;
     AppNavState state;
     AppNavState previous_state;
 
     uint8_t last_transition_reason;
     uint8_t pending_transition_reason;
+
+    /*
+     * Smooth primitive debug. smooth_finish_reason may report WALL when
+     * diagonal/wall reference moved the smooth action into post-yaw seek.
+     */
     uint8_t smooth_direction;
     uint8_t smooth_finish_reason;
 
