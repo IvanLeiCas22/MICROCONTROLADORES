@@ -3,6 +3,15 @@
 
 #include <stdint.h>
 
+/*
+ * Logical maze coordinate convention used by the portable firmware:
+ *
+ * - X increases toward HEADING_EAST.
+ * - Y increases toward HEADING_NORTH.
+ *
+ * UI/simulator screen coordinates may use a different visual convention; any
+ * conversion/inversion belongs to the adapter/UI layer, not to app_maze.
+ */
 typedef enum
 {
     HEADING_NORTH = 0,
@@ -11,6 +20,12 @@ typedef enum
     HEADING_WEST = 3
 } HeadingTypeDef;
 
+/*
+ * Relative logical turns.
+ *
+ * Values are chosen so heading update can be computed modulo 4:
+ *   new_heading = (heading + turn + 4) % 4
+ */
 typedef enum
 {
     TURN_RIGHT = 1,
@@ -18,6 +33,21 @@ typedef enum
     TURN_AROUND = 2
 } TurnTypeDef;
 
+/*
+ * Per-cell bit layout.
+ *
+ * Each maze cell is stored as one uint8_t:
+ *
+ * bit 0: north wall known/present
+ * bit 1: south wall known/present
+ * bit 2: east wall known/present
+ * bit 3: west wall known/present
+ * bit 4: visited cell
+ * bit 5: detected special cell
+ *
+ * The full byte is used by STM32/Qt sync, so new bits must remain compatible
+ * with the HMI/simulator drawing code.
+ */
 #define WALL_NORTH 0x01
 #define WALL_SOUTH 0x02
 #define WALL_EAST 0x04
@@ -32,6 +62,9 @@ typedef enum
 #define APP_MAZE_DEFAULT_START_Y 7U
 #define APP_MAZE_DEFAULT_START_HEADING HEADING_NORTH
 
+/*
+ * Payload sizes used by the STM32/Qt map synchronization commands.
+ */
 #define APP_MAZE_CELL_UPDATE_PAYLOAD_SIZE 4U
 #define APP_MAZE_COLUMN_SYNC_PAYLOAD_SIZE (MAZE_HEIGHT + 4U)
 
