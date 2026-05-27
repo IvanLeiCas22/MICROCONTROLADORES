@@ -510,24 +510,25 @@ void MainWindow::onPacketReceived(quint8 command, const QByteArray &payload) {
           quint8 col;
           stream >> col;
 
-          // 1. Extraemos y guardamos las 15 celdas de esta columna
-          for (int i = 0; i < MAZE_HEIGHT; i++) {
+          // 1. Extraemos y guardamos las 15 celdas de esta columna.
+          // IMPORTANTE: sim_maze_map usa coordenadas lógicas STM32.
+          // La inversión Y se aplica solo al dibujar.
+          for (int logical_y = 0; logical_y < MAZE_HEIGHT; logical_y++) {
               quint8 cell_data;
               stream >> cell_data;
 
-              // MUY IMPORTANTE: Traducimos la Y de STM32 a la Y visual de Qt (invertida)
-              int y_qt = (MAZE_HEIGHT - 1) - i;
-
-              // Rescatamos las banderas de Qt (ej. celdas especiales marcadas en UI)
-              uint8_t qt_flags = sim_maze_map[col][y_qt] & CELL_SPECIAL;
-              sim_maze_map[col][y_qt] = cell_data | qt_flags;
+              // Rescatamos banderas locales legacy si las hubiera.
+              // A futuro, cuando eliminemos la simulación local, esto también puede desaparecer.
+              uint8_t qt_flags = sim_maze_map[col][logical_y] & CELL_SPECIAL;
+              sim_maze_map[col][logical_y] = cell_data | qt_flags;
           }
 
-          // 2. Extraemos la posición y orientación actual del robot
+          // 2. Extraemos la posición y orientación actual del robot.
+          // current_x/current_y también quedan en coordenadas lógicas STM32.
           quint8 x, y_stm, heading;
           stream >> x >> y_stm >> heading;
           current_x = x;
-          current_y = static_cast<uint8_t>((MAZE_HEIGHT - 1) - y_stm); // Traducir Y
+          current_y = y_stm;
           current_heading = static_cast<Heading>(heading);
 
           // 3. PING-PONG: ¿Faltan columnas?
@@ -1116,7 +1117,18 @@ void MainWindow::on_btnConfigurePeriod_clicked() {
   }
 }
 
+static int logicalYToSceneRow(int logicalY)
+{
+    return MAZE_HEIGHT - 1 - logicalY;
+}
+
+static int sceneRowToLogicalY(int sceneRow)
+{
+    return MAZE_HEIGHT - 1 - sceneRow;
+}
+
 void MainWindow::drawMaze() {
+
   mazeScene->clear();
 
   if (!autonomousTimer->isActive()) {
@@ -1163,8 +1175,10 @@ void MainWindow::drawMaze() {
     leftAnchor->setPos(-15, i * cellSize + (cellSize / 2.0));
     leftAnchor->setFlag(QGraphicsItem::ItemIgnoresTransformations);
 
+    const int logical_y_label = sceneRowToLogicalY(i);
+
     QGraphicsTextItem *leftText =
-        new QGraphicsTextItem(QString::number(i), leftAnchor);
+        new QGraphicsTextItem(QString::number(logical_y_label), leftAnchor);
     leftText->setFont(numberFont);
     leftText->setDefaultTextColor(textPen.color());
     leftText->setPos(-leftText->boundingRect().width() / 2.0,
@@ -1174,26 +1188,28 @@ void MainWindow::drawMaze() {
   // 2. DIBUJAR LA GRILLA Y LAS PAREDES
   for (int x = 0; x < MAZE_WIDTH; x++) {
     for (int y = 0; y < MAZE_HEIGHT; y++) {
+        const int logical_x = x;
+        const int logical_y = y;
 
-      int px = x * cellSize;
-      int py = y * cellSize; // En Qt, la directriz Y crece hacia abajo
-      uint8_t current_map_cell = 0;
+        int px = logical_x * cellSize;
+        int py = logicalYToSceneRow(logical_y) * cellSize;
+        uint8_t current_map_cell = 0;
 
       if (ui->radioBtnRealView->isChecked()) {
-        current_map_cell = real_maze_map[x][y];
+        current_map_cell = real_maze_map[logical_x][logical_y];
       } else {
-        current_map_cell = sim_maze_map[x][y];
+        current_map_cell = sim_maze_map[logical_x][logical_y];
       }
 
       // === Colores Especiales de Baldosa ===
       QColor cellBgColor = Qt::transparent; // Vacío por defecto
 
       // ¿Es celda de Inicio?
-      if (x == start_x && y == start_y) {
+      if (logical_x == start_x && logical_y == start_y) {
         cellBgColor = QColor(20, 120, 20); // Verde vibrante sólido
       }
       // ¿Es celda Objetivo?
-      else if (x == goal_x && y == goal_y) {
+      else if (logical_x == goal_x && logical_y == goal_y) {
         cellBgColor = QColor(150, 20, 20); // Rojo sólido oscuro
       }
       // ¿Es celda Especial?
@@ -1304,13 +1320,13 @@ void MainWindow::drawMaze() {
       int bx1 = best_path[i] >> 4;
       int by1 = best_path[i] & 0x0F;
       qreal cx1 = (bx1 * cellSize) + (cellSize / 2.0);
-      qreal cy1 = (by1 * cellSize) + (cellSize / 2.0);
+      qreal cy1 = (logicalYToSceneRow(by1) * cellSize) + (cellSize / 2.0);
 
       // Desempaquetar la celda contigua ("i+1")
       int bx2 = best_path[i + 1] >> 4;
       int by2 = best_path[i + 1] & 0x0F;
       qreal cx2 = (bx2 * cellSize) + (cellSize / 2.0);
-      qreal cy2 = (by2 * cellSize) + (cellSize / 2.0);
+      qreal cy2 = (logicalYToSceneRow(by2) * cellSize) + (cellSize / 2.0);
 
       // Trazar el segmento
       mazeScene->addLine(cx1, cy1, cx2, cy2, gpsPen);
@@ -1322,7 +1338,7 @@ void MainWindow::drawMaze() {
   // Para que se vea centrado y más chico que la celda:
   int robotSize = cellSize / 2; // Por ej: 25x25 pixeles
   int rx = (current_x * cellSize) + (cellSize / 4);
-  int ry = (current_y * cellSize) + (cellSize / 4);
+  int ry = (logicalYToSceneRow(current_y) * cellSize) + (cellSize / 4);
 
   // Dibujar el cuerpo blindado con Z-Index Máximo (10)
   QGraphicsRectItem *robotBody =
@@ -2497,11 +2513,12 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
       // Convertimos pixeles (ej. 165) a un índice en nuestra matriz 15x15 (ej.
       // 3)
       int cell_x = scenePos.x() / cellSize;
-      int cell_y = scenePos.y() / cellSize;
+      int scene_row = scenePos.y() / cellSize;
+      int cell_y = sceneRowToLogicalY(scene_row);
 
       // Validamos que hiciste click "Adentro" del laberinto y no afuera
-      if (cell_x >= 0 && cell_x < MAZE_WIDTH && cell_y >= 0 &&
-          cell_y < MAZE_HEIGHT) {
+      if (cell_x >= 0 && cell_x < MAZE_WIDTH &&
+          cell_y >= 0 && cell_y < MAZE_HEIGHT) {
 
         // ¿Estaba apretado el radio botón de "Fijar Inicio"?
         if (ui->radioPointerStart->isChecked()) {
