@@ -5,6 +5,22 @@
 
 #include <stddef.h>
 
+/*
+ * Portable mission supervisor.
+ *
+ * This module owns high-level navigation sequencing for FIND_CELLS:
+ * - selects which primitive action to start;
+ * - updates the logical maze pose/cell after confirmed movement;
+ * - detects and counts unique CELL_SPECIAL cells;
+ * - finishes FIND_CELLS when the target number of special cells is reached.
+ *
+ * It does not implement low-level motor control. Motion primitives live in
+ * app_nav.c and are driven through App_Nav_*Action APIs.
+ *
+ * It does not access HAL directly. Hardware/simulator adapters must provide
+ * AppNavInput and consume AppNavOutput.
+ */
+
 #define APP_NAV_SUPERVISOR_SPECIAL_TARGET_COUNT 3U
 
 #define APP_NAV_SUPERVISOR_YAW_180_Q16 ((int64_t)180 << 16)
@@ -21,6 +37,10 @@ static HeadingTypeDef app_nav_supervisor_initial_heading;
 static uint8_t app_nav_supervisor_initial_pose_valid;
 static AppNavSupervisorMission app_nav_supervisor_mission =
     APP_NAV_SUPERVISOR_MISSION_FIND_CELLS;
+
+/* -------------------------------------------------------------------------- */
+/* State, output and shared utility helpers                                    */
+/* -------------------------------------------------------------------------- */
 
 static void App_NavSupervisor_ClearOutput(AppNavOutput *output)
 {
@@ -163,6 +183,10 @@ static AppNavSupervisorState App_NavSupervisor_SetError(uint8_t result)
     return app_nav_supervisor_debug.state;
 }
 
+/* -------------------------------------------------------------------------- */
+/* FIND_CELLS completion and special-cell detection                            */
+/* -------------------------------------------------------------------------- */
+
 static AppNavSupervisorState App_NavSupervisor_FinishFindCells(AppNavOutput *output)
 {
     App_NavSupervisor_ClearOutput(output);
@@ -210,6 +234,10 @@ static bool App_NavSupervisor_CheckSpecialAtConfirmedCellEntry(const AppNavInput
 
     return (app_nav_supervisor_special_found_count >= APP_NAV_SUPERVISOR_SPECIAL_TARGET_COUNT);
 }
+
+/* -------------------------------------------------------------------------- */
+/* Primitive start helpers                                                     */
+/* -------------------------------------------------------------------------- */
 
 static TurnTypeDef App_NavSupervisor_SmoothTurnForState(AppNavSupervisorState state)
 {
@@ -372,6 +400,10 @@ static bool App_NavSupervisor_StartRecommendedAction(AppNavRecommendedAction act
         return false;
     }
 }
+
+/* -------------------------------------------------------------------------- */
+/* Supervisor state handlers                                                   */
+/* -------------------------------------------------------------------------- */
 
 static AppNavSupervisorState App_NavSupervisor_HandleDecide(const AppNavInput *input)
 {
@@ -643,6 +675,10 @@ static AppNavSupervisorState App_NavSupervisor_HandlePivot(const AppNavInput *in
         return App_NavSupervisor_SetError(APP_NAV_SUPERVISOR_RESULT_PRIMITIVE_ERROR);
     }
 }
+
+/* -------------------------------------------------------------------------- */
+/* Public API                                                                  */
+/* -------------------------------------------------------------------------- */
 
 void App_NavSupervisor_Init(void)
 {
