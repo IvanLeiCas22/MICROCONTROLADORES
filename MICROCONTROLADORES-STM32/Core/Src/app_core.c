@@ -385,6 +385,7 @@ static void PrimitiveTest_WriteStatus(uint8_t *buffer);
 static void PrimitiveTest_WriteSmoothConfig(uint8_t *buffer);
 static void PrimitiveTest_SetSmoothConfigFromPayload(struct UNERBUSHandle *aBus);
 static uint8_t PrimitiveTest_SendStatus(struct UNERBUSHandle *aBus);
+static uint8_t PrimitiveTest_SendSmoothConfig(struct UNERBUSHandle *aBus);
 static uint8_t PrimitiveTest_HandleCommand(struct UNERBUSHandle *aBus);
 static void Stop_Portable_Nav_Actions(void);
 static void Supervisor_Run_SetInactiveMenuState(void);
@@ -2146,6 +2147,16 @@ static void PrimitiveTest_WriteSmoothConfig(uint8_t *buffer)
     UNERBUS_PutUInt16(buffer, &idx, turn_target_dps);
 }
 
+static uint8_t PrimitiveTest_SendSmoothConfig(struct UNERBUSHandle *aBus)
+{
+    uint8_t config_buffer[UNERBUS_PRIMITIVE_TEST_SMOOTH_CONFIG_SIZE];
+
+    PrimitiveTest_WriteSmoothConfig(config_buffer);
+    UNERBUS_Write(aBus, config_buffer, UNERBUS_PRIMITIVE_TEST_SMOOTH_CONFIG_SIZE);
+
+    return UNERBUS_PRIMITIVE_TEST_SMOOTH_CONFIG_SIZE;
+}
+
 static void PrimitiveTest_SetSmoothConfigFromPayload(struct UNERBUSHandle *aBus)
 {
     uint16_t kp_x100 = UNERBUS_GetUInt16(aBus);
@@ -2221,16 +2232,13 @@ static uint8_t PrimitiveTest_HandleCommand(struct UNERBUSHandle *aBus)
     }
     case PRIM_TEST_SET_CONFIG:
     {
-        uint8_t config_buffer[UNERBUS_PRIMITIVE_TEST_SMOOTH_CONFIG_SIZE];
         test_type = UNERBUS_GetUInt8(aBus);
 
         if (test_type == PRIM_TEST_SMOOTH_TURN)
         {
             PrimitiveTest_SetSmoothConfigFromPayload(aBus);
             primitive_test.result = PRIM_TEST_RESULT_OK;
-            PrimitiveTest_WriteSmoothConfig(config_buffer);
-            UNERBUS_Write(aBus, config_buffer, UNERBUS_PRIMITIVE_TEST_SMOOTH_CONFIG_SIZE);
-            return UNERBUS_PRIMITIVE_TEST_SMOOTH_CONFIG_SIZE;
+            return PrimitiveTest_SendSmoothConfig(aBus);
         }
 
         primitive_test.test_type = test_type;
@@ -2240,14 +2248,11 @@ static uint8_t PrimitiveTest_HandleCommand(struct UNERBUSHandle *aBus)
     }
     case PRIM_TEST_GET_CONFIG:
     {
-        uint8_t config_buffer[UNERBUS_PRIMITIVE_TEST_SMOOTH_CONFIG_SIZE];
         test_type = UNERBUS_GetUInt8(aBus);
 
         if (test_type == PRIM_TEST_SMOOTH_TURN)
         {
-            PrimitiveTest_WriteSmoothConfig(config_buffer);
-            UNERBUS_Write(aBus, config_buffer, UNERBUS_PRIMITIVE_TEST_SMOOTH_CONFIG_SIZE);
-            return UNERBUS_PRIMITIVE_TEST_SMOOTH_CONFIG_SIZE;
+            return PrimitiveTest_SendSmoothConfig(aBus);
         }
 
         primitive_test.test_type = test_type;
