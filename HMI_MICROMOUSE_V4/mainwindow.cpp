@@ -344,32 +344,34 @@ void MainWindow::onPacketReceived(quint8 command, const QByteArray &payload) {
           quint8 x, y_stm, walls, heading;
           stream >> x >> y_stm >> walls >> heading;
 
-          const int y_qt = (MAZE_HEIGHT - 1) - static_cast<int>(y_stm);
+          const int logical_x = static_cast<int>(x);
+          const int logical_y = static_cast<int>(y_stm);
 
-          if (x < MAZE_WIDTH && y_stm < MAZE_HEIGHT && y_qt >= 0 && y_qt < MAZE_HEIGHT) {
+          if (logical_x >= 0 && logical_x < MAZE_WIDTH &&
+              logical_y >= 0 && logical_y < MAZE_HEIGHT) {
 
-              // Rescatar banderas exclusivas de Qt antes de sobreescribir
-              uint8_t flags_exclusivas_qt = sim_maze_map[x][y_qt] & CELL_SPECIAL;
+              // sim_maze_map usa coordenadas lógicas STM32.
+              // La inversión Y se aplica solo al dibujar.
+              uint8_t local_flags = sim_maze_map[logical_x][logical_y] & CELL_SPECIAL;
 
-              // Actualizamos paredes y visitado del STM32, sumando las banderas de Qt
-              sim_maze_map[x][y_qt] = walls | flags_exclusivas_qt;
+              sim_maze_map[logical_x][logical_y] = walls | local_flags;
 
-              // Propagación simétrica de paredes a los vecinos
-              if (walls & WALL_NORTH && y_qt > 0)
-                  sim_maze_map[x][y_qt - 1] |= WALL_SOUTH;
+              // Propagación simétrica de paredes en coordenadas lógicas STM32.
+              // NORTH = y + 1, SOUTH = y - 1.
+              if ((walls & WALL_NORTH) && (logical_y < MAZE_HEIGHT - 1))
+                  sim_maze_map[logical_x][logical_y + 1] |= WALL_SOUTH;
 
-              if (walls & WALL_SOUTH && y_qt < MAZE_HEIGHT - 1)
-                  sim_maze_map[x][y_qt + 1] |= WALL_NORTH;
+              if ((walls & WALL_SOUTH) && (logical_y > 0))
+                  sim_maze_map[logical_x][logical_y - 1] |= WALL_NORTH;
 
-              if (walls & WALL_EAST && x < MAZE_WIDTH - 1)
-                  sim_maze_map[x + 1][y_qt] |= WALL_WEST;
+              if ((walls & WALL_EAST) && (logical_x < MAZE_WIDTH - 1))
+                  sim_maze_map[logical_x + 1][logical_y] |= WALL_WEST;
 
-              if (walls & WALL_WEST && x > 0)
-                  sim_maze_map[x - 1][y_qt] |= WALL_EAST;
+              if ((walls & WALL_WEST) && (logical_x > 0))
+                  sim_maze_map[logical_x - 1][logical_y] |= WALL_EAST;
 
-              // Sincronizamos la posición y heading del cuadradito verde
               current_x = x;
-              current_y = static_cast<uint8_t>(y_qt);
+              current_y = y_stm;
               current_heading = static_cast<Heading>(heading);
 
               drawMaze();
