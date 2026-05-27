@@ -2,6 +2,21 @@
 
 #include <string.h>
 
+/*
+ * Portable logical maze map.
+ *
+ * This module stores the robot logical pose and the known maze cells. It does
+ * not infer physical movement by itself: app_nav_supervisor calls movement
+ * update functions only after a primitive confirms the corresponding logical
+ * event, normally through rear tape detection.
+ *
+ * Coordinate convention:
+ * - x increases to HEADING_EAST.
+ * - y increases to HEADING_NORTH.
+ *
+ * UI/simulator screen conversions must be handled outside this module.
+ */
+
 typedef struct
 {
     uint8_t x;
@@ -9,14 +24,32 @@ typedef struct
     HeadingTypeDef heading;
 } AppMazePosition_t;
 
+/*
+ * Relative-to-absolute wall lookup.
+ *
+ * Index 0: wall in front of the robot.
+ * Index 1: wall to the robot right.
+ * Index 2: wall to the robot left.
+ *
+ * The row is selected by current logical heading.
+ */
+
 static const uint8_t wall_lut[4][3] = {
     {WALL_NORTH, WALL_EAST, WALL_WEST},
     {WALL_EAST, WALL_SOUTH, WALL_NORTH},
     {WALL_SOUTH, WALL_WEST, WALL_EAST},
     {WALL_WEST, WALL_NORTH, WALL_SOUTH}};
 
+/* -------------------------------------------------------------------------- */
+/* Internal map state                                                          */
+/* -------------------------------------------------------------------------- */
+
 static uint8_t maze_map[MAZE_WIDTH][MAZE_HEIGHT];
 static AppMazePosition_t current_pos;
+
+/* -------------------------------------------------------------------------- */
+/* Pose validation and lifecycle                                               */
+/* -------------------------------------------------------------------------- */
 
 bool App_Maze_IsValidPose(uint8_t x, uint8_t y, HeadingTypeDef heading)
 {
@@ -72,6 +105,10 @@ bool App_Maze_ResetStateWithPose(uint8_t x, uint8_t y, HeadingTypeDef heading)
     return true;
 }
 
+/* -------------------------------------------------------------------------- */
+/* Logical pose updates                                                        */
+/* -------------------------------------------------------------------------- */
+
 void App_Maze_AdvanceRobotPosition(void)
 {
     switch (current_pos.heading)
@@ -108,6 +145,10 @@ void App_Maze_UpdateRobotHeading(TurnTypeDef turn_direction)
     current_pos.heading = (HeadingTypeDef)((current_pos.heading + turn_direction + 4) % 4);
 }
 
+/* -------------------------------------------------------------------------- */
+/* Cell mapping and wall mirroring                                             */
+/* -------------------------------------------------------------------------- */
+
 void App_Maze_MapCurrentCell(bool front_wall_detected, bool right_wall_detected, bool left_wall_detected)
 {
     uint8_t cell_data = CELL_VISITED;
@@ -125,7 +166,17 @@ void App_Maze_MapCurrentCell(bool front_wall_detected, bool right_wall_detected,
         cell_data |= wall_lut[current_pos.heading][2];
     }
 
+    /*
+     * OR semantics preserve previously known flags such as CELL_SPECIAL and any
+     * walls discovered in earlier passes.
+     */
+
     maze_map[current_pos.x][current_pos.y] |= cell_data;
+
+    /*
+     * Mirror known walls into adjacent cells so both sides of a wall stay
+     * consistent for map synchronization and future planning.
+     */
 
     if ((cell_data & WALL_NORTH) && (current_pos.y < (MAZE_HEIGHT - 1U)))
     {
@@ -144,6 +195,10 @@ void App_Maze_MapCurrentCell(bool front_wall_detected, bool right_wall_detected,
         maze_map[current_pos.x - 1U][current_pos.y] |= WALL_EAST;
     }
 }
+
+/* -------------------------------------------------------------------------- */
+/* Special-cell flags                                                          */
+/* -------------------------------------------------------------------------- */
 
 bool App_Maze_MarkCurrentCellSpecial(void)
 {
@@ -167,6 +222,10 @@ uint8_t App_Maze_GetCurrentCellData(void)
 {
     return maze_map[current_pos.x][current_pos.y];
 }
+
+/* -------------------------------------------------------------------------- */
+/* STM32/Qt synchronization payloads                                           */
+/* -------------------------------------------------------------------------- */
 
 uint8_t App_Maze_WriteCurrentCellUpdatePayload(uint8_t *buffer)
 {
