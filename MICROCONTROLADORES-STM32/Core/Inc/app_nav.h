@@ -40,11 +40,12 @@ void App_Nav_Reset(void);
 /* -------------------------------------------------------------------------- */
 
 /*
- * These functions keep the older app_nav-level state/debug shell alive.
- * Current real navigation is orchestrated by app_nav_supervisor.
+ * Perception/debug shell.
+ *
+ * Current real navigation is orchestrated by app_nav_supervisor. App_Nav_Tick()
+ * updates perception/debug data from AppNavInput, but it does not run a mission
+ * state machine or command motors.
  */
-void App_Nav_StartFindCells(void);
-void App_Nav_Stop(void);
 void App_Nav_Tick(const AppNavInput *input, AppNavOutput *output);
 
 /* -------------------------------------------------------------------------- */

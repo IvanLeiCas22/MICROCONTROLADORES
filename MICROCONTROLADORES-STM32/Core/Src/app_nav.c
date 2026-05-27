@@ -613,37 +613,6 @@ void App_Nav_Reset(void)
     App_Nav_ResetDebug();
 }
 
-void App_Nav_StartFindCells(void)
-{
-    app_nav_enabled = true;
-    app_nav_debug.mode = APP_NAV_MODE_FIND_CELLS;
-    app_nav_debug.previous_state = app_nav_debug.state;
-    app_nav_debug.state = APP_NAV_STATE_NAVIGATING;
-    app_nav_debug.last_transition_reason = APP_NAV_TRANSITION_START_FIND_CELLS;
-    app_nav_debug.transition_sequence++;
-}
-
-void App_Nav_Stop(void)
-{
-    app_nav_enabled = false;
-    app_nav_straight_active = 0U;
-    app_nav_wall_follow_active = 0U;
-    app_nav_smooth_turn_active = 0U;
-    app_nav_pivot_turn_active = 0U;
-    app_nav_braking_active = 0U;
-    App_Nav_ClearAdvanceActionState();
-    App_Nav_ClearSmoothActionState();
-    App_Nav_ClearPivotActionState();
-    app_nav_debug.mode = APP_NAV_MODE_IDLE;
-    app_nav_debug.previous_state = app_nav_debug.state;
-    app_nav_debug.state = APP_NAV_STATE_IDLE;
-    app_nav_debug.last_transition_reason = APP_NAV_TRANSITION_STOP_TO_MENU;
-    app_nav_debug.pwm_right_cmd = 0;
-    app_nav_debug.pwm_left_cmd = 0;
-    app_nav_debug.transition_sequence++;
-    App_Nav_ClearApproachFrontWallActionState();
-}
-
 void App_Nav_Tick(const AppNavInput *input, AppNavOutput *output)
 {
     App_Nav_ClearOutput(output);
