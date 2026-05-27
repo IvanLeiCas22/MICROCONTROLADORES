@@ -3,6 +3,23 @@
 
 #include <string.h>
 
+/*
+ * Portable navigation primitive layer.
+ *
+ * This file intentionally contains no HAL calls. It is shared between the STM32
+ * firmware and the Qt simulator firmware_core.
+ *
+ * Important ownership rule:
+ *
+ * - app_nav.c owns perception, low-level controllers and primitive actions.
+ * - app_nav_supervisor.c owns mission sequencing, logical maze updates and
+ *   FIND_CELLS completion.
+ *
+ * App_Nav_Tick() is retained as a perception/debug shell. The active robot
+ * motion during FIND_CELLS is driven by the explicit primitive action APIs:
+ * AdvanceAction, SmoothAction, PivotAction and ApproachFrontWallAction.
+ */
+
 typedef enum
 {
     APP_NAV_REAR_TAPE_GATE_WAIT_LEAVE_ENTRY_BLACK = 0,
@@ -517,6 +534,10 @@ static void App_Nav_ResetDebug(void)
     app_nav_debug.yaw_target_deg = APP_NAV_YAW_TARGET_UNAVAILABLE;
 }
 
+/* -------------------------------------------------------------------------- */
+/* Configuration, lifecycle and legacy/perception shell                        */
+/* -------------------------------------------------------------------------- */
+
 void App_Nav_Init(const AppNavConfig *config)
 {
     if (config != NULL)
@@ -661,6 +682,10 @@ void App_Nav_GetDebug(AppNavDebug *debug_out)
     *debug_out = app_nav_debug;
 }
 
+/* -------------------------------------------------------------------------- */
+/* Local recommendation policy                                                  */
+/* -------------------------------------------------------------------------- */
+
 bool App_Nav_RecommendAction(uint32_t random_value,
                               AppNavRecommendedAction *action_out)
 {
@@ -765,6 +790,10 @@ static bool App_Nav_StartYawHoldAdvanceInternal(int32_t yaw_target_q16_deg,
 
     return true;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Reusable low-level drive controllers                                         */
+/* -------------------------------------------------------------------------- */
 
 bool App_Nav_StartStraightDriveYawHold(int32_t yaw_target_q16_deg)
 {
@@ -894,6 +923,10 @@ bool App_Nav_StartWallFollowAdvance(void)
 
     return true;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Smooth turn controller and SmoothAction                                      */
+/* -------------------------------------------------------------------------- */
 
 bool App_Nav_StartSmoothTurn(AppNavSmoothTurnDirection direction)
 {
@@ -1196,6 +1229,10 @@ AppNavSmoothActionState App_Nav_TickSmoothAction(const AppNavInput *input,
     return app_nav_smooth_action_state;
 }
 
+/* -------------------------------------------------------------------------- */
+/* Pivot turn controller and PivotAction                                        */
+/* -------------------------------------------------------------------------- */
+
 bool App_Nav_StartPivotTurn(void)
 {
     app_nav_pivot_turn_active = 1U;
@@ -1382,6 +1419,10 @@ AppNavPivotActionState App_Nav_TickPivotAction(const AppNavInput *input,
     app_nav_pivot_action_state = APP_NAV_PIVOT_ACTION_RUNNING;
     return app_nav_pivot_action_state;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Legacy braking controller                                                    */
+/* -------------------------------------------------------------------------- */
 
 bool App_Nav_StartBraking(void)
 {
@@ -1587,6 +1628,10 @@ void App_Nav_StopAdvanceAction(void)
     app_nav_debug.pwm_left_cmd = 0;
 }
 
+/* -------------------------------------------------------------------------- */
+/* AdvanceAction: drive until rear tape confirms next cell boundary             */
+/* -------------------------------------------------------------------------- */
+
 bool App_Nav_StartAdvanceAction(AppNavAdvanceActionMode mode)
 {
     return App_Nav_StartAdvanceActionWithRearTapeProfile(mode,
@@ -1781,6 +1826,10 @@ void App_Nav_StopApproachFrontWallAction(void)
     app_nav_debug.pwm_right_cmd = 0;
     app_nav_debug.pwm_left_cmd = 0;
 }
+
+/* -------------------------------------------------------------------------- */
+/* ApproachFrontWallAction: prepare in-cell 180 pivot in dead-end               */
+/* -------------------------------------------------------------------------- */
 
 bool App_Nav_StartApproachFrontWallAction(void)
 {
