@@ -384,6 +384,7 @@ static void PrimitiveTest_WriteStatus(uint8_t *buffer);
 static void PrimitiveTest_WriteSmoothConfig(uint8_t *buffer);
 static void PrimitiveTest_SetSmoothConfigFromPayload(struct UNERBUSHandle *aBus);
 static uint8_t PrimitiveTest_HandleCommand(struct UNERBUSHandle *aBus);
+static void Stop_Portable_Nav_Actions(void);
 static bool Start_Supervisor_Run(MenuModeTypeDef requested_mode);
 static void Stop_Supervisor_Run(void);
 static void Tick_Supervisor_Run(uint32_t dt_ms);
@@ -2254,15 +2255,20 @@ static uint8_t PrimitiveTest_HandleCommand(struct UNERBUSHandle *aBus)
     }
 }
 
-static bool Start_Supervisor_Run(MenuModeTypeDef requested_mode)
+static void Stop_Portable_Nav_Actions(void)
 {
-    Set_Motor_Speeds(0, 0);
-    PrimitiveTest_Stop();
     App_NavSupervisor_Stop();
     App_Nav_StopAdvanceAction();
     App_Nav_StopSmoothAction();
     App_Nav_StopPivotAction();
     App_Nav_StopApproachFrontWallAction();
+}
+
+static bool Start_Supervisor_Run(MenuModeTypeDef requested_mode)
+{
+    Set_Motor_Speeds(0, 0);
+    PrimitiveTest_Stop();
+    Stop_Portable_Nav_Actions();
 
     supervisor_run_active = false;
     Set_Robot_State(STATE_IDLE);
@@ -2318,11 +2324,7 @@ static bool Start_Supervisor_Run(MenuModeTypeDef requested_mode)
 
 static void Stop_Supervisor_Run(void)
 {
-    App_NavSupervisor_Stop();
-    App_Nav_StopAdvanceAction();
-    App_Nav_StopSmoothAction();
-    App_Nav_StopPivotAction();
-    App_Nav_StopApproachFrontWallAction();
+    Stop_Portable_Nav_Actions();
     Set_Motor_Speeds(0, 0);
 
     supervisor_run_active = false;
