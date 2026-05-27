@@ -2197,7 +2197,6 @@ static uint8_t PrimitiveTest_HandleCommand(struct UNERBUSHandle *aBus)
     }
     case PRIM_TEST_START:
     {
-        uint8_t status_buffer[UNERBUS_PRIMITIVE_TEST_STATUS_SIZE];
         test_type = UNERBUS_GetUInt8(aBus);
         uint8_t variant = UNERBUS_GetUInt8(aBus);
 
@@ -2214,16 +2213,11 @@ static uint8_t PrimitiveTest_HandleCommand(struct UNERBUSHandle *aBus)
             primitive_test.result = PRIM_TEST_RESULT_UNSUPPORTED;
         }
 
-        PrimitiveTest_WriteStatus(status_buffer);
-        UNERBUS_Write(aBus, status_buffer, UNERBUS_PRIMITIVE_TEST_STATUS_SIZE);
-        return UNERBUS_PRIMITIVE_TEST_STATUS_SIZE;
+        return PrimitiveTest_SendStatus(aBus);
     }
     case PRIM_TEST_GET_STATUS:
     {
-        uint8_t status_buffer[UNERBUS_PRIMITIVE_TEST_STATUS_SIZE];
-        PrimitiveTest_WriteStatus(status_buffer);
-        UNERBUS_Write(aBus, status_buffer, UNERBUS_PRIMITIVE_TEST_STATUS_SIZE);
-        return UNERBUS_PRIMITIVE_TEST_STATUS_SIZE;
+    	return PrimitiveTest_SendStatus(aBus);
     }
     case PRIM_TEST_SET_CONFIG:
     {
@@ -2263,12 +2257,9 @@ static uint8_t PrimitiveTest_HandleCommand(struct UNERBUSHandle *aBus)
     }
     default:
     {
-        uint8_t status_buffer[UNERBUS_PRIMITIVE_TEST_STATUS_SIZE];
         primitive_test.state = PRIM_TEST_STATE_REJECTED;
         primitive_test.result = PRIM_TEST_RESULT_INVALID;
-        PrimitiveTest_WriteStatus(status_buffer);
-        UNERBUS_Write(aBus, status_buffer, UNERBUS_PRIMITIVE_TEST_STATUS_SIZE);
-        return UNERBUS_PRIMITIVE_TEST_STATUS_SIZE;
+        return PrimitiveTest_SendStatus(aBus);
     }
     }
 }
