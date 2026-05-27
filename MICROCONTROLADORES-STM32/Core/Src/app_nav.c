@@ -65,7 +65,6 @@ static uint8_t app_nav_smooth_action_active;
 static uint8_t app_nav_smooth_was_rear_tape_detected;
 static uint8_t app_nav_pivot_turn_active;
 static uint8_t app_nav_braking_active;
-static bool app_nav_enabled = false;
 
 static bool App_Nav_StartYawHoldAdvanceInternal(int32_t yaw_target_q16_deg,
                                                 uint8_t clear_smooth_action);
@@ -549,7 +548,6 @@ void App_Nav_Init(const AppNavConfig *config)
         app_nav_config = App_Nav_DefaultConfig();
     }
 
-    app_nav_enabled = false;
     app_nav_straight_active = 0U;
     app_nav_wall_follow_active = 0U;
     app_nav_smooth_turn_active = 0U;
@@ -594,7 +592,6 @@ void App_Nav_GetConfig(AppNavConfig *config_out)
 
 void App_Nav_Reset(void)
 {
-    app_nav_enabled = false;
     app_nav_straight_active = 0U;
     app_nav_wall_follow_active = 0U;
     app_nav_smooth_turn_active = 0U;
@@ -634,11 +631,8 @@ void App_Nav_Tick(const AppNavInput *input, AppNavOutput *output)
     output->right_motor_pwm = 0;
     output->left_motor_pwm = 0;
 
-    if (!app_nav_enabled)
-    {
-        app_nav_debug.mode = APP_NAV_MODE_IDLE;
-        app_nav_debug.state = APP_NAV_STATE_IDLE;
-    }
+    app_nav_debug.mode = APP_NAV_MODE_IDLE;
+    app_nav_debug.state = APP_NAV_STATE_IDLE;
 }
 
 void App_Nav_GetDebug(AppNavDebug *debug_out)
