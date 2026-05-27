@@ -386,6 +386,7 @@ static void PrimitiveTest_WriteSmoothConfig(uint8_t *buffer);
 static void PrimitiveTest_SetSmoothConfigFromPayload(struct UNERBUSHandle *aBus);
 static uint8_t PrimitiveTest_HandleCommand(struct UNERBUSHandle *aBus);
 static void Stop_Portable_Nav_Actions(void);
+static void Supervisor_Run_SetInactiveMenuState(void);
 static bool Start_Supervisor_Run(MenuModeTypeDef requested_mode);
 static void Stop_Supervisor_Run(void);
 static void Tick_Supervisor_Run(uint32_t dt_ms);
@@ -2283,6 +2284,13 @@ static void Stop_Portable_Nav_Actions(void)
     App_Nav_StopApproachFrontWallAction();
 }
 
+static void Supervisor_Run_SetInactiveMenuState(void)
+{
+    supervisor_run_active = false;
+    app_state = APP_STATE_MENU;
+    Set_Robot_State(STATE_IDLE);
+}
+
 static bool Start_Supervisor_Run(MenuModeTypeDef requested_mode)
 {
     Set_Motor_Speeds(0, 0);
@@ -2343,10 +2351,8 @@ static void Stop_Supervisor_Run(void)
     Stop_Portable_Nav_Actions();
     Set_Motor_Speeds(0, 0);
 
-    supervisor_run_active = false;
-    app_state = APP_STATE_MENU;
+    Supervisor_Run_SetInactiveMenuState();
     menu_mode = MENU_MODE_IDLE;
-    Set_Robot_State(STATE_IDLE);
     Nav_Debug_ClearYawTarget();
     Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_STOP_TO_MENU);
     Request_Display_Update();
@@ -2365,11 +2371,9 @@ static void Tick_Supervisor_Run(uint32_t dt_ms)
     if ((supervisor_state == APP_NAV_SUPERVISOR_ERROR) ||
         (supervisor_state == APP_NAV_SUPERVISOR_IDLE))
     {
-        Set_Motor_Speeds(0, 0);
-        supervisor_run_active = false;
-        app_state = APP_STATE_MENU;
-        Set_Robot_State(STATE_IDLE);
-        Request_Display_Update();
+    	Set_Motor_Speeds(0, 0);
+    	Supervisor_Run_SetInactiveMenuState();
+    	Request_Display_Update();
     }
 }
 
