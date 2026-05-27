@@ -14,7 +14,6 @@
 #include <QtSerialPort/QSerialPort>     // Incluir para QSerialPort
 #include <QtSerialPort/QSerialPortInfo> // Incluir para QSerialPortInfo
 #include <QMessageBox>
-#include <QFileDialog>
 
 // --- CONSTANTES DEL LABERINTO ---
 #define MAZE_WIDTH 15
@@ -172,17 +171,12 @@ private slots:
   // --- Variables LABERINTO ---
   // Puntero maestro del lienzo
   QGraphicsScene *mazeScene;
-  // Matrices de Mapas Duales
-  uint8_t sim_maze_map[MAZE_WIDTH][MAZE_HEIGHT];  // La memoria del Robot
+  // Memoria del mapa sincronizada desde STM32.
+  uint8_t sim_maze_map[MAZE_WIDTH][MAZE_HEIGHT];
   // Coordenadas
   uint8_t current_x;
   uint8_t current_y;
   Heading current_heading;
-
-  bool is_mode_b = false; // False = MODO A (Explorar). True = MODO B (Speedrun)
-  int tsp_targets[3][2];
-  bool tsp_solved = false;
-  int current_tsp_index = 0;
 
   // --- Funciones de ayuda ---
   void updateSerialPortList();
@@ -206,9 +200,6 @@ private slots:
   // Función que hará toda la magia de iluminar las paredes
   void drawMaze();
   void requestMazeColumn(quint8 col);
-  void calculateFastestPath(int sx, int sy, int gx, int gy);
-  int getFloodFillDistance(int sx, int sy, int gx, int gy);
-  void autonomousTick();
 
   // --- Funciones dispatch comunicaciones ---
   void setupConfigPage();
