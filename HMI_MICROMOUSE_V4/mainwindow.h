@@ -172,7 +172,7 @@ private slots:
   // Puntero maestro del lienzo
   QGraphicsScene *mazeScene;
   // Memoria del mapa sincronizada desde STM32.
-  uint8_t sim_maze_map[MAZE_WIDTH][MAZE_HEIGHT];
+  uint8_t robot_maze_map[MAZE_WIDTH][MAZE_HEIGHT];
   // Coordenadas
   uint8_t current_x;
   uint8_t current_y;

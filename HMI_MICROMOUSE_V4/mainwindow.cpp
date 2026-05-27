@@ -149,7 +149,7 @@ MainWindow::MainWindow(QWidget *parent)
   // Opcional: Le damos un fondo oscuro muy moderno al canvas
   mazeScene->setBackgroundBrush(QColor(20, 25, 30));
   // 2. Limpiar todos los mapas lógicos (llenarlos de 0)
-  memset(sim_maze_map, 0, sizeof(sim_maze_map));
+  memset(robot_maze_map, 0, sizeof(robot_maze_map));
 
   // 3. El robot nace en el centro lógico de la matriz de 15x15
   current_x = 7;
@@ -157,7 +157,7 @@ MainWindow::MainWindow(QWidget *parent)
   current_heading = HEADING_NORTH;
 
   // 4. Marcamos la celda en la que empezamos como "Visitada"
-  sim_maze_map[current_x][current_y] |= CELL_VISITED;
+  robot_maze_map[current_x][current_y] |= CELL_VISITED;
 
   // 6. Ordenamos pintar el mapa por primera vez
   drawMaze();
@@ -350,25 +350,25 @@ void MainWindow::onPacketReceived(quint8 command, const QByteArray &payload) {
           if (logical_x >= 0 && logical_x < MAZE_WIDTH &&
               logical_y >= 0 && logical_y < MAZE_HEIGHT) {
 
-              // sim_maze_map usa coordenadas lógicas STM32.
+              // robot_maze_map usa coordenadas lógicas STM32.
               // La inversión Y se aplica solo al dibujar.
-              uint8_t local_flags = sim_maze_map[logical_x][logical_y] & CELL_SPECIAL;
+              uint8_t local_flags = robot_maze_map[logical_x][logical_y] & CELL_SPECIAL;
 
-              sim_maze_map[logical_x][logical_y] = walls | local_flags;
+              robot_maze_map[logical_x][logical_y] = walls | local_flags;
 
               // Propagación simétrica de paredes en coordenadas lógicas STM32.
               // NORTH = y + 1, SOUTH = y - 1.
               if ((walls & WALL_NORTH) && (logical_y < MAZE_HEIGHT - 1))
-                  sim_maze_map[logical_x][logical_y + 1] |= WALL_SOUTH;
+                  robot_maze_map[logical_x][logical_y + 1] |= WALL_SOUTH;
 
               if ((walls & WALL_SOUTH) && (logical_y > 0))
-                  sim_maze_map[logical_x][logical_y - 1] |= WALL_NORTH;
+                  robot_maze_map[logical_x][logical_y - 1] |= WALL_NORTH;
 
               if ((walls & WALL_EAST) && (logical_x < MAZE_WIDTH - 1))
-                  sim_maze_map[logical_x + 1][logical_y] |= WALL_WEST;
+                  robot_maze_map[logical_x + 1][logical_y] |= WALL_WEST;
 
               if ((walls & WALL_WEST) && (logical_x > 0))
-                  sim_maze_map[logical_x - 1][logical_y] |= WALL_EAST;
+                  robot_maze_map[logical_x - 1][logical_y] |= WALL_EAST;
 
               current_x = x;
               current_y = y_stm;
@@ -494,7 +494,7 @@ void MainWindow::onPacketReceived(quint8 command, const QByteArray &payload) {
           stream >> col;
 
           // 1. Extraemos y guardamos las 15 celdas de esta columna.
-          // IMPORTANTE: sim_maze_map usa coordenadas lógicas STM32.
+          // IMPORTANTE: robot_maze_map usa coordenadas lógicas STM32.
           // La inversión Y se aplica solo al dibujar.
           for (int logical_y = 0; logical_y < MAZE_HEIGHT; logical_y++) {
               quint8 cell_data;
@@ -502,8 +502,8 @@ void MainWindow::onPacketReceived(quint8 command, const QByteArray &payload) {
 
               // Rescatamos banderas locales legacy si las hubiera.
               // A futuro, cuando eliminemos la simulación local, esto también puede desaparecer.
-              uint8_t qt_flags = sim_maze_map[col][logical_y] & CELL_SPECIAL;
-              sim_maze_map[col][logical_y] = cell_data | qt_flags;
+              uint8_t qt_flags = robot_maze_map[col][logical_y] & CELL_SPECIAL;
+              robot_maze_map[col][logical_y] = cell_data | qt_flags;
           }
 
           // 2. Extraemos la posición y orientación actual del robot.
@@ -1171,7 +1171,7 @@ void MainWindow::drawMaze() {
         int py = logicalYToSceneRow(logical_y) * cellSize;
         uint8_t current_map_cell = 0;
 
-        current_map_cell = sim_maze_map[logical_x][logical_y];
+        current_map_cell = robot_maze_map[logical_x][logical_y];
 
       // === Colores Especiales de Baldosa ===
       QColor cellBgColor = Qt::transparent; // Vacío por defecto
@@ -2147,13 +2147,13 @@ void MainWindow::updateDelayTicksUI(const QByteArray &payload) {
 }
 
 void MainWindow::on_btnSimReset_clicked() {
-    memset(sim_maze_map, 0, sizeof(sim_maze_map));
+    memset(robot_maze_map, 0, sizeof(robot_maze_map));
 
     current_x = 7;
     current_y = 7;
     current_heading = HEADING_NORTH;
 
-    sim_maze_map[current_x][current_y] |= CELL_VISITED;
+    robot_maze_map[current_x][current_y] |= CELL_VISITED;
 
     ui->mazeView->resetTransform();
 
