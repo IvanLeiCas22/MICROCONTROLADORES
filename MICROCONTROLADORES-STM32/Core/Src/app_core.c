@@ -355,12 +355,12 @@ static int16_t GyroRaw_To_Dps(int16_t gyro_raw);
 static void Reset_Yaw_Tracking(void);
 static void Integrate_Yaw_From_Gyro(int16_t gz_calibrated);
 static void Set_Motor_Speeds(int16_t right_speed, int16_t left_speed);
-
 static void ADC_Filter_Task(void);
 static void ADC_LUT_Precompute(void);
 static int32_t Get_Filtered_ADC_Value(uint8_t channel);
 static void Set_Robot_State(RobotStateTypeDef new_state);
 static void Update_Display_Content(void);
+static void Request_Display_Update(void);
 static int32_t ADC_To_Distance_mm(uint16_t adc_value);
 static void Update_Navigation_Perception(void);
 static void Init_Pid_Configs(void);
@@ -1227,8 +1227,7 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
         {
             menu_mode = requested_mode;
         }
-        Update_Display_Content();
-        SSD_UPDATE_REQUEST = true;
+        Request_Display_Update();
         break;
     }
     case CMD_GET_MENU_MODE:
@@ -1727,8 +1726,7 @@ static void ManageButtonEvents(void)
 
                 temporary_heartbeat = HEARTBEAT_BTN_SHORT_PRESS;
                 temporary_heartbeat_ticks = 5;
-                Update_Display_Content();
-                SSD_UPDATE_REQUEST = true;
+                Request_Display_Update();
             }
             else if (button_event == EVENT_LONG_PRESS_RELEASED)
             {
@@ -2318,8 +2316,7 @@ static bool Start_Supervisor_Run(MenuModeTypeDef requested_mode)
         app_state = APP_STATE_RUNNING;
         menu_mode = MENU_MODE_FIND_CELLS;
         Set_Robot_State(STATE_IDLE);
-        Update_Display_Content();
-        SSD_UPDATE_REQUEST = true;
+        Request_Display_Update();
         return true;
     }
 
@@ -2329,16 +2326,14 @@ static bool Start_Supervisor_Run(MenuModeTypeDef requested_mode)
         menu_mode = MENU_MODE_GO_TO_B;
         app_state = APP_STATE_MENU;
         Set_Motor_Speeds(0, 0);
-        Update_Display_Content();
-        SSD_UPDATE_REQUEST = true;
+        Request_Display_Update();
         return false;
     }
 
     menu_mode = MENU_MODE_IDLE;
     app_state = APP_STATE_MENU;
     Set_Motor_Speeds(0, 0);
-    Update_Display_Content();
-    SSD_UPDATE_REQUEST = true;
+    Request_Display_Update();
     return false;
 }
 
@@ -2353,8 +2348,7 @@ static void Stop_Supervisor_Run(void)
     Set_Robot_State(STATE_IDLE);
     Nav_Debug_ClearYawTarget();
     Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_STOP_TO_MENU);
-    Update_Display_Content();
-    SSD_UPDATE_REQUEST = true;
+    Request_Display_Update();
 }
 
 static void Tick_Supervisor_Run(uint32_t dt_ms)
@@ -2374,8 +2368,7 @@ static void Tick_Supervisor_Run(uint32_t dt_ms)
         supervisor_run_active = false;
         app_state = APP_STATE_MENU;
         Set_Robot_State(STATE_IDLE);
-        Update_Display_Content();
-        SSD_UPDATE_REQUEST = true;
+        Request_Display_Update();
     }
 }
 
@@ -2573,7 +2566,6 @@ static void Set_Robot_State(RobotStateTypeDef new_state)
         nav_debug.last_transition_reason = nav_debug.pending_transition_reason;
         nav_debug.transition_sequence++;
         robot_state = new_state;
-        // SSD_UPDATE_REQUEST = true;
     }
 
     nav_debug.pending_transition_reason = NAV_DBG_TRANSITION_NONE;
@@ -2602,6 +2594,12 @@ static void Update_Display_Content(void)
         SSD1306_DrawText(&hssd, 0, 20, text_line2, SSD1306_TEXT_ALIGN_LEFT);
         SSD1306_DrawText(&hssd, 0, 30, text_line3, SSD1306_TEXT_ALIGN_LEFT);
     }
+}
+
+static void Request_Display_Update(void)
+{
+    Update_Display_Content();
+    SSD_UPDATE_REQUEST = true;
 }
 
 /**
