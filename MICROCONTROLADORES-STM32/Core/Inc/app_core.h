@@ -5,19 +5,41 @@
 #include "main.h"
 
 /*
- *  Declaraciones de las funciones principales del núcleo de la aplicación.
- *  Estas funciones son llamadas desde main.c para inicializar y ejecutar
- *  la lógica principal del programa.
+ * STM32 application core / hardware adapter.
+ *
+ * app_core is the integration layer between CubeMX/HAL-generated code and the
+ * project-specific portable modules.
+ *
+ * Responsibilities:
+ * - initialize application-level drivers and runtime state;
+ * - run the main cooperative loop;
+ * - adapt STM32 sensors/timing into AppNavInput;
+ * - consume AppNavOutput and drive motors;
+ * - route UNERBUS commands from USB/WiFi;
+ * - manage the physical button and local OLED display;
+ * - start/stop primitive tests and supervisor runs.
+ *
+ * Navigation ownership:
+ * - app_nav owns portable perception/controllers/primitives;
+ * - app_nav_supervisor owns mission sequencing and logical maze updates;
+ * - app_core only adapts hardware, configuration and communication.
  */
+
+/* -------------------------------------------------------------------------- */
+/* Main application entry points                                               */
+/* -------------------------------------------------------------------------- */
 
 void App_Core_Init(void);
 void App_Core_Loop(void);
 
+/* -------------------------------------------------------------------------- */
+/* HAL callback wrappers                                                       */
+/* -------------------------------------------------------------------------- */
+
 /*
- *  Declaraciones de los "wrappers" de callbacks.
- *  Estas funciones son llamadas desde las verdaderas interrupciones HAL en main.c,
- *  permitiendo que toda la lógica de manejo de interrupciones resida en app_core.c
- *  y manteniendo main.c limpio.
+ * These wrappers are called from the actual HAL callbacks generated in main.c
+ * or STM32 interrupt files. Keeping the application logic here keeps CubeMX
+ * generated files smaller and easier to regenerate.
  */
 void App_Core_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim);
 void App_Core_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc);
