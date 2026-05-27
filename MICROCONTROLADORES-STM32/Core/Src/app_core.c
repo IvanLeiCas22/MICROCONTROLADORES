@@ -18,16 +18,40 @@
 #include "SSD1306.h"
 #include "pid_controller.h"
 
-/* --- Gyro scaling --- */
+/*
+ * STM32 application core / hardware adapter.
+ *
+ * This file integrates HAL/CubeMX peripherals with the project-specific
+ * portable modules.
+ *
+ * Ownership boundaries:
+ *
+ * - app_core.c:
+ *   hardware scheduling, sensor acquisition, command routing, display update,
+ *   button handling, primitive-test runner, supervisor runner and motor output.
+ *
+ * - app_nav.c:
+ *   portable perception, controllers and primitive actions.
+ *
+ * - app_nav_supervisor.c:
+ *   mission sequencing, logical maze updates and FIND_CELLS completion.
+ *
+ * Keep mission logic out of this file whenever possible. app_core should adapt
+ * hardware/runtime configuration to portable inputs/outputs.
+ */
+
+/* -------------------------------------------------------------------------- */
+/* Gyro scaling constants                                                      */
+/* -------------------------------------------------------------------------- */
 #define GYRO_SENSITIVITY_X10_250DPS 1310
 #define GYRO_SENSITIVITY_X10_500DPS 655
 #define GYRO_SENSITIVITY_X10_1000DPS 328
 #define GYRO_SENSITIVITY_X10_2000DPS 164
 #define GYRO_YAW_DEADBAND_DPS_X10 75
 
-//==============================================================================
-// DECLARACIONES EXTERN DE HANDLES DE PERIFÉRICOS (definidos en main.c)
-//==============================================================================
+/* -------------------------------------------------------------------------- */
+/* HAL peripheral handles defined by CubeMX/main.c                              */
+/* -------------------------------------------------------------------------- */
 extern ADC_HandleTypeDef hadc1;
 extern I2C_HandleTypeDef hi2c2;
 extern TIM_HandleTypeDef htim1;
@@ -37,9 +61,9 @@ extern DMA_HandleTypeDef hdma_adc1;
 extern DMA_HandleTypeDef hdma_i2c2_rx;
 extern DMA_HandleTypeDef hdma_i2c2_tx;
 
-//==============================================================================
-// VARIABLES GLOBALES DEL MÓDULO
-//==============================================================================
+/* -------------------------------------------------------------------------- */
+/* Module state and runtime configuration                                       */
+/* -------------------------------------------------------------------------- */
 
 SystemFlagTypeDef flags0;
 volatile bool app_uart_bypass = false;
@@ -77,13 +101,17 @@ static const AppTimebaseConfig app_timebase_config = {
 };
 static uint32_t control_step_dt_ms = CONTROL_PERIOD_MS;
 
-// --- Variables de Estado de la Aplicación ---
+/* Application/menu state exposed to the local button/OLED flow. */
 static AppStateTypeDef app_state = APP_STATE_MENU;
 static MenuModeTypeDef menu_mode = MENU_MODE_IDLE;
 static uint32_t temporary_heartbeat = 0;
 static uint8_t temporary_heartbeat_ticks = 0;
 
-// --- Configuraciones PID runtime sincronizadas con app_nav ---
+/*
+ * Runtime PID gains mirrored into AppNavConfig.
+ * The HMI writes these legacy/runtime variables; app_core then synchronizes
+ * them into the portable app_nav configuration.
+ */
 typedef enum
 {
     PID_ROLE_CENTERING = 0,
@@ -94,6 +122,13 @@ typedef enum
 } PID_Role_t;
 
 static PID_Config_t pid_configs[PID_ROLE_COUNT];
+
+/*
+ * Hardware-facing sensor snapshot.
+ *
+ * This is the STM32-side representation. It is converted into AppNavInput by
+ * Build_AppNavInput_From_SensorSnapshot().
+ */
 
 typedef struct
 {
@@ -113,6 +148,13 @@ typedef struct
     int16_t gz;
     int32_t yaw_fixed;
 } SensorSnapshotTypeDef;
+
+/*
+ * Manual primitive-test runner.
+ *
+ * This is intentionally separate from the supervisor. Starting a primitive test
+ * stops an active supervisor run so the two flows cannot drive motors at once.
+ */
 
 typedef enum
 {
@@ -145,6 +187,13 @@ typedef struct
     int32_t last_yaw_rate_dps_x10;
     int32_t target_dps_x10;
 } PrimitiveTestContextTypeDef;
+
+/*
+ * Legacy navigation debug labels kept for telemetry compatibility.
+ *
+ * Live mission state should be read from AppNavSupervisorDebug. These labels
+ * are still useful for old HMI fields and transition diagnostics.
+ */
 
 typedef enum
 {
@@ -210,6 +259,13 @@ static NavDebugTelemetryTypeDef nav_debug = {
     .pwm_left_cmd = 0,
     .transition_sequence = 0};
 
+/*
+ * Runtime navigation configuration exposed through HMI commands.
+ *
+ * Build_AppNavConfig_From_LegacyRuntime() is the single bridge that copies these
+ * values into AppNavConfig.
+ */
+
 uint16_t right_motor_base_speed = 3575;         // Velocidad base motor derecho
 uint16_t left_motor_base_speed = 4550;          // Velocidad base motor izquierdo
 uint16_t faster_motor_smooth_turn_speed = 6000; // Velocidad del motor más rápido en giro suave
@@ -236,9 +292,14 @@ uint16_t braking_min_speed = BRAKING_MIN_SPEED_DEFAULT;
 uint16_t braking_dead_zone = BRAKING_DEAD_ZONE_DEFAULT;
 
 uint8_t wall_fade_ticks = WALL_FADE_TICKS_DEFAULT;
+
+/* Current sensor snapshot, manual primitive-test context and supervisor runner state. */
+
 static SensorSnapshotTypeDef sensor_snapshot;
 static PrimitiveTestContextTypeDef primitive_test;
 static bool supervisor_run_active = false;
+
+/* MPU yaw integration state. Yaw is stored as Q16.16 degrees. */
 
 static volatile int32_t current_yaw_fixed = 0; // Yaw angle in Q16.16 fixed-point (degrees)
 static volatile uint16_t gyro_sensitivity_x10 = GYRO_SENSITIVITY_X10_500DPS;
@@ -246,17 +307,23 @@ static AppTimingClock mpu_yaw_timing_clock;
 static volatile bool mpu_yaw_timing_initialized = false;
 static volatile uint32_t mpu_last_sample_cycle = 0;
 
+/* Legacy/diagnostic robot state used by display/debug paths. */
+
 static volatile RobotStateTypeDef robot_state = STATE_IDLE;
 
-// Valores legacy del post-yaw del giro suave. app_nav ejecuta la fase portable
-// y app_core conserva el mapeo de configuracion/runtime.
+/*
+ * Legacy runtime constants for smooth post-yaw seek.
+ *
+ * The phase itself is implemented in app_nav. app_core keeps the STM32 runtime
+ * mapping into AppNavConfig.
+ */
 #define SMOOTH_POST_YAW_SEEK_TIMEOUT_MS 1500U
 #define SMOOTH_POST_YAW_SEEK_TIMEOUT_TICKS \
     ((SMOOTH_POST_YAW_SEEK_TIMEOUT_MS + CONTROL_PERIOD_MS - 1U) / CONTROL_PERIOD_MS)
 
-//==============================================================================
-// PROTOTIPOS DE FUNCIONES PRIVADAS
-//==============================================================================
+/* -------------------------------------------------------------------------- */
+/* Private function prototypes                                                  */
+/* -------------------------------------------------------------------------- */
 void ESP01_SetChipEnable(uint8_t value);
 int ESP01_WriteUartByte(uint8_t value);
 void ESP01_WriteByteToRxBuffer(uint8_t value);
@@ -321,9 +388,9 @@ static bool Start_Supervisor_Run(MenuModeTypeDef requested_mode);
 static void Stop_Supervisor_Run(void);
 static void Tick_Supervisor_Run(uint32_t dt_ms);
 
-//==============================================================================
-// IMPLEMENTACIÓN DE WRAPPERS DE CALLBACKS HAL
-//==============================================================================
+/* -------------------------------------------------------------------------- */
+/* HAL callback wrappers                                                        */
+/* -------------------------------------------------------------------------- */
 void App_Core_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
     if (htim->Instance == TIM1)
@@ -423,9 +490,9 @@ static uint32_t Read_Cycle_Counter(void)
     return DWT->CYCCNT;
 }
 
-//==============================================================================
-// IMPLEMENTACIÓN DE FUNCIONES DE LA APLICACIÓN
-//==============================================================================
+/* -------------------------------------------------------------------------- */
+/* Application helpers and portable-configuration bridge                         */
+/* -------------------------------------------------------------------------- */
 
 static int32_t Gain_Hundredths_To_Fixed(uint16_t gain_x100)
 {
