@@ -492,7 +492,7 @@ static uint32_t Read_Cycle_Counter(void)
 }
 
 /* -------------------------------------------------------------------------- */
-/* Application helpers and portable-configuration bridge                         */
+/* Runtime configuration -> AppNavConfig bridge                                */
 /* -------------------------------------------------------------------------- */
 
 static int32_t Gain_Hundredths_To_Fixed(uint16_t gain_x100)
@@ -560,6 +560,10 @@ static void Sync_AppNavConfig_From_LegacyRuntime(void)
 
     App_Nav_SetConfig(&cfg);
 }
+
+/* -------------------------------------------------------------------------- */
+/* Gyro / yaw conversion helpers                                               */
+/* -------------------------------------------------------------------------- */
 
 static int32_t GyroRaw_To_DpsX10(int16_t gyro_raw)
 {
@@ -1880,6 +1884,10 @@ void App_Core_Init(void)
     HAL_TIM_Base_Start_IT(&htim1);
 }
 
+/* -------------------------------------------------------------------------- */
+/* Sensor snapshot -> portable navigation input                                */
+/* -------------------------------------------------------------------------- */
+
 static void Build_AppNavInput_From_SensorSnapshot(uint32_t dt_ms, AppNavInput *input)
 {
     if (input == NULL)
@@ -1914,6 +1922,10 @@ static void Build_AppNavInput_From_SensorSnapshot(uint32_t dt_ms, AppNavInput *i
     input->yaw_q16_deg = sensor_snapshot.yaw_fixed;
     input->yaw_rate_dps = GyroRaw_To_Dps(sensor_snapshot.gz);
 }
+
+/* -------------------------------------------------------------------------- */
+/* Portable perception/debug update                                            */
+/* -------------------------------------------------------------------------- */
 
 static void Run_Portable_Nav_Tick(uint32_t dt_ms)
 {
@@ -1958,6 +1970,10 @@ static void Apply_Portable_Nav_Perception_To_Snapshot(void)
     App_Nav_GetDebug(&debug);
     sensor_snapshot.detection_flags = Build_DetectionFlags_From_AppNavDebug(&debug);
 }
+
+/* -------------------------------------------------------------------------- */
+/* Manual primitive-test runner                                                */
+/* -------------------------------------------------------------------------- */
 
 static int32_t PrimitiveTest_GetYawDegX10(void)
 {
@@ -2255,6 +2271,10 @@ static uint8_t PrimitiveTest_HandleCommand(struct UNERBUSHandle *aBus)
     }
 }
 
+/* -------------------------------------------------------------------------- */
+/* Supervisor run adapter                                                       */
+/* -------------------------------------------------------------------------- */
+
 static void Stop_Portable_Nav_Actions(void)
 {
     App_NavSupervisor_Stop();
@@ -2359,6 +2379,10 @@ static void Tick_Supervisor_Run(uint32_t dt_ms)
     }
 }
 
+/* -------------------------------------------------------------------------- */
+/* Control loop step                                                           */
+/* -------------------------------------------------------------------------- */
+
 static void Run_Control_Step(uint32_t dt_ms)
 {
     control_step_dt_ms = dt_ms;
@@ -2381,6 +2405,10 @@ static void Run_Control_Step(uint32_t dt_ms)
 
     Set_Motor_Speeds(0, 0);
 }
+
+/* -------------------------------------------------------------------------- */
+/* Public application loop                                                      */
+/* -------------------------------------------------------------------------- */
 
 void App_Core_Loop(void)
 {
