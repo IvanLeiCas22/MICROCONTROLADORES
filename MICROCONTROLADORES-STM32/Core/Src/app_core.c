@@ -362,6 +362,7 @@ static int32_t Get_Filtered_ADC_Value(uint8_t channel);
 static void Set_Robot_State(RobotStateTypeDef new_state);
 static void Update_Display_Content(void);
 static void Request_Display_Update(void);
+static bool Is_Valid_Menu_Mode(MenuModeTypeDef mode);
 static int32_t ADC_To_Distance_mm(uint16_t adc_value);
 static void Update_Navigation_Perception(void);
 static void Init_Pid_Configs(void);
@@ -1226,9 +1227,7 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
     case CMD_SET_MENU_MODE:
     {
         MenuModeTypeDef requested_mode = (MenuModeTypeDef)UNERBUS_GetUInt8(aBus);
-        if ((requested_mode == MENU_MODE_IDLE) ||
-            (requested_mode == MENU_MODE_FIND_CELLS) ||
-            (requested_mode == MENU_MODE_GO_TO_B))
+        if (Is_Valid_Menu_Mode(requested_mode))
         {
             menu_mode = requested_mode;
         }
@@ -2611,6 +2610,13 @@ static void Request_Display_Update(void)
 {
     Update_Display_Content();
     SSD_UPDATE_REQUEST = true;
+}
+
+static bool Is_Valid_Menu_Mode(MenuModeTypeDef mode)
+{
+    return ((mode == MENU_MODE_IDLE) ||
+            (mode == MENU_MODE_FIND_CELLS) ||
+            (mode == MENU_MODE_GO_TO_B));
 }
 
 /**
