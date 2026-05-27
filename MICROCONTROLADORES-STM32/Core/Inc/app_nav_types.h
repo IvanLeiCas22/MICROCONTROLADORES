@@ -66,6 +66,27 @@ typedef enum
     APP_NAV_SMOOTH_TURN_RIGHT = 1
 } AppNavSmoothTurnDirection;
 
+/*
+ * Smooth action lifecycle:
+ *
+ * - TURNING:
+ *   The robot is executing the curved part of the smooth turn.
+ *
+ * - POST_YAW_SEEK_REAR_TAPE:
+ *   The curved part finished by yaw target or by diagonal/wall reference.
+ *   The action is not complete yet; it keeps driving with yaw-hold until the
+ *   rear floor sensor confirms the target cell boundary tape.
+ *
+ * - DONE_REAR_TAPE / DONE_POST_YAW_REAR_TAPE:
+ *   Terminal states that confirm cell entry. The supervisor may update both
+ *   logical heading and logical cell position.
+ *
+ * - DONE_WALL:
+ *   Legacy terminal state. Normal smooth diagonal/wall detection should no
+ *   longer generate this state; it should enter POST_YAW_SEEK_REAR_TAPE
+ *   instead. If this state reaches the supervisor, it is treated defensively
+ *   as a primitive error to avoid map desynchronization.
+ */
 typedef enum
 {
     APP_NAV_SMOOTH_ACTION_IDLE = 0,
@@ -135,6 +156,13 @@ typedef enum
     APP_NAV_PIVOT_180_RIGHT
 } AppNavPivotActionType;
 
+/*
+ * Debug reason for the latest smooth phase transition/finish.
+ *
+ * WALL means the diagonal/wall reference ended the curved part of the smooth
+ * turn and moved the action into POST_YAW_SEEK_REAR_TAPE. It does not mean the
+ * logical cell entry is complete.
+ */
 typedef enum
 {
     APP_NAV_SMOOTH_FINISH_NONE = 0,
