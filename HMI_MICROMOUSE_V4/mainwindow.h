@@ -98,18 +98,6 @@ private slots:
   void on_btnSetPidBrakingConfig_clicked();
 
   // --- Slots para la página del laberinto ---
-  void on_btnSimTurnL_clicked();
-
-  void on_btnSimFwd_clicked();
-
-  void on_btnSimTurnR_clicked();
-
-  void on_btnSimWallLeft_clicked();
-
-  void on_btnSimWallFront_clicked();
-
-  void on_btnSimWallRight_clicked();
-
   void on_btnSimReset_clicked();
 
   void on_btnRotMapL_clicked();
@@ -185,32 +173,16 @@ private slots:
   // Puntero maestro del lienzo
   QGraphicsScene *mazeScene;
   // Matrices de Mapas Duales
-  uint8_t real_maze_map[MAZE_WIDTH][MAZE_HEIGHT]; // El Universo (15x15)
   uint8_t sim_maze_map[MAZE_WIDTH][MAZE_HEIGHT];  // La memoria del Robot
   // Coordenadas
   uint8_t current_x;
   uint8_t current_y;
   Heading current_heading;
-  // Matriz de mapeo: Fila = Orientación Actual, Columna = Pared Frente(0),
-  // Der(1), Izq(2)
-  const uint8_t sim_wall_lut[4][3] = {
-      {WALL_NORTH, WALL_EAST, WALL_WEST},  // Si el robot mira al NORTH
-      {WALL_EAST, WALL_SOUTH, WALL_NORTH}, // Si el robot mira al EAST
-      {WALL_SOUTH, WALL_WEST, WALL_EAST},  // Si el robot mira al SOUTH
-      {WALL_WEST, WALL_NORTH, WALL_SOUTH}  // Si el robot mira al WEST
-  };
-  // Variables de Meta e Inicio
-  int start_x, start_y;
-  int goal_x, goal_y;
-  bool is_returning = false;
-  int special_cells_found = 0;
+
   bool is_mode_b = false; // False = MODO A (Explorar). True = MODO B (Speedrun)
   int tsp_targets[3][2];
   bool tsp_solved = false;
   int current_tsp_index = 0;
-  // Memoria BFS Estática (Compatible con STM32 - Empaquetado)
-  uint8_t best_path[225]; // Almacena (X << 4) | Y
-  uint8_t path_length;
 
   // --- Funciones de ayuda ---
   void updateSerialPortList();
@@ -279,8 +251,7 @@ private slots:
   quint8 currentPrimitiveVariant() const;
 
 protected:
-  // Filtro maestro de cualquier evento del ratón
-  bool eventFilter(QObject *watched, QEvent *event) override;
+
 };
 
 #endif // MAINWINDOW_H

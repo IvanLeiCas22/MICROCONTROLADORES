@@ -10,7 +10,6 @@
 #include <QLabel>
 #include <QMessageBox>
 #include <QMetaEnum>
-#include <QMouseEvent>
 #include <QPen>
 #include <QTextBlock>
 
@@ -146,21 +145,11 @@ MainWindow::MainWindow(QWidget *parent)
   // 1. Crear el escenario e insertarlo en la vista del UI
   mazeScene = new QGraphicsScene(this);
   ui->mazeView->setScene(mazeScene);
-  // Le pedimos interceptar los clicks de nuestro visor del laberinto
-  ui->mazeView->viewport()->installEventFilter(this);
-  // Inicializamos nuestras metas por defecto "apagadas" (-1)
-  start_x = -1;
-  start_y = -1;
-  goal_x = -1;
-  goal_y = -1;
 
   // Opcional: Le damos un fondo oscuro muy moderno al canvas
   mazeScene->setBackgroundBrush(QColor(20, 25, 30));
   // 2. Limpiar todos los mapas lógicos (llenarlos de 0)
   memset(sim_maze_map, 0, sizeof(sim_maze_map));
-  memset(real_maze_map, 0, sizeof(real_maze_map));
-  memset(best_path, 0, sizeof(best_path));
-  path_length = 0;
 
   // 3. El robot nace en el centro lógico de la matriz de 15x15
   current_x = 7;
@@ -1185,62 +1174,17 @@ void MainWindow::drawMaze() {
       // === Colores Especiales de Baldosa ===
       QColor cellBgColor = Qt::transparent; // Vacío por defecto
 
-      // ¿Es celda de Inicio?
-      if (logical_x == start_x && logical_y == start_y) {
-        cellBgColor = QColor(20, 120, 20); // Verde vibrante sólido
-      }
-      // ¿Es celda Objetivo?
-      else if (logical_x == goal_x && logical_y == goal_y) {
-        cellBgColor = QColor(150, 20, 20); // Rojo sólido oscuro
-      }
-      // ¿Es celda Especial?
-      else if (current_map_cell & CELL_SPECIAL) {
-        cellBgColor = QColor(255, 215, 0); // Dorado
-      }
-      // ¿Al menos está visitada?
-      else if (current_map_cell & CELL_VISITED) {
+        if (current_map_cell & CELL_SPECIAL) {
+            cellBgColor = QColor(255, 215, 0);
+        }
+        // ¿Al menos está visitada?
+        else if (current_map_cell & CELL_VISITED) {
         cellBgColor = QColor(255, 255, 255, 10); // Blancuzco tenue
-      }
+        }
 
       // Dibujamos el cuadrado base y guardamos el puntero
       QGraphicsRectItem *cellRect =
           mazeScene->addRect(px, py, cellSize, cellSize, faintPen, cellBgColor);
-
-      // Elevamos las placas de A y B (Z=5) para que tapen el nivel de suelo
-      // (Z=0)
-      if ((x == start_x && y == start_y) || (x == goal_x && y == goal_y)) {
-        cellRect->setZValue(5);
-      }
-
-      // Textos 'A' y 'B' centrados a prueba de rotación
-      if (x == start_x && y == start_y) {
-        QGraphicsRectItem *anchor =
-            mazeScene->addRect(0, 0, 0, 0, Qt::NoPen, Qt::NoBrush);
-        anchor->setZValue(
-            6); // La letra debe flotar apenas sobre su placa (Z=5)
-        anchor->setPos(px + (cellSize / 2.0), py + (cellSize / 2.0));
-        anchor->setFlag(QGraphicsItem::ItemIgnoresTransformations);
-
-        QGraphicsTextItem *tx = new QGraphicsTextItem("A", anchor);
-        tx->setFont(QFont("Arial", 16, QFont::Bold));
-        tx->setDefaultTextColor(QColor(150, 255, 150));
-        tx->setPos(-tx->boundingRect().width() / 2.0,
-                   -tx->boundingRect().height() / 2.0);
-      }
-      if (x == goal_x && y == goal_y) {
-        QGraphicsRectItem *anchor =
-            mazeScene->addRect(0, 0, 0, 0, Qt::NoPen, Qt::NoBrush);
-        anchor->setZValue(
-            6); // La letra debe flotar apenas sobre su placa (Z=5)
-        anchor->setPos(px + (cellSize / 2.0), py + (cellSize / 2.0));
-        anchor->setFlag(QGraphicsItem::ItemIgnoresTransformations);
-
-        QGraphicsTextItem *tx = new QGraphicsTextItem("B", anchor);
-        tx->setFont(QFont("Arial", 16, QFont::Bold));
-        tx->setDefaultTextColor(QColor(255, 150, 150));
-        tx->setPos(-tx->boundingRect().width() / 2.0,
-                   -tx->boundingRect().height() / 2.0);
-      }
 
       // Si el robot visitó esta celda, dibujamos sus paredes reales
       uint8_t cellData = current_map_cell;
@@ -1282,34 +1226,6 @@ void MainWindow::drawMaze() {
     }
   }
 
-  // ==========================================
-  // 3. DIBUJAR LA RUTA RÁPIDA (Estilo GPS)
-  // ==========================================
-  if (path_length > 1) {
-    // Configuramos la "Cinta" del GPS:
-    // Color amarillo vibrante, translúcida, 6px de grosor y con uniones suaves
-    QPen gpsPen(QColor(91, 94, 255, 180), 6, Qt::SolidLine, Qt::RoundCap,
-                Qt::RoundJoin);
-
-    // Iteramos sobre todos los puntos encadenándolos con líneas
-    for (int i = 0; i < path_length - 1; i++) {
-      // Desempaquetar la celda origen ("i")
-      int bx1 = best_path[i] >> 4;
-      int by1 = best_path[i] & 0x0F;
-      qreal cx1 = (bx1 * cellSize) + (cellSize / 2.0);
-      qreal cy1 = (logicalYToSceneRow(by1) * cellSize) + (cellSize / 2.0);
-
-      // Desempaquetar la celda contigua ("i+1")
-      int bx2 = best_path[i + 1] >> 4;
-      int by2 = best_path[i + 1] & 0x0F;
-      qreal cx2 = (bx2 * cellSize) + (cellSize / 2.0);
-      qreal cy2 = (logicalYToSceneRow(by2) * cellSize) + (cellSize / 2.0);
-
-      // Trazar el segmento
-      mazeScene->addLine(cx1, cy1, cx2, cy2, gpsPen);
-    }
-  }
-
   // 4. DIBUJAR AL ROBOT
   // El robot debe estar en la coordenada (current_x, current_y).
   // Para que se vea centrado y más chico que la celda:
@@ -1343,129 +1259,6 @@ void MainWindow::drawMaze() {
 
   if (dirLine)
     dirLine->setZValue(10); // Flechita roja también a nivel nubes
-}
-
-void MainWindow::calculateFastestPath(int sx, int sy, int gx, int gy) {
-  path_length = 0; // Reiniciar ruta
-  // 0. Si no hay meta o inicio, o el mouse no está calibrado, abortar
-  if (sx == -1 || gx == -1)
-    return;
-  // 1. Matriz topográfica (0 = Cerca; 255 = Desconocido)
-  uint8_t distances[MAZE_WIDTH][MAZE_HEIGHT];
-  memset(distances, 255, sizeof(distances));
-  // 2. Colas estáticas Empaquetadas (X << 4 | Y). Reduce 50% la RAM.
-  uint8_t queue[225];
-  uint8_t head = 0;
-  uint8_t tail = 0;
-  // Empezamos la inundación plantando la semilla 0 en el Inicio (A)
-  queue[tail] = (sx << 4) | sy;
-  tail++;
-  distances[sx][sy] = 0;
-  bool reached_goal = false;
-  // --- FASE 1: EXPANSIÓN DE LA OLA (Cálculo de Distancias) ---
-  while (head < tail) {
-    int cx = queue[head] >> 4;
-    int cy = queue[head] & 0x0F;
-    head++;
-    // Si la ola acaba de chocar la meta, paramos inmediatamente!
-    if (cx == gx && cy == gy) {
-      reached_goal = true;
-      break;
-    }
-    uint8_t current_dist = distances[cx][cy];
-    uint8_t cell = sim_maze_map[cx][cy];
-    // Vertremos agua hacia el Norte (Si no hay muro, no es borde y no se ha
-    // inundado ya)
-    if (!(cell & WALL_NORTH) && cy > 0 && distances[cx][cy - 1] == 255) {
-      distances[cx][cy - 1] = current_dist + 1;
-      queue[tail] = (cx << 4) | (cy - 1);
-      tail++;
-    }
-    // Vertremos agua hacia el Sur
-    if (!(cell & WALL_SOUTH) && cy < MAZE_HEIGHT - 1 &&
-        distances[cx][cy + 1] == 255) {
-      distances[cx][cy + 1] = current_dist + 1;
-      queue[tail] = (cx << 4) | (cy + 1);
-      tail++;
-    }
-    // Vertremos hacia el Este
-    if (!(cell & WALL_EAST) && cx < MAZE_WIDTH - 1 &&
-        distances[cx + 1][cy] == 255) {
-      distances[cx + 1][cy] = current_dist + 1;
-      queue[tail] = ((cx + 1) << 4) | cy;
-      tail++;
-    }
-    // Vertremos hacia el Oeste
-    if (!(cell & WALL_WEST) && cx > 0 && distances[cx - 1][cy] == 255) {
-      distances[cx - 1][cy] = current_dist + 1;
-      queue[tail] = ((cx - 1) << 4) | cy;
-      tail++;
-    }
-  }
-  // --- FASE 2: EL BACKTRACKING (Rastrear el río de bajada a casa) ---
-  if (reached_goal) {
-    int cx = gx;
-    int cy = gy;
-
-    while (cx != sx || cy != sy) {
-      // Tomar foto de pisada actual y empacar en guardado métrico
-      best_path[path_length] = (cx << 4) | cy;
-      path_length++;
-      uint8_t d = distances[cx][cy];
-      uint8_t cell = sim_maze_map[cx][cy];
-      // Buscar lógicamente cuál vecino estrictamente tiene un número `d-1`
-      // (Bajar escalón)
-      if (!(cell & WALL_NORTH) && cy > 0 && distances[cx][cy - 1] == d - 1) {
-        cy--;
-      } else if (!(cell & WALL_SOUTH) && cy < MAZE_HEIGHT - 1 &&
-                 distances[cx][cy + 1] == d - 1) {
-        cy++;
-      } else if (!(cell & WALL_EAST) && cx < MAZE_WIDTH - 1 &&
-                 distances[cx + 1][cy] == d - 1) {
-        cx++;
-      } else if (!(cell & WALL_WEST) && cx > 0 &&
-                 distances[cx - 1][cy] == d - 1) {
-        cx--;
-      } else {
-        // FALLBACK DE SEGURIDAD EXTREMA: (Previene cuelgues)
-        break;
-      }
-    }
-    // Finalmente guardamos el punto donde iniciamos
-    best_path[path_length] = (sx << 4) | sy;
-    path_length++;
-  }
-}
-
-int MainWindow::getFloodFillDistance(int sx, int sy, int gx, int gy) {
-    uint8_t dist[MAZE_WIDTH][MAZE_HEIGHT];
-    memset(dist, 255, sizeof(dist));
-    uint8_t q[225];
-    int h = 0, t = 0;
-    q[t++] = (sx << 4) | sy;
-    dist[sx][sy] = 0;
-    while (h < t) {
-        int px = q[h] >> 4;
-        int py = q[h] & 0x0F;
-        h++;
-        if (px == gx && py == gy)
-            return dist[px][py];
-        int d = dist[px][py];
-        int cell = sim_maze_map[px][py];
-        if (!(cell & WALL_NORTH) && py > 0 && dist[px][py - 1] == 255) {
-            dist[px][py - 1] = d + 1; q[t++] = (px << 4) | (py - 1);
-        }
-        if (!(cell & WALL_SOUTH) && py < MAZE_HEIGHT - 1 && dist[px][py + 1] == 255) {
-            dist[px][py + 1] = d + 1; q[t++] = (px << 4) | (py + 1);
-        }
-        if (!(cell & WALL_EAST) && px < MAZE_WIDTH - 1 && dist[px + 1][py] == 255) {
-            dist[px + 1][py] = d + 1; q[t++] = ((px + 1) << 4) | py;
-        }
-        if (!(cell & WALL_WEST) && px > 0 && dist[px - 1][py] == 255) {
-            dist[px - 1][py] = d + 1; q[t++] = ((px - 1) << 4) | py;
-        }
-    }
-    return 9999; // Inalcanzable
 }
 
 /**
@@ -2351,175 +2144,18 @@ void MainWindow::updateDelayTicksUI(const QByteArray &payload) {
   ui->editWallFadeTicks->setText(QString::number(delayTicks));
 }
 
-void MainWindow::on_btnSimTurnL_clicked() {
-  // +(4-1) = +3 evita números negativos en módulo 4 de C++
-  current_heading = (Heading)((current_heading + 3) % 4);
-  drawMaze();
-}
-
-void MainWindow::on_btnSimFwd_clicked() {
-  int next_x = static_cast<int>(current_x);
-  int next_y = static_cast<int>(current_y);
-
-  // Calculamos hacia dónde caminamos
-  if (current_heading == HEADING_NORTH)
-    next_y--;
-  else if (current_heading == HEADING_SOUTH)
-    next_y++;
-  else if (current_heading == HEADING_EAST)
-    next_x++;
-  else if (current_heading == HEADING_WEST)
-    next_x--;
-
-  // Evitamos salirnos y provocar un acceso fuera de rango
-  if (next_x < 0)
-    next_x = 0;
-  if (next_x >= MAZE_WIDTH)
-    next_x = MAZE_WIDTH - 1;
-  if (next_y < 0)
-    next_y = 0;
-  if (next_y >= MAZE_HEIGHT)
-    next_y = MAZE_HEIGHT - 1;
-
-  current_x = static_cast<uint8_t>(next_x);
-  current_y = static_cast<uint8_t>(next_y);
-
-  // Repintamos la escena
-  drawMaze();
-}
-
-void MainWindow::on_btnSimTurnR_clicked() {
-  current_heading = (Heading)((current_heading + 1) % 4);
-  drawMaze();
-}
-
-void MainWindow::on_btnSimWallLeft_clicked() {
-  uint8_t wall = sim_wall_lut[current_heading][2];
-  real_maze_map[current_x][current_y] ^= wall;
-
-  // Aplicamos simetría física a la celda vecina
-  if (wall == WALL_NORTH && current_y > 0)
-    real_maze_map[current_x][current_y - 1] ^= WALL_SOUTH;
-  if (wall == WALL_SOUTH && current_y < MAZE_HEIGHT - 1)
-    real_maze_map[current_x][current_y + 1] ^= WALL_NORTH;
-  if (wall == WALL_EAST && current_x < MAZE_WIDTH - 1)
-    real_maze_map[current_x + 1][current_y] ^= WALL_WEST;
-  if (wall == WALL_WEST && current_x > 0)
-    real_maze_map[current_x - 1][current_y] ^= WALL_EAST;
-
-  drawMaze();
-}
-
-void MainWindow::on_btnSimWallFront_clicked() {
-  uint8_t wall = sim_wall_lut[current_heading][0];
-  real_maze_map[current_x][current_y] ^= wall;
-
-  if (wall == WALL_NORTH && current_y > 0)
-    real_maze_map[current_x][current_y - 1] ^= WALL_SOUTH;
-  if (wall == WALL_SOUTH && current_y < MAZE_HEIGHT - 1)
-    real_maze_map[current_x][current_y + 1] ^= WALL_NORTH;
-  if (wall == WALL_EAST && current_x < MAZE_WIDTH - 1)
-    real_maze_map[current_x + 1][current_y] ^= WALL_WEST;
-  if (wall == WALL_WEST && current_x > 0)
-    real_maze_map[current_x - 1][current_y] ^= WALL_EAST;
-
-  drawMaze();
-}
-
-void MainWindow::on_btnSimWallRight_clicked() {
-  uint8_t wall = sim_wall_lut[current_heading][1];
-  real_maze_map[current_x][current_y] ^= wall;
-
-  if (wall == WALL_NORTH && current_y > 0)
-    real_maze_map[current_x][current_y - 1] ^= WALL_SOUTH;
-  if (wall == WALL_SOUTH && current_y < MAZE_HEIGHT - 1)
-    real_maze_map[current_x][current_y + 1] ^= WALL_NORTH;
-  if (wall == WALL_EAST && current_x < MAZE_WIDTH - 1)
-    real_maze_map[current_x + 1][current_y] ^= WALL_WEST;
-  if (wall == WALL_WEST && current_x > 0)
-    real_maze_map[current_x - 1][current_y] ^= WALL_EAST;
-
-  drawMaze();
-}
-
 void MainWindow::on_btnSimReset_clicked() {
-  memset(sim_maze_map, 0, sizeof(sim_maze_map));
-  memset(
-      real_maze_map, 0,
-      sizeof(real_maze_map)); // Ahora Creador y Robot pierden la memoria juntos
-  memset(best_path, 0, sizeof(best_path));
-  path_length = 0;
-  current_x = 7;
-  current_y = 7;
-  current_heading = HEADING_NORTH;
-  sim_maze_map[current_x][current_y] |= CELL_VISITED;
-  is_returning = false;
+    memset(sim_maze_map, 0, sizeof(sim_maze_map));
 
-  // Limpiar Meta e Inicio
-  start_x = -1;
-  start_y = -1;
-  goal_x = -1;
-  goal_y = -1;
+    current_x = 7;
+    current_y = 7;
+    current_heading = HEADING_NORTH;
 
-  // Enderezar la cámara si el usuario la había dejado rotada
-  ui->mazeView->resetTransform();
+    sim_maze_map[current_x][current_y] |= CELL_VISITED;
 
-  drawMaze();
-}
+    ui->mazeView->resetTransform();
 
-bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
-  // Verificamos si alguien hizo "Click"
-  if (event->type() == QEvent::MouseButtonPress) {
-
-    // Verificamos que ese "Click" haya sido EXCLUSIVAMENTE encima de la ventana
-    // del Laberinto
-    if (watched == ui->mazeView->viewport()) {
-
-      QMouseEvent *mouseEvent = static_cast<QMouseEvent *>(event);
-
-      // Obtenemos la coordenada matemática del click en el plano
-      QPointF scenePos = ui->mazeView->mapToScene(mouseEvent->pos());
-      int cellSize = 50;
-
-      // Convertimos pixeles (ej. 165) a un índice en nuestra matriz 15x15 (ej.
-      // 3)
-      int cell_x = scenePos.x() / cellSize;
-      int scene_row = scenePos.y() / cellSize;
-      int cell_y = sceneRowToLogicalY(scene_row);
-
-      // Validamos que hiciste click "Adentro" del laberinto y no afuera
-      if (cell_x >= 0 && cell_x < MAZE_WIDTH &&
-          cell_y >= 0 && cell_y < MAZE_HEIGHT) {
-
-        // ¿Estaba apretado el radio botón de "Fijar Inicio"?
-        if (ui->radioPointerStart->isChecked()) {
-          start_x = cell_x;
-          start_y = cell_y;
-          drawMaze();  // Repintamos la escena de inmediato
-          return true; // "Consumimos" el evento
-        }
-        // ¿O estaba apretado el radio botón de "Fijar Meta"?
-        else if (ui->radioPointerGoal->isChecked()) {
-          goal_x = cell_x;
-          goal_y = cell_y;
-          drawMaze(); // Repintamos la escena de inmediato
-          return true;
-        }
-        // O estaba apretado el radio botón de "Fijar Especiales"?
-        else if (ui->radioPointerSpecial->isChecked()) {
-          // El operador ^= alterna (toggle). Un clic la pone, otro clic la
-          // quita.
-          real_maze_map[cell_x][cell_y] ^= CELL_SPECIAL;
-          drawMaze();
-          return true;
-        }
-      }
-    }
-  }
-
-  // Si fue un click en otra parte o no era un evento de mouse, dejamos fluir el
-  // programa:
-  return QMainWindow::eventFilter(watched, event);
+    drawMaze();
 }
 
 void MainWindow::on_btnRotMapL_clicked() {
@@ -2539,8 +2175,6 @@ void MainWindow::on_btnSyncMaze_clicked()
         return;
     }
     ui->commsLog->appendPlainText("Iniciando sincronización del laberinto...");
-    memset(best_path, 0, sizeof(best_path));
-    path_length = 0;
     requestMazeColumn(0); // Iniciamos el efecto dominó pidiendo la columna 0
 }
 
