@@ -355,6 +355,7 @@ static int16_t GyroRaw_To_Dps(int16_t gyro_raw);
 static void Reset_Yaw_Tracking(void);
 static void Integrate_Yaw_From_Gyro(int16_t gz_calibrated);
 static void Set_Motor_Speeds(int16_t right_speed, int16_t left_speed);
+static void Apply_AppNavOutput_To_Motors(const AppNavOutput *output);
 static void ADC_Filter_Task(void);
 static void ADC_LUT_Precompute(void);
 static int32_t Get_Filtered_ADC_Value(uint8_t channel);
@@ -2080,7 +2081,7 @@ static void PrimitiveTest_Tick(uint32_t dt_ms)
     if ((primitive_test.test_type == PRIM_TEST_SMOOTH_TURN) &&
         App_Nav_ComputeSmoothTurnPwm(&input, &output))
     {
-        Set_Motor_Speeds(output.right_motor_pwm, output.left_motor_pwm);
+    	Apply_AppNavOutput_To_Motors(&output);
         primitive_test.last_left_pwm = output.left_motor_pwm;
         primitive_test.last_right_pwm = output.right_motor_pwm;
         primitive_test.last_yaw_deg_x10 = PrimitiveTest_GetYawDegX10();
@@ -2359,7 +2360,7 @@ static void Tick_Supervisor_Run(uint32_t dt_ms)
 
     Build_AppNavInput_From_SensorSnapshot(dt_ms, &input);
     supervisor_state = App_NavSupervisor_Tick(&input, &output);
-    Set_Motor_Speeds(output.right_motor_pwm, output.left_motor_pwm);
+    Apply_AppNavOutput_To_Motors(&output);
 
     if ((supervisor_state == APP_NAV_SUPERVISOR_ERROR) ||
         (supervisor_state == APP_NAV_SUPERVISOR_IDLE))
@@ -2495,6 +2496,11 @@ static void Set_Motor_Speeds(int16_t right_speed, int16_t left_speed)
     // Motor izquierdo: ch4 adelante (TIM4_CH4), ch3 atrás (TIM4_CH3)
     __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_4, left_fwd);
     __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, left_rev);
+}
+
+static void Apply_AppNavOutput_To_Motors(const AppNavOutput *output)
+{
+    Set_Motor_Speeds(output->right_motor_pwm, output->left_motor_pwm);
 }
 
 /**
