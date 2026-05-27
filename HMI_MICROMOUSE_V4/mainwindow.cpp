@@ -352,9 +352,7 @@ void MainWindow::onPacketReceived(quint8 command, const QByteArray &payload) {
 
               // robot_maze_map usa coordenadas lógicas STM32.
               // La inversión Y se aplica solo al dibujar.
-              uint8_t local_flags = robot_maze_map[logical_x][logical_y] & CELL_SPECIAL;
-
-              robot_maze_map[logical_x][logical_y] = walls | local_flags;
+              robot_maze_map[logical_x][logical_y] = walls;
 
               // Propagación simétrica de paredes en coordenadas lógicas STM32.
               // NORTH = y + 1, SOUTH = y - 1.
@@ -500,10 +498,7 @@ void MainWindow::onPacketReceived(quint8 command, const QByteArray &payload) {
               quint8 cell_data;
               stream >> cell_data;
 
-              // Rescatamos banderas locales legacy si las hubiera.
-              // A futuro, cuando eliminemos la simulación local, esto también puede desaparecer.
-              uint8_t qt_flags = robot_maze_map[col][logical_y] & CELL_SPECIAL;
-              robot_maze_map[col][logical_y] = cell_data | qt_flags;
+              robot_maze_map[col][logical_y] = cell_data;
           }
 
           // 2. Extraemos la posición y orientación actual del robot.
