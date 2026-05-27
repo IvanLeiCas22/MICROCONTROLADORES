@@ -572,17 +572,20 @@ static AppNavSupervisorState App_NavSupervisor_HandleSmooth(const AppNavInput *i
         return app_nav_supervisor_debug.state;
 
     case APP_NAV_SMOOTH_ACTION_DONE_WALL:
+        /*
+         * Defensive legacy path.
+         *
+         * Smooth diagonal/wall detection no longer completes the action here.
+         * It enters APP_NAV_SMOOTH_ACTION_POST_YAW_SEEK_REAR_TAPE inside app_nav.c
+         * and waits for rear tape confirmation before the supervisor advances the
+         * logical map cell.
+         *
+         * If DONE_WALL reaches the supervisor, treating it as a primitive error is
+         * safer than updating heading and starting a separate ADVANCE, which can
+         * desynchronize physical and logical position.
+         */
         App_NavSupervisor_ClearOutput(output);
-        App_Maze_UpdateRobotHeading(turn);
-        App_Nav_StopSmoothAction();
-        App_NavSupervisor_UpdateMazeDebug();
-
-        if (!App_NavSupervisor_StartAdvance(input))
-        {
-            return App_NavSupervisor_SetError(APP_NAV_SUPERVISOR_RESULT_START_FAILED);
-        }
-
-        return app_nav_supervisor_debug.state;
+        return App_NavSupervisor_SetError(APP_NAV_SUPERVISOR_RESULT_PRIMITIVE_ERROR);
 
     case APP_NAV_SMOOTH_ACTION_FRONT_WALL_SAFETY:
     case APP_NAV_SMOOTH_ACTION_POST_YAW_TIMEOUT:
