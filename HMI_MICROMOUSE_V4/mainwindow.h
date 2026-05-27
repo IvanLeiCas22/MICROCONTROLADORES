@@ -116,12 +116,6 @@ private slots:
 
   void on_btnRotMapR_clicked();
 
-  void on_btnToggleAutonomous_clicked();
-
-  void on_btnSaveMaze_clicked();
-
-  void on_btnLoadMaze_clicked();
-
   void on_btnSyncMaze_clicked();
 
   void on_btnSetSupervisorInitialPose_clicked();
@@ -193,8 +187,6 @@ private slots:
   // Matrices de Mapas Duales
   uint8_t real_maze_map[MAZE_WIDTH][MAZE_HEIGHT]; // El Universo (15x15)
   uint8_t sim_maze_map[MAZE_WIDTH][MAZE_HEIGHT];  // La memoria del Robot
-  // Motor de Autonomía
-  QTimer *autonomousTimer;
   // Coordenadas
   uint8_t current_x;
   uint8_t current_y;

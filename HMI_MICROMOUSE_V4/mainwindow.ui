@@ -3385,29 +3385,6 @@ QPushButton:checked {
                 </widget>
                </item>
                <item>
-                <widget class="QGroupBox" name="groupBox_13">
-                 <property name="title">
-                  <string>Guardar/cargar mapa</string>
-                 </property>
-                 <layout class="QHBoxLayout" name="horizontalLayout_27">
-                  <item>
-                   <widget class="QPushButton" name="btnSaveMaze">
-                    <property name="text">
-                     <string>Guardar</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item>
-                   <widget class="QPushButton" name="btnLoadMaze">
-                    <property name="text">
-                     <string>Cargar</string>
-                    </property>
-                   </widget>
-                  </item>
-                 </layout>
-                </widget>
-               </item>
-               <item>
                 <widget class="QGroupBox" name="groupBox_7">
                  <property name="title">
                   <string>Casillas especiales</string>
@@ -3449,43 +3426,6 @@ QPushButton:checked {
                    </layout>
                   </item>
                  </layout>
-                </widget>
-               </item>
-              </layout>
-             </widget>
-            </item>
-            <item>
-             <widget class="QGroupBox" name="groupBox_12">
-              <property name="title">
-               <string>Simulación</string>
-              </property>
-              <layout class="QVBoxLayout" name="verticalLayout_22">
-               <item>
-                <layout class="QHBoxLayout" name="horizontalLayout_28">
-                 <item>
-                  <widget class="QRadioButton" name="radioBtnRealView">
-                   <property name="text">
-                    <string>Múndo físico</string>
-                   </property>
-                   <property name="checked">
-                    <bool>true</bool>
-                   </property>
-                  </widget>
-                 </item>
-                 <item>
-                  <widget class="QRadioButton" name="radioBtnRobotView">
-                   <property name="text">
-                    <string>Memoria robot</string>
-                   </property>
-                  </widget>
-                 </item>
-                </layout>
-               </item>
-               <item>
-                <widget class="QPushButton" name="btnToggleAutonomous">
-                 <property name="text">
-                  <string>Iniciar simulación</string>
-                 </property>
                 </widget>
                </item>
               </layout>
