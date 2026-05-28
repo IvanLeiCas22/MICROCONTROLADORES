@@ -6,7 +6,11 @@
 #include <QFormLayout>
 #include <QGraphicsLineItem>
 #include <QGraphicsRectItem>
+#include <QGroupBox>
 #include <QIntValidator>
+#include <QLabel>
+#include <QPushButton>
+#include <QVBoxLayout>
 #include <QLabel>
 #include <QMessageBox>
 #include <QMetaEnum>
@@ -36,6 +40,7 @@ constexpr int PRIM_TEST_STATUS_SIZE = 26;
 constexpr int PRIM_TEST_CONFIG_SIZE = 16;
 constexpr quint8 SUPERVISOR_RUN_MODE_FIND_CELLS = 0x01;
 constexpr quint8 SUPERVISOR_RUN_MODE_GO_A_TO_B = 0x02;
+constexpr int SUPERVISOR_DEBUG_STATUS_SIZE = 9;
 
 quint8 supervisorHeadingForComboIndex(int index) {
   switch (index) {
@@ -68,6 +73,88 @@ int comboIndexForSupervisorHeading(quint8 heading) {
 quint8 supervisorRunModeForComboIndex(int index) {
   return (index == 1) ? SUPERVISOR_RUN_MODE_GO_A_TO_B
                       : SUPERVISOR_RUN_MODE_FIND_CELLS;
+}
+
+QString supervisorStateToText(quint8 state) {
+    switch (state) {
+    case 0:
+        return "IDLE";
+    case 1:
+        return "START_INITIAL_ADVANCE";
+    case 2:
+        return "RUN_INITIAL_ADVANCE";
+    case 3:
+        return "DECIDE";
+    case 4:
+        return "RUN_ADVANCE";
+    case 5:
+        return "RUN_APPROACH_FRONT_WALL";
+    case 6:
+        return "RUN_SMOOTH_LEFT";
+    case 7:
+        return "RUN_SMOOTH_RIGHT";
+    case 8:
+        return "RUN_PIVOT_180";
+    case 9:
+        return "ERROR";
+    default:
+        return QString("UNKNOWN(%1)").arg(state);
+    }
+}
+
+QString supervisorActionToText(quint8 action) {
+    switch (action) {
+    case 0:
+        return "NONE";
+    case 1:
+        return "INITIAL_ADVANCE";
+    case 2:
+        return "ADVANCE";
+    case 3:
+        return "APPROACH_FRONT_WALL";
+    case 4:
+        return "SMOOTH_LEFT";
+    case 5:
+        return "SMOOTH_RIGHT";
+    case 6:
+        return "PIVOT_180";
+    default:
+        return QString("UNKNOWN(%1)").arg(action);
+    }
+}
+
+QString supervisorResultToText(quint8 result) {
+    switch (result) {
+    case 0:
+        return "OK";
+    case 1:
+        return "INVALID_ARGUMENT";
+    case 2:
+        return "START_FAILED";
+    case 3:
+        return "PRIMITIVE_ERROR";
+    case 4:
+        return "UNSUPPORTED_ACTION";
+    case 5:
+        return "FIND_CELLS_COMPLETE";
+    default:
+        return QString("UNKNOWN(%1)").arg(result);
+    }
+}
+
+QString mazeHeadingToText(quint8 heading) {
+    switch (heading) {
+    case HEADING_NORTH:
+        return "Norte";
+    case HEADING_EAST:
+        return "Este";
+    case HEADING_SOUTH:
+        return "Sur";
+    case HEADING_WEST:
+        return "Oeste";
+    default:
+        return QString("Unknown(%1)").arg(heading);
+    }
 }
 
 void setDetectionLabel(QLabel *label, bool active) {
@@ -134,6 +221,7 @@ MainWindow::MainWindow(QWidget *parent)
   setupConfigPage();
   setupPrimitiveTestPage();
   setupActivitiesTab();
+  setupSupervisorDebugPanel();
 
   QIntValidator *turnAngleValidator = new QIntValidator(-360, 360, this);
   ui->editTurnAngle->setValidator(turnAngleValidator);
@@ -186,7 +274,8 @@ void MainWindow::on_navigationButtonClicked(QAbstractButton *button) {
     requestPrimitiveTestConfig();
     requestPrimitiveTestStatus();
   } else if (pageIndex == 5) {
-    requestSupervisorInitialPose();
+      requestSupervisorInitialPose();
+      requestSupervisorDebugStatus();
   }
 
   // El QButtonGroup ya se encarga de que solo un botón esté checked si
@@ -461,6 +550,10 @@ void MainWindow::onPacketReceived(quint8 command, const QByteArray &payload) {
     updateSupervisorInitialPoseUI(payload);
     break;
   }
+  case Unerbus::CommandId::CMD_GET_SUPERVISOR_DEBUG_STATUS: {
+      updateSupervisorDebugStatusUI(payload);
+      break;
+  }
   case Unerbus::CommandId::CMD_GET_BRAKING_MAX_SPEED: {
     updateBrakingMaxSpeedUI(payload);
     break;
@@ -582,6 +675,9 @@ void MainWindow::populateCMDComboBox() {
   ui->CMDComboBox->addItem(
       "GET_NAV_DEBUG_STATUS (0x94)",
       static_cast<quint8>(Unerbus::CommandId::CMD_GET_NAV_DEBUG_STATUS));
+  ui->CMDComboBox->addItem(
+      "GET_SUPERVISOR_DEBUG_STATUS (0x9C)",
+      static_cast<quint8>(Unerbus::CommandId::CMD_GET_SUPERVISOR_DEBUG_STATUS));
 }
 
 void MainWindow::on_btnSendCMD_clicked() {
@@ -2175,6 +2271,52 @@ void MainWindow::on_btnSyncMaze_clicked()
     requestMazeColumn(0); // Iniciamos el efecto dominó pidiendo la columna 0
 }
 
+void MainWindow::setupSupervisorDebugPanel() {
+    QGroupBox *group = new QGroupBox("Estado supervisor", ui->manualControls);
+    QFormLayout *layout = new QFormLayout(group);
+
+    auto createValueLabel = [group]() {
+        QLabel *label = new QLabel("-", group);
+        label->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        label->setMinimumWidth(120);
+        return label;
+    };
+
+    lblSupervisorActive = createValueLabel();
+    lblSupervisorState = createValueLabel();
+    lblSupervisorAction = createValueLabel();
+    lblSupervisorResult = createValueLabel();
+    lblSupervisorPose = createValueLabel();
+    lblSupervisorCell = createValueLabel();
+    lblSupervisorSpecials = createValueLabel();
+
+    layout->addRow("Activo:", lblSupervisorActive);
+    layout->addRow("Estado:", lblSupervisorState);
+    layout->addRow("Acción:", lblSupervisorAction);
+    layout->addRow("Resultado:", lblSupervisorResult);
+    layout->addRow("Pose:", lblSupervisorPose);
+    layout->addRow("Celda:", lblSupervisorCell);
+    layout->addRow("Especiales:", lblSupervisorSpecials);
+
+    QPushButton *btnRefreshSupervisor = new QPushButton("Actualizar estado", group);
+    layout->addRow(btnRefreshSupervisor);
+
+    connect(btnRefreshSupervisor, &QPushButton::clicked, this,
+            &MainWindow::requestSupervisorDebugStatus);
+
+    QVBoxLayout *panelLayout =
+        qobject_cast<QVBoxLayout *>(ui->manualControls->layout());
+
+    if (panelLayout != nullptr) {
+        const int rotateIndex = panelLayout->indexOf(ui->groupBox_11);
+        if (rotateIndex >= 0) {
+            panelLayout->insertWidget(rotateIndex, group);
+        } else {
+            panelLayout->addWidget(group);
+        }
+    }
+}
+
 void MainWindow::requestMazeColumn(quint8 col) {
     QByteArray payload;
     QDataStream stream(&payload, QIODevice::WriteOnly);
@@ -2202,6 +2344,10 @@ void MainWindow::requestSupervisorInitialPose() {
     sendUnerbusCommand(Unerbus::CommandId::CMD_GET_SUPERVISOR_INITIAL_POSE);
 }
 
+void MainWindow::requestSupervisorDebugStatus() {
+    sendUnerbusCommand(Unerbus::CommandId::CMD_GET_SUPERVISOR_DEBUG_STATUS);
+}
+
 void MainWindow::updateSupervisorInitialPoseUI(const QByteArray &payload) {
     if (payload.size() < 3)
         return;
@@ -2225,6 +2371,49 @@ void MainWindow::updateSupervisorInitialPoseUI(const QByteArray &payload) {
         comboIndexForSupervisorHeading(heading));
 }
 
+void MainWindow::updateSupervisorDebugStatusUI(const QByteArray &payload) {
+    if (payload.size() < SUPERVISOR_DEBUG_STATUS_SIZE) {
+        return;
+    }
+
+    QDataStream stream(payload);
+    stream.setByteOrder(QDataStream::LittleEndian);
+
+    quint8 state;
+    quint8 action;
+    quint8 active;
+    quint8 result;
+    quint8 maze_x;
+    quint8 maze_y;
+    quint8 maze_heading;
+    quint8 maze_cell;
+    quint8 special_found_count;
+
+    stream >> state >> action >> active >> result
+        >> maze_x >> maze_y >> maze_heading >> maze_cell
+        >> special_found_count;
+
+    if (lblSupervisorActive == nullptr) {
+        return;
+    }
+
+    lblSupervisorActive->setText(active ? "Sí" : "No");
+    lblSupervisorState->setText(
+        QString("%1 (%2)").arg(supervisorStateToText(state)).arg(state));
+    lblSupervisorAction->setText(
+        QString("%1 (%2)").arg(supervisorActionToText(action)).arg(action));
+    lblSupervisorResult->setText(
+        QString("%1 (%2)").arg(supervisorResultToText(result)).arg(result));
+    lblSupervisorPose->setText(
+        QString("(%1, %2), %3")
+            .arg(maze_x)
+            .arg(maze_y)
+            .arg(mazeHeadingToText(maze_heading)));
+    lblSupervisorCell->setText(
+        QString("0x%1").arg(maze_cell, 2, 16, QChar('0')).toUpper());
+    lblSupervisorSpecials->setText(QString("%1/3").arg(special_found_count));
+}
+
 void MainWindow::on_btnSetSupervisorInitialPose_clicked() {
     sendSupervisorInitialPose();
 }
@@ -2241,10 +2430,12 @@ void MainWindow::on_btnStartSupervisorRun_clicked() {
     stream << supervisorRunModeForComboIndex(
         ui->comboSupervisorRunMode->currentIndex());
     sendUnerbusCommand(Unerbus::CommandId::CMD_START_SUPERVISOR_RUN, payload);
+    requestSupervisorDebugStatus();
 }
 
 void MainWindow::on_btnStopSupervisorRun_clicked() {
     sendUnerbusCommand(Unerbus::CommandId::CMD_STOP_SUPERVISOR_RUN);
+    requestSupervisorDebugStatus();
 }
 
 void MainWindow::setupPrimitiveTestPage()

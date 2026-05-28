@@ -158,6 +158,13 @@ private slots:
   QLabel *lblPrimTestLeftPwm = nullptr;
   QLabel *lblPrimTestRightPwm = nullptr;
   QLabel *lblPrimTestResult = nullptr;
+  QLabel *lblSupervisorActive = nullptr;
+  QLabel *lblSupervisorState = nullptr;
+  QLabel *lblSupervisorAction = nullptr;
+  QLabel *lblSupervisorResult = nullptr;
+  QLabel *lblSupervisorPose = nullptr;
+  QLabel *lblSupervisorCell = nullptr;
+  QLabel *lblSupervisorSpecials = nullptr;
 
   quint16 m_pwmPeriod = 1000; // Almacena el período máximo de PWM para escalar
                               // los valores de la UI.
@@ -200,6 +207,9 @@ private slots:
   // Función que hará toda la magia de iluminar las paredes
   void drawMaze();
   void requestMazeColumn(quint8 col);
+  void setupSupervisorDebugPanel();
+  void requestSupervisorDebugStatus();
+  void updateSupervisorDebugStatusUI(const QByteArray &payload);
 
   // --- Funciones dispatch comunicaciones ---
   void setupConfigPage();
