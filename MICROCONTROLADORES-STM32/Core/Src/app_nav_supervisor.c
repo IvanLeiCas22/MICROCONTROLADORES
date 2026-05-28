@@ -1,5 +1,6 @@
 #include "app_nav_supervisor.h"
 
+#include "app_find_cells_policy.h"
 #include "app_maze.h"
 #include "app_nav.h"
 
@@ -398,12 +399,29 @@ static bool App_NavSupervisor_StartRecommendedAction(AppNavRecommendedAction act
 static AppNavSupervisorState App_NavSupervisor_HandleDecide(const AppNavInput *input)
 {
     AppNavRecommendedAction recommended_action = APP_NAV_ACTION_NONE;
+    AppFindCellsDecision find_cells_decision = {0};
 
     App_NavSupervisor_MapCurrentCellFromInput(input);
 
-    if (!App_Nav_RecommendAction(0U, &recommended_action))
+    /*
+     * Production FIND_CELLS policy, stage 1:
+     * prefer immediate unvisited neighbors using the logical map.
+     *
+     * If it has no concrete action yet, keep the previous local policy as
+     * fallback. This avoids shadow/debug code while preserving safe behavior
+     * for cases not covered by the new policy yet.
+     */
+    if (App_FindCellsPolicy_Evaluate(&find_cells_decision) &&
+        (find_cells_decision.action != APP_NAV_ACTION_NONE))
     {
-        return App_NavSupervisor_SetError(APP_NAV_SUPERVISOR_RESULT_UNSUPPORTED_ACTION);
+        recommended_action = find_cells_decision.action;
+    }
+    else
+    {
+        if (!App_Nav_RecommendAction(0U, &recommended_action))
+        {
+            return App_NavSupervisor_SetError(APP_NAV_SUPERVISOR_RESULT_UNSUPPORTED_ACTION);
+        }
     }
 
     if (!App_NavSupervisor_StartRecommendedAction(recommended_action, input))
