@@ -78,6 +78,42 @@ bool App_Maze_IsCurrentCellSpecial(void);
 uint8_t App_Maze_GetCurrentCellData(void);
 
 /* -------------------------------------------------------------------------- */
+/* Read-only map query API for planning                                        */
+/* -------------------------------------------------------------------------- */
+
+bool App_Maze_GetRobotPose(uint8_t *x,
+                           uint8_t *y,
+                           HeadingTypeDef *heading);
+
+bool App_Maze_GetCellData(uint8_t x,
+                          uint8_t y,
+                          uint8_t *cell_out);
+
+bool App_Maze_IsCellVisited(uint8_t x,
+                            uint8_t y);
+
+bool App_Maze_IsCellSpecial(uint8_t x,
+                            uint8_t y);
+
+bool App_Maze_IsEdgeKnown(uint8_t x,
+                          uint8_t y,
+                          HeadingTypeDef dir);
+
+bool App_Maze_CellHasWall(uint8_t x,
+                          uint8_t y,
+                          HeadingTypeDef dir);
+
+bool App_Maze_IsKnownOpenEdge(uint8_t x,
+                              uint8_t y,
+                              HeadingTypeDef dir);
+
+bool App_Maze_GetNeighbor(uint8_t x,
+                          uint8_t y,
+                          HeadingTypeDef dir,
+                          uint8_t *neighbor_x,
+                          uint8_t *neighbor_y);
+
+/* -------------------------------------------------------------------------- */
 /* STM32/Qt synchronization payloads                                           */
 /* -------------------------------------------------------------------------- */
 

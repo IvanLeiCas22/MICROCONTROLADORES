@@ -55,6 +55,18 @@ typedef enum
 #define CELL_VISITED 0x10
 #define CELL_SPECIAL 0x20
 
+/*
+ * Known-edge bit layout.
+ *
+ * These bits are used in a separate internal map, not in the STM32/Qt
+ * synchronized cell byte. They indicate that a direction was observed,
+ * regardless of whether a wall was present or the edge was open.
+ */
+#define EDGE_KNOWN_NORTH 0x01
+#define EDGE_KNOWN_SOUTH 0x02
+#define EDGE_KNOWN_EAST 0x04
+#define EDGE_KNOWN_WEST 0x08
+
 #define MAZE_WIDTH 15
 #define MAZE_HEIGHT 15
 
