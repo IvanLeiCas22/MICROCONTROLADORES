@@ -38,10 +38,10 @@ typedef enum
  *
  * Each maze cell is stored as one uint8_t:
  *
- * bit 0: north wall known/present
- * bit 1: south wall known/present
- * bit 2: east wall known/present
- * bit 3: west wall known/present
+ * bit 0: north wall present
+ * bit 1: south wall present
+ * bit 2: east wall present
+ * bit 3: west wall present
  * bit 4: visited cell
  * bit 5: detected special cell
  *
