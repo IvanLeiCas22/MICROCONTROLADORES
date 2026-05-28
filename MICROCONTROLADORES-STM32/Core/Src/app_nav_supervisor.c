@@ -190,7 +190,8 @@ static AppNavSupervisorState App_NavSupervisor_SetError(uint8_t result)
 /* FIND_CELLS completion and special-cell detection                            */
 /* -------------------------------------------------------------------------- */
 
-static AppNavSupervisorState App_NavSupervisor_FinishFindCells(AppNavOutput *output)
+static AppNavSupervisorState App_NavSupervisor_FinishFindCellsWithResult(AppNavOutput *output,
+                                                                         uint8_t result)
 {
     App_NavSupervisor_ClearOutput(output);
     App_NavSupervisor_StopActions();
@@ -202,9 +203,16 @@ static AppNavSupervisorState App_NavSupervisor_FinishFindCells(AppNavOutput *out
     App_NavSupervisor_UpdateMazeDebug();
     App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_IDLE,
                                APP_NAV_SUPERVISOR_ACTION_NONE,
-                               APP_NAV_SUPERVISOR_RESULT_FIND_CELLS_COMPLETE);
+                               result);
 
     return app_nav_supervisor_debug.state;
+}
+
+static AppNavSupervisorState App_NavSupervisor_FinishFindCells(AppNavOutput *output)
+{
+    return App_NavSupervisor_FinishFindCellsWithResult(
+        output,
+        APP_NAV_SUPERVISOR_RESULT_FIND_CELLS_COMPLETE);
 }
 
 static bool App_NavSupervisor_CheckSpecialAtConfirmedCellEntry(const AppNavInput *input)
@@ -396,7 +404,8 @@ static bool App_NavSupervisor_StartRecommendedAction(AppNavRecommendedAction act
 /* Supervisor state handlers                                                   */
 /* -------------------------------------------------------------------------- */
 
-static AppNavSupervisorState App_NavSupervisor_HandleDecide(const AppNavInput *input)
+static AppNavSupervisorState App_NavSupervisor_HandleDecide(const AppNavInput *input,
+                                                            AppNavOutput *output)
 {
     AppNavRecommendedAction recommended_action = APP_NAV_ACTION_NONE;
     AppFindCellsDecision find_cells_decision = {0};
@@ -404,17 +413,23 @@ static AppNavSupervisorState App_NavSupervisor_HandleDecide(const AppNavInput *i
     App_NavSupervisor_MapCurrentCellFromInput(input);
 
     /*
-     * Production FIND_CELLS policy, stage 1:
-     * prefer immediate unvisited neighbors using the logical map.
-     *
-     * If it has no concrete action yet, keep the previous local policy as
-     * fallback. This avoids shadow/debug code while preserving safe behavior
-     * for cases not covered by the new policy yet.
+     * Production FIND_CELLS policy:
+     * - execute concrete actions returned by app_find_cells_policy;
+     * - if exploration has no remaining frontier, finish the mission as
+     *   incomplete instead of falling back to the old local policy;
+     * - keep the old local policy as fallback for transitional cases such as
+     *   BACKTRACK_REQUIRED until CENTER_BY_FRONT_TAPE_FOR_PIVOT exists.
      */
     if (App_FindCellsPolicy_Evaluate(&find_cells_decision) &&
         (find_cells_decision.action != APP_NAV_ACTION_NONE))
     {
         recommended_action = find_cells_decision.action;
+    }
+    else if (find_cells_decision.reason == APP_FIND_CELLS_DECISION_REASON_NO_FRONTIER)
+    {
+        return App_NavSupervisor_FinishFindCellsWithResult(
+            output,
+            APP_NAV_SUPERVISOR_RESULT_FIND_CELLS_INCOMPLETE_NO_FRONTIER);
     }
     else
     {
@@ -850,7 +865,7 @@ AppNavSupervisorState App_NavSupervisor_Tick(const AppNavInput *input,
         return App_NavSupervisor_HandleInitialAdvance(input, output);
 
     case APP_NAV_SUPERVISOR_DECIDE:
-        return App_NavSupervisor_HandleDecide(input);
+    	return App_NavSupervisor_HandleDecide(input, output);
 
     case APP_NAV_SUPERVISOR_RUN_ADVANCE:
         return App_NavSupervisor_HandleAdvance(input, output);

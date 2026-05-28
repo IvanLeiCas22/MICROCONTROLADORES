@@ -137,6 +137,8 @@ QString supervisorResultToText(quint8 result) {
         return "UNSUPPORTED_ACTION";
     case 5:
         return "FIND_CELLS_COMPLETE";
+    case 6:
+        return "FIND_CELLS_INCOMPLETE_NO_FRONTIER";
     default:
         return QString("UNKNOWN(%1)").arg(result);
     }
