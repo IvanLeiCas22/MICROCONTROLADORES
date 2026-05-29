@@ -109,6 +109,10 @@ private slots:
 
   void on_btnGetSupervisorInitialPose_clicked();
 
+  void on_btnSetSupervisorGoalCell_clicked();
+
+  void on_btnGetSupervisorGoalCell_clicked();
+
   void on_btnStartSupervisorRun_clicked();
 
   void on_btnStopSupervisorRun_clicked();
@@ -242,6 +246,9 @@ private slots:
   void sendSupervisorInitialPose();
   void requestSupervisorInitialPose();
   void updateSupervisorInitialPoseUI(const QByteArray &payload);
+  void sendSupervisorGoalCell();
+  void requestSupervisorGoalCell();
+  void updateSupervisorGoalCellUI(const QByteArray &payload);
   void setupPrimitiveTestPage();
   void requestPrimitiveTestStatus();
   void requestPrimitiveTestConfig();

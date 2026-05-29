@@ -3237,6 +3237,78 @@ QPushButton:checked {
                 </widget>
                </item>
                <item>
+                <widget class="QGroupBox" name="groupSupervisorGoalCell">
+                 <property name="title">
+                  <string>Destino B para Ir A-&gt;B</string>
+                 </property>
+                 <layout class="QVBoxLayout" name="verticalLayoutSupervisorGoalCell">
+                  <item>
+                   <layout class="QFormLayout" name="formLayoutSupervisorGoalCell">
+                    <item row="0" column="0">
+                     <widget class="QLabel" name="labelGoalCellX">
+                      <property name="text">
+                       <string>Celda B X:</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item row="0" column="1">
+                     <widget class="QSpinBox" name="spinGoalCellX">
+                      <property name="maximum">
+                       <number>14</number>
+                      </property>
+                      <property name="value">
+                       <number>7</number>
+                      </property>
+                     </widget>
+                    </item>
+                    <item row="1" column="0">
+                     <widget class="QLabel" name="labelGoalCellY">
+                      <property name="text">
+                       <string>Celda B Y:</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item row="1" column="1">
+                     <widget class="QSpinBox" name="spinGoalCellY">
+                      <property name="maximum">
+                       <number>14</number>
+                      </property>
+                      <property name="value">
+                       <number>7</number>
+                      </property>
+                     </widget>
+                    </item>
+                   </layout>
+                  </item>
+                  <item>
+                   <layout class="QHBoxLayout" name="horizontalLayoutSupervisorGoalCell">
+                    <item>
+                     <widget class="QPushButton" name="btnSetSupervisorGoalCell">
+                      <property name="text">
+                       <string>Enviar destino B</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QPushButton" name="btnGetSupervisorGoalCell">
+                      <property name="text">
+                       <string>Obtener destino B</string>
+                      </property>
+                     </widget>
+                    </item>
+                   </layout>
+                  </item>
+                  <item>
+                   <widget class="QLabel" name="labelSupervisorGoalStatus">
+                    <property name="text">
+                     <string>Destino no configurado</string>
+                    </property>
+                   </widget>
+                  </item>
+                 </layout>
+                </widget>
+               </item>
+               <item>
                 <widget class="QGroupBox" name="groupSupervisorRun">
                  <property name="title">
                   <string>Run del laberinto</string>

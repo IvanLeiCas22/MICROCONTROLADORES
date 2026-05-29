@@ -1219,6 +1219,29 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
         length = UNERBUS_CMD_ID_SIZE + UNERBUS_SUPERVISOR_INITIAL_POSE_SIZE;
         break;
     }
+    case CMD_SET_SUPERVISOR_GOAL_CELL:
+    {
+        uint8_t requested_x = UNERBUS_GetUInt8(aBus);
+        uint8_t requested_y = UNERBUS_GetUInt8(aBus);
+
+        (void)App_NavSupervisor_SetGoalCell(requested_x, requested_y);
+        break;
+    }
+    case CMD_GET_SUPERVISOR_GOAL_CELL:
+    {
+        uint8_t supervisor_goal_buffer[UNERBUS_SUPERVISOR_GOAL_CELL_SIZE];
+        uint8_t goal_x = 0U;
+        uint8_t goal_y = 0U;
+        bool goal_valid = false;
+
+        (void)App_NavSupervisor_GetGoalCell(&goal_x, &goal_y, &goal_valid);
+        supervisor_goal_buffer[0] = goal_x;
+        supervisor_goal_buffer[1] = goal_y;
+        supervisor_goal_buffer[2] = goal_valid ? 1U : 0U;
+        UNERBUS_Write(aBus, supervisor_goal_buffer, UNERBUS_SUPERVISOR_GOAL_CELL_SIZE);
+        length = UNERBUS_CMD_ID_SIZE + UNERBUS_SUPERVISOR_GOAL_CELL_SIZE;
+        break;
+    }
     case CMD_GET_SUPERVISOR_DEBUG_STATUS:
     {
         uint8_t supervisor_debug_buffer[UNERBUS_SUPERVISOR_DEBUG_STATUS_SIZE];

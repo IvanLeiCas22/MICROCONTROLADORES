@@ -20,6 +20,9 @@
 #define APP_NAV_SUPERVISOR_RESULT_UNSUPPORTED_ACTION 4U
 #define APP_NAV_SUPERVISOR_RESULT_FIND_CELLS_COMPLETE 5U
 #define APP_NAV_SUPERVISOR_RESULT_FIND_CELLS_INCOMPLETE_NO_FRONTIER 6U
+#define APP_NAV_SUPERVISOR_RESULT_GO_TO_B_COMPLETE 7U
+#define APP_NAV_SUPERVISOR_RESULT_GO_TO_B_INVALID_TARGET 8U
+#define APP_NAV_SUPERVISOR_RESULT_GO_TO_B_NO_PATH 9U
 
 /*
  * Mission-level supervisor state.
@@ -89,8 +92,9 @@ typedef enum
  * when three unique CELL_SPECIAL cells have been detected, or as incomplete
  * when no reachable frontier remains.
  *
- * GO_A_TO_B is reserved and must remain safe: starting it should fail / not
- * move the robot until the mission is implemented.
+ * GO_A_TO_B is reserved for target-cell navigation. Its destination can be
+ * configured independently, but starting the mission must remain safe until the
+ * navigation policy is implemented.
  */
 
 typedef enum
@@ -142,6 +146,8 @@ bool App_NavSupervisor_SetInitialPose(uint8_t x,
 bool App_NavSupervisor_ResetWithInitialPose(uint8_t x,
                                             uint8_t y,
                                             HeadingTypeDef heading);
+bool App_NavSupervisor_SetGoalCell(uint8_t x, uint8_t y);
+bool App_NavSupervisor_GetGoalCell(uint8_t *x, uint8_t *y, bool *valid);
 bool App_NavSupervisor_SetMission(AppNavSupervisorMission mission);
 AppNavSupervisorMission App_NavSupervisor_GetMission(void);
 bool App_NavSupervisor_Start(void);

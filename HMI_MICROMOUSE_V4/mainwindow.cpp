@@ -41,6 +41,7 @@ constexpr int PRIM_TEST_CONFIG_SIZE = 16;
 constexpr quint8 SUPERVISOR_RUN_MODE_FIND_CELLS = 0x01;
 constexpr quint8 SUPERVISOR_RUN_MODE_GO_A_TO_B = 0x02;
 constexpr int SUPERVISOR_DEBUG_STATUS_SIZE = 9;
+constexpr int SUPERVISOR_GOAL_CELL_SIZE = 3;
 
 quint8 supervisorHeadingForComboIndex(int index) {
   switch (index) {
@@ -143,6 +144,12 @@ QString supervisorResultToText(quint8 result) {
         return "FIND_CELLS_COMPLETE";
     case 6:
         return "FIND_CELLS_INCOMPLETE_NO_FRONTIER";
+    case 7:
+        return "GO_TO_B_COMPLETE";
+    case 8:
+        return "GO_TO_B_INVALID_TARGET";
+    case 9:
+        return "GO_TO_B_NO_PATH";
     default:
         return QString("UNKNOWN(%1)").arg(result);
     }
@@ -281,6 +288,7 @@ void MainWindow::on_navigationButtonClicked(QAbstractButton *button) {
     requestPrimitiveTestStatus();
   } else if (pageIndex == 5) {
       requestSupervisorInitialPose();
+      requestSupervisorGoalCell();
       requestSupervisorDebugStatus();
   }
 
@@ -554,6 +562,10 @@ void MainWindow::onPacketReceived(quint8 command, const QByteArray &payload) {
   }
   case Unerbus::CommandId::CMD_GET_SUPERVISOR_INITIAL_POSE: {
     updateSupervisorInitialPoseUI(payload);
+    break;
+  }
+  case Unerbus::CommandId::CMD_GET_SUPERVISOR_GOAL_CELL: {
+    updateSupervisorGoalCellUI(payload);
     break;
   }
   case Unerbus::CommandId::CMD_GET_SUPERVISOR_DEBUG_STATUS: {
@@ -2354,6 +2366,23 @@ void MainWindow::requestSupervisorDebugStatus() {
     sendUnerbusCommand(Unerbus::CommandId::CMD_GET_SUPERVISOR_DEBUG_STATUS);
 }
 
+void MainWindow::sendSupervisorGoalCell() {
+    QByteArray payload;
+    QDataStream stream(&payload, QIODevice::WriteOnly);
+    stream.setByteOrder(QDataStream::LittleEndian);
+
+    const quint8 x = static_cast<quint8>(ui->spinGoalCellX->value());
+    const quint8 y = static_cast<quint8>(ui->spinGoalCellY->value());
+
+    stream << x << y;
+    sendUnerbusCommand(Unerbus::CommandId::CMD_SET_SUPERVISOR_GOAL_CELL,
+                       payload);
+}
+
+void MainWindow::requestSupervisorGoalCell() {
+    sendUnerbusCommand(Unerbus::CommandId::CMD_GET_SUPERVISOR_GOAL_CELL);
+}
+
 void MainWindow::updateSupervisorInitialPoseUI(const QByteArray &payload) {
     if (payload.size() < 3)
         return;
@@ -2375,6 +2404,28 @@ void MainWindow::updateSupervisorInitialPoseUI(const QByteArray &payload) {
     ui->spinInitialCellY->setValue(static_cast<int>(y));
     ui->comboInitialHeading->setCurrentIndex(
         comboIndexForSupervisorHeading(heading));
+}
+
+void MainWindow::updateSupervisorGoalCellUI(const QByteArray &payload) {
+    if (payload.size() < SUPERVISOR_GOAL_CELL_SIZE) {
+        return;
+    }
+
+    QDataStream stream(payload);
+    stream.setByteOrder(QDataStream::LittleEndian);
+
+    quint8 x;
+    quint8 y;
+    quint8 valid;
+    stream >> x >> y >> valid;
+
+    if ((x < MAZE_WIDTH) && (y < MAZE_HEIGHT)) {
+        ui->spinGoalCellX->setValue(static_cast<int>(x));
+        ui->spinGoalCellY->setValue(static_cast<int>(y));
+    }
+
+    ui->labelSupervisorGoalStatus->setText(valid ? "Destino válido"
+                                                 : "Destino no configurado");
 }
 
 void MainWindow::updateSupervisorDebugStatusUI(const QByteArray &payload) {
@@ -2428,10 +2479,23 @@ void MainWindow::on_btnGetSupervisorInitialPose_clicked() {
     requestSupervisorInitialPose();
 }
 
+void MainWindow::on_btnSetSupervisorGoalCell_clicked() {
+    sendSupervisorGoalCell();
+    requestSupervisorGoalCell();
+}
+
+void MainWindow::on_btnGetSupervisorGoalCell_clicked() {
+    requestSupervisorGoalCell();
+}
+
 void MainWindow::on_btnStartSupervisorRun_clicked() {
     QByteArray payload;
     QDataStream stream(&payload, QIODevice::WriteOnly);
     stream.setByteOrder(QDataStream::LittleEndian);
+
+    if (ui->comboSupervisorRunMode->currentIndex() == 1) {
+        sendSupervisorGoalCell();
+    }
 
     stream << supervisorRunModeForComboIndex(
         ui->comboSupervisorRunMode->currentIndex());

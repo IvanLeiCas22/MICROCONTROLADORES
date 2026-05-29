@@ -88,6 +88,8 @@ namespace Unerbus
         CMD_START_SUPERVISOR_RUN = 0x9A,
         CMD_STOP_SUPERVISOR_RUN = 0x9B,
         CMD_GET_SUPERVISOR_DEBUG_STATUS = 0x9C,
+        CMD_SET_SUPERVISOR_GOAL_CELL = 0x9D,
+        CMD_GET_SUPERVISOR_GOAL_CELL = 0x9E,
         CMD_OTHERS
     };
     Q_ENUM_NS(CommandId)

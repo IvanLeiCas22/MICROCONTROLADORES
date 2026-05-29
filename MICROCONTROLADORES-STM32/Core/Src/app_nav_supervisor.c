@@ -39,6 +39,9 @@ static uint8_t app_nav_supervisor_initial_x;
 static uint8_t app_nav_supervisor_initial_y;
 static HeadingTypeDef app_nav_supervisor_initial_heading;
 static uint8_t app_nav_supervisor_initial_pose_valid;
+static uint8_t app_nav_supervisor_goal_x;
+static uint8_t app_nav_supervisor_goal_y;
+static uint8_t app_nav_supervisor_goal_valid;
 static AppNavSupervisorMission app_nav_supervisor_mission =
     APP_NAV_SUPERVISOR_MISSION_FIND_CELLS;
 
@@ -77,6 +80,11 @@ static void App_NavSupervisor_SetDefaultInitialPose(void)
     app_nav_supervisor_initial_y = APP_MAZE_DEFAULT_START_Y;
     app_nav_supervisor_initial_heading = APP_MAZE_DEFAULT_START_HEADING;
     app_nav_supervisor_initial_pose_valid = 1U;
+}
+
+static bool App_NavSupervisor_IsValidCell(uint8_t x, uint8_t y)
+{
+    return ((x < MAZE_WIDTH) && (y < MAZE_HEIGHT));
 }
 
 static void App_NavSupervisor_ClearActionYawReference(void)
@@ -829,6 +837,9 @@ static AppNavSupervisorState App_NavSupervisor_HandlePivot(const AppNavInput *in
 void App_NavSupervisor_Init(void)
 {
     app_nav_supervisor_mission = APP_NAV_SUPERVISOR_MISSION_FIND_CELLS;
+    app_nav_supervisor_goal_x = 0U;
+    app_nav_supervisor_goal_y = 0U;
+    app_nav_supervisor_goal_valid = 0U;
     App_NavSupervisor_SetDefaultInitialPose();
     App_NavSupervisor_Reset();
 }
@@ -894,6 +905,36 @@ bool App_NavSupervisor_ResetWithInitialPose(uint8_t x,
     }
 
     App_NavSupervisor_Reset();
+    return true;
+}
+
+bool App_NavSupervisor_SetGoalCell(uint8_t x, uint8_t y)
+{
+    if (!App_NavSupervisor_IsValidCell(x, y))
+    {
+        app_nav_supervisor_goal_x = 0U;
+        app_nav_supervisor_goal_y = 0U;
+        app_nav_supervisor_goal_valid = 0U;
+        return false;
+    }
+
+    app_nav_supervisor_goal_x = x;
+    app_nav_supervisor_goal_y = y;
+    app_nav_supervisor_goal_valid = 1U;
+    return true;
+}
+
+bool App_NavSupervisor_GetGoalCell(uint8_t *x, uint8_t *y, bool *valid)
+{
+    if ((x == NULL) || (y == NULL) || (valid == NULL))
+    {
+        return false;
+    }
+
+    *x = app_nav_supervisor_goal_x;
+    *y = app_nav_supervisor_goal_y;
+    *valid = (app_nav_supervisor_goal_valid != 0U);
+
     return true;
 }
 
