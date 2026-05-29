@@ -17,7 +17,8 @@
  *
  * App_Nav_Tick() is retained as a perception/debug shell. The active robot
  * motion during FIND_CELLS is driven by the explicit primitive action APIs:
- * AdvanceAction, SmoothAction, PivotAction and ApproachFrontWallAction.
+ * AdvanceAction, SmoothAction, PivotAction, ApproachFrontWallAction and
+ * CenterByFrontTapeForPivotAction.
  */
 
 typedef enum
@@ -1829,7 +1830,7 @@ void App_Nav_StopApproachFrontWallAction(void)
 }
 
 /* -------------------------------------------------------------------------- */
-/* ApproachFrontWallAction: prepare in-cell 180 pivot in dead-end               */
+/* ApproachFrontWallAction: prepare in-cell 180 pivot using front wall          */
 /* -------------------------------------------------------------------------- */
 
 bool App_Nav_StartApproachFrontWallAction(void)

@@ -18,8 +18,8 @@
  * - if no immediate unvisited neighbor is available, route toward the nearest
  *   exploration frontier using flood fill implemented as multi-source BFS;
  * - if the best next step is behind the robot, report BACKTRACK_REQUIRED.
- *   The supervisor handles that reason by running the open-cell 180° pivot
- *   preparation sequence.
+ *   The supervisor handles that reason by selecting the correct 180° pivot
+ *   preparation method from the current front edge.
  *
  * Tie-break rule:
  * - front -> right -> left -> back.
@@ -51,11 +51,12 @@ typedef struct
  *
  * Returns false for supervisor-handled reasons such as BACKTRACK_REQUIRED and
  * NO_FRONTIER. The caller must inspect decision_out->reason before deciding
- * whether to use the local fallback.
+ * whether to finish the mission, start a route-backtracking pivot preparation,
+ * or use the local fallback.
  *
  * Important:
  * - BACKTRACK_REQUIRED must not be translated to APP_NAV_ACTION_GO_BACK.
- *   APP_NAV_ACTION_GO_BACK remains tied to the dead-end front-wall approach.
+ *   APP_NAV_ACTION_GO_BACK remains tied to the local dead-end recommendation.
  */
 bool App_FindCellsPolicy_Evaluate(AppFindCellsDecision *decision_out);
 

@@ -83,8 +83,11 @@ typedef enum
 /*
  * Supervisor mission selector.
  *
- * FIND_CELLS is the currently implemented mission. It explores with the local
- * policy and finishes when three unique CELL_SPECIAL cells have been detected.
+ * FIND_CELLS is the currently implemented mission. It explores the maze using
+ * app_find_cells_policy: immediate unvisited neighbors first, then flood
+ * fill/BFS toward the nearest exploration frontier. It finishes successfully
+ * when three unique CELL_SPECIAL cells have been detected, or as incomplete
+ * when no reachable frontier remains.
  *
  * GO_A_TO_B is reserved and must remain safe: starting it should fail / not
  * move the robot until the mission is implemented.
@@ -102,9 +105,11 @@ typedef struct
     AppNavSupervisorAction current_action;
 
     /*
-     * active != 0 means the supervisor is currently executing a mission.
-     * When FIND_CELLS completes normally, active becomes 0, state returns to
-     * IDLE, and last_result is APP_NAV_SUPERVISOR_RESULT_FIND_CELLS_COMPLETE.
+     * When FIND_CELLS finishes, active becomes 0 and state returns to IDLE.
+     * last_result indicates whether the mission completed successfully
+     * (APP_NAV_SUPERVISOR_RESULT_FIND_CELLS_COMPLETE), stopped as incomplete
+     * because no reachable frontier remains
+     * (APP_NAV_SUPERVISOR_RESULT_FIND_CELLS_INCOMPLETE_NO_FRONTIER), or failed.
      */
     uint8_t active;
 

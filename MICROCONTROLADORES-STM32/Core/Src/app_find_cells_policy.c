@@ -332,12 +332,13 @@ static bool App_FindCellsPolicy_SelectRouteStep(uint8_t x,
 
     if (candidates[best_candidate_index].action == APP_NAV_ACTION_NONE)
     {
-        /*
-         * The route exists, but the next step is behind the robot.
-         * Do not use APP_NAV_ACTION_GO_BACK here: the current GO_BACK path is
-         * reserved for dead-end front-wall approach. The supervisor handles
-         * BACKTRACK_REQUIRED with CENTER_BY_FRONT_TAPE_FOR_PIVOT.
-         */
+    	/*
+    	 * The route exists, but the next step is behind the robot.
+    	 * Do not use APP_NAV_ACTION_GO_BACK here: that action remains reserved for
+    	 * the local dead-end recommendation path. The supervisor handles
+    	 * BACKTRACK_REQUIRED by choosing the correct 180° pivot preparation method
+    	 * from the current front edge.
+    	 */
         decision_out->action = APP_NAV_ACTION_NONE;
         decision_out->reason = APP_FIND_CELLS_DECISION_REASON_BACKTRACK_REQUIRED;
         return false;
@@ -370,8 +371,9 @@ bool App_FindCellsPolicy_Evaluate(AppFindCellsDecision *decision_out)
      * First priority: immediately enter an unvisited neighbor if it is already
      * reachable from the current decision point.
      *
-     * Back is intentionally checked separately after the executable options,
-     * because open-cell backtracking still needs a dedicated primitive.
+     * Back is intentionally checked separately after the directly executable
+     * front/right/left options because it requires a 180° pivot preparation
+     * selected by the supervisor.
      */
     const AppFindCellsCandidate immediate_candidates[3] =
     {
@@ -402,9 +404,9 @@ bool App_FindCellsPolicy_Evaluate(AppFindCellsDecision *decision_out)
 
     /*
      * If there is no known-open exit in front/right/left, this is a local
-     * dead-end from the robot's current heading. Do not report
-     * BACKTRACK_REQUIRED here: the legacy local fallback must handle it as
-     * APP_NAV_ACTION_GO_BACK, which uses the front-wall approach sequence.
+     * dead-end from the robot's current heading. Do not report BACKTRACK_REQUIRED
+     * here: the local fallback must handle it as APP_NAV_ACTION_GO_BACK, which
+     * uses the front-wall approach sequence.
      */
     if (!App_FindCellsPolicy_HasOpenNonBackExit(x, y, heading))
     {
@@ -413,9 +415,9 @@ bool App_FindCellsPolicy_Evaluate(AppFindCellsDecision *decision_out)
     }
 
     /*
-     * If the only immediate unvisited neighbor is behind the robot, report it
-     * as BACKTRACK_REQUIRED. The supervisor handles this with the open-cell
-     * front-tape pivot preparation sequence.
+     * If the only immediate unvisited neighbor is behind the robot, report it as
+     * BACKTRACK_REQUIRED. The supervisor will choose the proper 180° pivot
+     * preparation method from the current front edge.
      */
     {
         uint8_t back_target_x = 0U;

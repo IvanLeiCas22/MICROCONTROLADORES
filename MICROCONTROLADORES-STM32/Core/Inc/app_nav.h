@@ -133,8 +133,11 @@ AppNavPivotActionState App_Nav_TickPivotAction(const AppNavInput *input,
 void App_Nav_StopPivotAction(void);
 
 /*
- * Approach the front wall before an in-cell 180° pivot in a dead-end.
- * This action does not confirm cell entry by itself.
+ * Approach the front wall before an in-cell 180° pivot.
+ *
+ * This is used for dead-end turnarounds and for route backtracking when the
+ * current front edge is a wall. This action does not confirm cell entry by
+ * itself.
  */
 bool App_Nav_StartApproachFrontWallAction(void);
 AppNavApproachFrontWallActionState App_Nav_TickApproachFrontWallAction(const AppNavInput *input,

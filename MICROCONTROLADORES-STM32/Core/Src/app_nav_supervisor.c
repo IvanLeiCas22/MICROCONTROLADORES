@@ -10,10 +10,13 @@
  * Portable mission supervisor.
  *
  * This module owns high-level navigation sequencing for FIND_CELLS:
- * - selects which primitive action to start;
+ * - maps the current logical cell from relative wall perception;
+ * - asks app_find_cells_policy for the next exploration decision;
+ * - selects and sequences the required primitive action;
  * - updates the logical maze pose/cell after confirmed movement;
  * - detects and counts unique CELL_SPECIAL cells;
- * - finishes FIND_CELLS when the target number of special cells is reached.
+ * - finishes FIND_CELLS when the target number of special cells is reached;
+ * - finishes FIND_CELLS as incomplete when no reachable frontier remains.
  *
  * It does not implement low-level motor control. Motion primitives live in
  * app_nav.c and are driven through App_Nav_*Action APIs.
@@ -351,8 +354,8 @@ static bool App_NavSupervisor_StartCenterFrontTapeForPivot(const AppNavInput *in
     }
 
     /*
-     * This action prepares an open-cell 180° route backtracking pivot.
-     * The actual pivot exit advance is armed only after the front tape
+     * This action prepares a 180° route-backtracking pivot when the front edge is
+     * open. The actual pivot exit advance is armed only after the front-tape
      * preparation action completes.
      */
     App_NavSupervisor_ClearPivotExitLatch();
@@ -482,8 +485,10 @@ static AppNavSupervisorState App_NavSupervisor_HandleDecide(const AppNavInput *i
      * - execute concrete actions returned by app_find_cells_policy;
      * - if exploration has no remaining frontier, finish the mission as
      *   incomplete instead of falling back to the old local policy;
-     * - if the route to a frontier requires an initial backward step, prepare
-     *   an open-cell 180° pivot using the front tape primitive.
+     * - if the route to a frontier requires an initial backward step, start a
+     *   180° route-backtracking preparation. The preparation method is selected
+     *   from the current front edge: front-wall approach if a front wall is known,
+     *   front-tape centering if the front edge is open.
      */
     if (App_FindCellsPolicy_Evaluate(&find_cells_decision) &&
         (find_cells_decision.action != APP_NAV_ACTION_NONE))
