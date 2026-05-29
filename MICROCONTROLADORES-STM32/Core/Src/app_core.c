@@ -2314,6 +2314,7 @@ static void Stop_Portable_Nav_Actions(void)
     App_Nav_StopSmoothAction();
     App_Nav_StopPivotAction();
     App_Nav_StopApproachFrontWallAction();
+    App_Nav_StopCenterByFrontTapeForPivotAction();
 }
 
 static void Supervisor_Run_SetInactiveMenuState(void)

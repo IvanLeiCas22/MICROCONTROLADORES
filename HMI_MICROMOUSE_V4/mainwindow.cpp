@@ -97,6 +97,8 @@ QString supervisorStateToText(quint8 state) {
         return "RUN_PIVOT_180";
     case 9:
         return "ERROR";
+    case 10:
+        return "RUN_CENTER_FRONT_TAPE_FOR_PIVOT";
     default:
         return QString("UNKNOWN(%1)").arg(state);
     }
@@ -118,6 +120,8 @@ QString supervisorActionToText(quint8 action) {
         return "SMOOTH_RIGHT";
     case 6:
         return "PIVOT_180";
+    case 7:
+        return "CENTER_FRONT_TAPE_FOR_PIVOT";
     default:
         return QString("UNKNOWN(%1)").arg(action);
     }

@@ -17,9 +17,9 @@
  *   front -> right -> left;
  * - if no immediate unvisited neighbor is available, route toward the nearest
  *   exploration frontier using flood fill implemented as multi-source BFS;
- * - if the best next step is behind the robot, report BACKTRACK_REQUIRED and
- *   return false until the future CENTER_BY_FRONT_TAPE_FOR_PIVOT primitive is
- *   available.
+ * - if the best next step is behind the robot, report BACKTRACK_REQUIRED.
+ *   The supervisor handles that reason by running the open-cell 180° pivot
+ *   preparation sequence.
  *
  * Tie-break rule:
  * - front -> right -> left -> back.
@@ -46,12 +46,16 @@ typedef struct
 /*
  * Evaluate the current FIND_CELLS decision.
  *
- * Returns true only when this policy found a concrete executable action.
- * Returns false when the supervisor should use the existing local fallback.
+ * Returns true only when this policy found a concrete action expressible as
+ * AppNavRecommendedAction.
+ *
+ * Returns false for supervisor-handled reasons such as BACKTRACK_REQUIRED and
+ * NO_FRONTIER. The caller must inspect decision_out->reason before deciding
+ * whether to use the local fallback.
  *
  * Important:
- * - BACKTRACK_REQUIRED is intentionally not executable yet, because the current
- *   APP_NAV_ACTION_GO_BACK path is tied to the dead-end front-wall approach.
+ * - BACKTRACK_REQUIRED must not be translated to APP_NAV_ACTION_GO_BACK.
+ *   APP_NAV_ACTION_GO_BACK remains tied to the dead-end front-wall approach.
  */
 bool App_FindCellsPolicy_Evaluate(AppFindCellsDecision *decision_out);
 

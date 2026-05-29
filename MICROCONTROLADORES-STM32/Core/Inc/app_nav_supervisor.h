@@ -30,6 +30,7 @@
  * - AppNavSmoothActionState
  * - AppNavPivotActionState
  * - AppNavApproachFrontWallActionState
+ * - AppNavCenterFrontTapeActionState
  */
 
 typedef enum
@@ -43,7 +44,16 @@ typedef enum
     APP_NAV_SUPERVISOR_RUN_SMOOTH_LEFT,
     APP_NAV_SUPERVISOR_RUN_SMOOTH_RIGHT,
     APP_NAV_SUPERVISOR_RUN_PIVOT_180,
-    APP_NAV_SUPERVISOR_ERROR
+
+    /*
+     * Keep ERROR at 9 for compatibility with existing HMI/debug displays.
+     */
+    APP_NAV_SUPERVISOR_ERROR = 9,
+
+    /*
+     * Route backtracking preparation in an open cell.
+     */
+    APP_NAV_SUPERVISOR_RUN_CENTER_FRONT_TAPE_FOR_PIVOT = 10
 } AppNavSupervisorState;
 
 /*
@@ -62,7 +72,12 @@ typedef enum
     APP_NAV_SUPERVISOR_ACTION_APPROACH_FRONT_WALL_FOR_PIVOT,
     APP_NAV_SUPERVISOR_ACTION_SMOOTH_LEFT,
     APP_NAV_SUPERVISOR_ACTION_SMOOTH_RIGHT,
-    APP_NAV_SUPERVISOR_ACTION_PIVOT_180
+    APP_NAV_SUPERVISOR_ACTION_PIVOT_180,
+
+    /*
+     * Preparation action for open-cell route backtracking.
+     */
+    APP_NAV_SUPERVISOR_ACTION_CENTER_FRONT_TAPE_FOR_PIVOT
 } AppNavSupervisorAction;
 
 /*

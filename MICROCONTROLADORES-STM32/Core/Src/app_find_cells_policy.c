@@ -94,6 +94,28 @@ static bool App_FindCellsPolicy_IsReachableUnvisitedNeighbor(uint8_t x,
     return true;
 }
 
+static bool App_FindCellsPolicy_HasOpenNonBackExit(uint8_t x,
+                                                   uint8_t y,
+                                                   HeadingTypeDef heading)
+{
+    const HeadingTypeDef dirs[3] =
+    {
+        heading,
+        App_FindCellsPolicy_RotateRight(heading),
+        App_FindCellsPolicy_RotateLeft(heading)
+    };
+
+    for (uint8_t i = 0U; i < 3U; i++)
+    {
+        if (App_Maze_IsKnownOpenEdge(x, y, dirs[i]))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 static bool App_FindCellsPolicy_IsFrontierCell(uint8_t x, uint8_t y)
 {
     static const HeadingTypeDef dirs[4] =
@@ -313,9 +335,8 @@ static bool App_FindCellsPolicy_SelectRouteStep(uint8_t x,
         /*
          * The route exists, but the next step is behind the robot.
          * Do not use APP_NAV_ACTION_GO_BACK here: the current GO_BACK path is
-         * reserved for dead-end front-wall approach. Open-cell route
-         * backtracking will be connected after CENTER_BY_FRONT_TAPE_FOR_PIVOT
-         * exists.
+         * reserved for dead-end front-wall approach. The supervisor handles
+         * BACKTRACK_REQUIRED with CENTER_BY_FRONT_TAPE_FOR_PIVOT.
          */
         decision_out->action = APP_NAV_ACTION_NONE;
         decision_out->reason = APP_FIND_CELLS_DECISION_REASON_BACKTRACK_REQUIRED;
@@ -380,9 +401,21 @@ bool App_FindCellsPolicy_Evaluate(AppFindCellsDecision *decision_out)
     }
 
     /*
-     * If the only immediate unvisited neighbor is behind the robot, detect it
-     * but do not execute it yet. This will be handled after the future
-     * CENTER_BY_FRONT_TAPE_FOR_PIVOT primitive is available.
+     * If there is no known-open exit in front/right/left, this is a local
+     * dead-end from the robot's current heading. Do not report
+     * BACKTRACK_REQUIRED here: the legacy local fallback must handle it as
+     * APP_NAV_ACTION_GO_BACK, which uses the front-wall approach sequence.
+     */
+    if (!App_FindCellsPolicy_HasOpenNonBackExit(x, y, heading))
+    {
+        decision_out->reason = APP_FIND_CELLS_DECISION_REASON_NONE;
+        return false;
+    }
+
+    /*
+     * If the only immediate unvisited neighbor is behind the robot, report it
+     * as BACKTRACK_REQUIRED. The supervisor handles this with the open-cell
+     * front-tape pivot preparation sequence.
      */
     {
         uint8_t back_target_x = 0U;

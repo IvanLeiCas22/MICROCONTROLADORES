@@ -1953,6 +1953,14 @@ static bool App_Nav_UpdateCenterFrontTapeGate(bool current_front_tape)
     case APP_NAV_FRONT_TAPE_GATE_INIT:
         if (current_front_tape)
         {
+            /*
+             * If the front floor sensor is already black at action start,
+             * never finish immediately. First leave the current black region,
+             * then arm detection for the next rising edge.
+             *
+             * This protects special-cell black patches and any unexpected
+             * initial black condition in normal cells.
+             */
             app_nav_center_front_tape_was_front_tape_detected = 1U;
             app_nav_center_front_tape_gate_state = APP_NAV_FRONT_TAPE_GATE_WAIT_LEAVE_CURRENT_BLACK;
         }

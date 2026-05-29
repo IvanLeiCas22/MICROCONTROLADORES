@@ -63,6 +63,7 @@ static void App_NavSupervisor_StopActions(void)
 {
     App_Nav_StopAdvanceAction();
     App_Nav_StopApproachFrontWallAction();
+    App_Nav_StopCenterByFrontTapeForPivotAction();
     App_Nav_StopSmoothAction();
     App_Nav_StopPivotAction();
 }
@@ -321,6 +322,39 @@ static bool App_NavSupervisor_StartApproachFrontWallForPivot(const AppNavInput *
     return true;
 }
 
+static bool App_NavSupervisor_StartCenterFrontTapeForPivot(const AppNavInput *input)
+{
+    AppNavFrontTapeProfile front_tape_profile = APP_NAV_FRONT_TAPE_PROFILE_NORMAL_CELL;
+
+    if (!App_NavSupervisor_CaptureActionYawReference(input))
+    {
+        return false;
+    }
+
+    if (App_Maze_IsCurrentCellSpecial())
+    {
+        front_tape_profile = APP_NAV_FRONT_TAPE_PROFILE_SPECIAL_CELL;
+    }
+
+    /*
+     * This action prepares an open-cell 180° route backtracking pivot.
+     * The actual pivot exit advance is armed only after the front tape
+     * preparation action completes.
+     */
+    App_NavSupervisor_ClearPivotExitLatch();
+
+    if (!App_Nav_StartCenterByFrontTapeForPivotAction(front_tape_profile))
+    {
+        App_NavSupervisor_ClearActionYawReference();
+        return false;
+    }
+
+    App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_RUN_CENTER_FRONT_TAPE_FOR_PIVOT,
+                               APP_NAV_SUPERVISOR_ACTION_CENTER_FRONT_TAPE_FOR_PIVOT,
+                               APP_NAV_SUPERVISOR_RESULT_OK);
+    return true;
+}
+
 static bool App_NavSupervisor_StartPivot180(const AppNavInput *input)
 {
     if (!App_NavSupervisor_CaptureActionYawReference(input))
@@ -417,8 +451,8 @@ static AppNavSupervisorState App_NavSupervisor_HandleDecide(const AppNavInput *i
      * - execute concrete actions returned by app_find_cells_policy;
      * - if exploration has no remaining frontier, finish the mission as
      *   incomplete instead of falling back to the old local policy;
-     * - keep the old local policy as fallback for transitional cases such as
-     *   BACKTRACK_REQUIRED until CENTER_BY_FRONT_TAPE_FOR_PIVOT exists.
+     * - if the route to a frontier requires an initial backward step, prepare
+     *   an open-cell 180° pivot using the front tape primitive.
      */
     if (App_FindCellsPolicy_Evaluate(&find_cells_decision) &&
         (find_cells_decision.action != APP_NAV_ACTION_NONE))
@@ -430,6 +464,15 @@ static AppNavSupervisorState App_NavSupervisor_HandleDecide(const AppNavInput *i
         return App_NavSupervisor_FinishFindCellsWithResult(
             output,
             APP_NAV_SUPERVISOR_RESULT_FIND_CELLS_INCOMPLETE_NO_FRONTIER);
+    }
+    else if (find_cells_decision.reason == APP_FIND_CELLS_DECISION_REASON_BACKTRACK_REQUIRED)
+    {
+        if (!App_NavSupervisor_StartCenterFrontTapeForPivot(input))
+        {
+            return App_NavSupervisor_SetError(APP_NAV_SUPERVISOR_RESULT_START_FAILED);
+        }
+
+        return app_nav_supervisor_debug.state;
     }
     else
     {
@@ -569,6 +612,50 @@ static AppNavSupervisorState App_NavSupervisor_HandleApproachFrontWallForPivot(c
     case APP_NAV_APPROACH_FRONT_WALL_ACTION_TIMEOUT:
     case APP_NAV_APPROACH_FRONT_WALL_ACTION_ERROR:
     case APP_NAV_APPROACH_FRONT_WALL_ACTION_IDLE:
+    default:
+        App_NavSupervisor_ClearOutput(output);
+        return App_NavSupervisor_SetError(APP_NAV_SUPERVISOR_RESULT_PRIMITIVE_ERROR);
+    }
+}
+
+static AppNavSupervisorState App_NavSupervisor_HandleCenterFrontTapeForPivot(const AppNavInput *input,
+                                                                             AppNavOutput *output)
+{
+    AppNavInput action_input = {0};
+    AppNavCenterFrontTapeActionState center_state;
+
+    if (!App_NavSupervisor_BuildActionInput(input, &action_input))
+    {
+        App_NavSupervisor_ClearOutput(output);
+        return App_NavSupervisor_SetError(APP_NAV_SUPERVISOR_RESULT_PRIMITIVE_ERROR);
+    }
+
+    center_state = App_Nav_TickCenterByFrontTapeForPivotAction(&action_input, output);
+
+    switch (center_state)
+    {
+    case APP_NAV_CENTER_FRONT_TAPE_ACTION_RUNNING_WALL_FOLLOW:
+    case APP_NAV_CENTER_FRONT_TAPE_ACTION_RUNNING_YAW_HOLD:
+        App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_RUN_CENTER_FRONT_TAPE_FOR_PIVOT,
+                                   APP_NAV_SUPERVISOR_ACTION_CENTER_FRONT_TAPE_FOR_PIVOT,
+                                   APP_NAV_SUPERVISOR_RESULT_OK);
+        return app_nav_supervisor_debug.state;
+
+    case APP_NAV_CENTER_FRONT_TAPE_ACTION_DONE_FRONT_TAPE:
+        App_NavSupervisor_ClearOutput(output);
+        App_Nav_StopCenterByFrontTapeForPivotAction();
+        app_nav_supervisor_pivot_180_exit_requires_advance = 1U;
+
+        if (!App_NavSupervisor_StartPivot180(input))
+        {
+            return App_NavSupervisor_SetError(APP_NAV_SUPERVISOR_RESULT_START_FAILED);
+        }
+
+        return app_nav_supervisor_debug.state;
+
+    case APP_NAV_CENTER_FRONT_TAPE_ACTION_TIMEOUT:
+    case APP_NAV_CENTER_FRONT_TAPE_ACTION_ERROR:
+    case APP_NAV_CENTER_FRONT_TAPE_ACTION_IDLE:
     default:
         App_NavSupervisor_ClearOutput(output);
         return App_NavSupervisor_SetError(APP_NAV_SUPERVISOR_RESULT_PRIMITIVE_ERROR);
@@ -872,6 +959,9 @@ AppNavSupervisorState App_NavSupervisor_Tick(const AppNavInput *input,
 
     case APP_NAV_SUPERVISOR_RUN_APPROACH_FRONT_WALL_FOR_PIVOT:
         return App_NavSupervisor_HandleApproachFrontWallForPivot(input, output);
+
+    case APP_NAV_SUPERVISOR_RUN_CENTER_FRONT_TAPE_FOR_PIVOT:
+        return App_NavSupervisor_HandleCenterFrontTapeForPivot(input, output);
 
     case APP_NAV_SUPERVISOR_RUN_SMOOTH_LEFT:
     case APP_NAV_SUPERVISOR_RUN_SMOOTH_RIGHT:
