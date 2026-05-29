@@ -1,80 +1,98 @@
 # README_NAV_SUPERVISOR
 
-## Objetivo del documento
+## Objetivo
 
-Este documento resume el estado actual de la navegación portable del autito micromouse STM32 + HMI Qt, con foco en el modo `FIND_CELLS`, el supervisor portable, el mapa lógico y la detección de celdas especiales.
+Este documento resume el estado actual de la navegación portable del autito micromouse STM32 + HMI Qt, con foco en:
 
-La intención es dejar una referencia rápida para continuar el desarrollo sin tener que reconstruir el contexto desde el código o desde chats anteriores.
+- supervisor portable `app_nav_supervisor`;
+- modo `FIND_CELLS`;
+- política inteligente `app_find_cells_policy`;
+- mapa lógico `app_maze`;
+- primitivas de navegación `app_nav`;
+- integración con HMI Qt y simulador.
+
+La intención es que este archivo sea la referencia principal para continuar el desarrollo sin reconstruir contexto desde chats anteriores.
+
+> Fuente de verdad funcional al actualizar este README: repo STM32+Qt real versión `repomix-output-resumido-autitoReal-15.xml`.
 
 ---
 
-## Arquitectura actual
+## Regla general de arquitectura
 
-La navegación está separada en capas:
+La separación de responsabilidades vigente es:
 
 ```text
 app_core.c
     Adaptador STM32:
     - lee sensores reales;
     - arma AppNavInput;
-    - ejecuta el supervisor o primitive test;
+    - ejecuta supervisor o primitive tests;
     - aplica AppNavOutput a motores;
     - atiende comandos UNERBUS/HMI;
-    - gestiona botón físico y OLED.
+    - gestiona botón físico y OLED;
+    - no debe contener lógica de misión si puede vivir en el supervisor.
 
 app_nav.c
     Capa portable de percepción, controladores y primitivas:
     - percepción de paredes/suelo;
-    - control yaw-hold;
     - wall-follow;
-    - advance action;
-    - smooth action;
-    - pivot action;
-    - approach-front-wall action.
+    - yaw-hold;
+    - AdvanceAction;
+    - SmoothAction;
+    - PivotAction;
+    - ApproachFrontWallAction;
+    - CenterByFrontTapeForPivotAction.
+
+app_find_cells_policy.c
+    Política portable de alto nivel para FIND_CELLS:
+    - decide próxima acción conceptual de exploración;
+    - prioriza vecinos no visitados;
+    - calcula ruta hacia frontera con flood fill/BFS;
+    - no mueve motores;
+    - no accede a HAL;
+    - no ejecuta primitivas.
 
 app_nav_supervisor.c
     Supervisor portable de misión:
-    - decide qué primitiva iniciar;
-    - secuencia FIND_CELLS;
-    - actualiza mapa lógico;
-    - detecta y cuenta celdas especiales;
-    - finaliza misión al encontrar 3 especiales.
-
-    Importante: la secuencia y las primitivas existen, pero la política
-    actual de FIND_CELLS todavía no es una exploración completa del laberinto.
+    - mapea celda actual;
+    - consulta app_find_cells_policy;
+    - decide qué primitiva arrancar;
+    - secuencia primitivas;
+    - actualiza pose lógica después de movimientos confirmados;
+    - cuenta celdas especiales;
+    - finaliza la misión.
 
 app_maze.c
     Mapa lógico portable:
-    - celda actual x/y;
-    - heading lógico;
-    - paredes conocidas;
+    - pose lógica x/y/heading;
     - celdas visitadas;
-    - celdas especiales detectadas.
+    - paredes presentes;
+    - celdas especiales;
+    - edges conocidas/open/desconocidas para planificación.
 ```
 
-Regla general:
+Regla estricta:
 
 ```text
 app_core adapta hardware.
 app_nav ejecuta primitivas.
-app_nav_supervisor decide misión.
-app_maze guarda mapa lógico.
+app_find_cells_policy decide exploración.
+app_nav_supervisor secuencia misión y actualiza mapa.
+app_maze guarda el mapa lógico.
 ```
-
-La lógica de misión no debe agregarse en `app_core.c` salvo como adaptación estrictamente necesaria.
 
 ---
 
 ## Convención lógica del mapa
 
-El mapa lógico portable usa esta convención:
+El firmware portable usa una convención lógica propia:
 
 ```text
 X positivo: Este
 Y positivo: Norte
 ```
 
-Los headings son:
+Headings:
 
 ```c
 HEADING_NORTH = 0
@@ -83,7 +101,7 @@ HEADING_SOUTH = 2
 HEADING_WEST  = 3
 ```
 
-Por lo tanto:
+Movimiento lógico:
 
 ```text
 HEADING_NORTH -> y++
@@ -92,150 +110,427 @@ HEADING_SOUTH -> y--
 HEADING_WEST  -> x--
 ```
 
-La HMI o el simulador pueden usar otra convención visual, por ejemplo Y positivo hacia abajo. Esa conversión corresponde a la capa de UI/adaptador, no a `app_maze`.
-
-En la HMI Qt real, la regla actual es:
+La HMI Qt o el simulador pueden dibujar con Y visual hacia abajo, pero esa conversión debe hacerse solo en la capa de UI/dibujo. Internamente:
 
 ```text
-robot_maze_map[x][y] = coordenadas lógicas STM32.
-current_x/current_y  = coordenadas lógicas STM32.
-La conversión visual de Y se hace solo al dibujar.
+robot_maze_map[x][y] = coordenadas lógicas STM32
+current_x/current_y  = coordenadas lógicas STM32
+conversión visual Y  = solo al dibujar
 ```
-
-Por lo tanto, las rutas de sincronización y actualización de mapa no deben guardar Y invertida. La inversión `scene_row = MAZE_HEIGHT - 1 - logical_y` pertenece exclusivamente al dibujo.
 
 ---
 
-## Mapa lógico y bits de celda
+## Mapa lógico: byte de celda
 
-Cada celda del mapa se guarda como un `uint8_t`.
-
-Bits actuales:
+Cada celda sincronizada STM32/Qt se guarda como `uint8_t`:
 
 ```c
-WALL_NORTH   = 0x01
-WALL_SOUTH   = 0x02
-WALL_EAST    = 0x04
-WALL_WEST    = 0x08
-CELL_VISITED = 0x10
-CELL_SPECIAL = 0x20
+#define WALL_NORTH   0x01
+#define WALL_SOUTH   0x02
+#define WALL_EAST    0x04
+#define WALL_WEST    0x08
+#define CELL_VISITED 0x10
+#define CELL_SPECIAL 0x20
 ```
 
-`CELL_SPECIAL` se guarda en el mismo byte de celda que paredes y visitado.
+Semántica:
 
-Cuando se sincroniza el mapa hacia la HMI, se envía el byte completo de cada celda. Por eso la HMI puede visualizar celdas visitadas, paredes y celdas especiales detectadas.
+```text
+WALL_*       = pared presente
+CELL_VISITED = celda visitada
+CELL_SPECIAL = celda especial detectada
+```
+
+El byte completo se usa para sincronización con la HMI/simulador, por lo que no se deben agregar bits nuevos ahí sin verificar compatibilidad.
+
+Ejemplo:
+
+```text
+0x1E = 0x10 + 0x08 + 0x04 + 0x02
+
+CELL_VISITED = sí
+WALL_WEST    = sí
+WALL_EAST    = sí
+WALL_SOUTH   = sí
+WALL_NORTH   = no
+CELL_SPECIAL = no
+```
+
+---
+
+## Known edges
+
+Para planificación inteligente se agregó un mapa interno separado:
+
+```c
+static uint8_t maze_known_edges[MAZE_WIDTH][MAZE_HEIGHT];
+```
+
+Bits:
+
+```c
+#define EDGE_KNOWN_NORTH 0x01
+#define EDGE_KNOWN_SOUTH 0x02
+#define EDGE_KNOWN_EAST  0x04
+#define EDGE_KNOWN_WEST  0x08
+```
+
+Esto resuelve la ambigüedad entre:
+
+```text
+no hay pared conocida
+```
+
+y:
+
+```text
+todavía no sé si hay pared
+```
+
+La semántica correcta es:
+
+```text
+edge desconocida:
+    EDGE_KNOWN = 0
+    WALL       = 0
+
+edge abierta conocida:
+    EDGE_KNOWN = 1
+    WALL       = 0
+
+edge con pared conocida:
+    EDGE_KNOWN = 1
+    WALL       = 1
+```
+
+`App_Maze_MapCurrentCell(...)` marca como conocidas las direcciones observadas desde la pose actual:
+
+```text
+frente
+derecha
+izquierda
+```
+
+Eso ocurre haya pared o no. Además, el conocimiento de edge se espeja hacia la celda vecina cuando existe.
+
+Ejemplo:
+
+```text
+Desde (x,y) observo NORTH sin pared:
+    known_edges[x][y] |= NORTH
+    known_edges[x][y+1] |= SOUTH
+
+maze_map no recibe WALL_NORTH porque no hay pared.
+```
+
+El planner seguro debe cruzar solo si:
+
+```text
+App_Maze_IsKnownOpenEdge(x, y, dir) == true
+```
 
 ---
 
 ## Modo FIND_CELLS
 
-`FIND_CELLS` es la misión actualmente implementada a nivel de supervisor, primitivas, mapa lógico y conteo de especiales.
+`FIND_CELLS` es la misión implementada actualmente.
 
-Objetivo nominal:
-
-```text
-Encontrar exactamente 3 celdas especiales únicas.
-```
-
-Estado real actual:
+Objetivo:
 
 ```text
-FIND_CELLS todavía no está terminada como estrategia completa de exploración.
+Encontrar 3 celdas especiales únicas.
 ```
 
-El supervisor puede iniciar la misión, mapear paredes/celdas visitadas, detectar celdas especiales y detenerse al llegar al contador objetivo. Sin embargo, la decisión de navegación todavía usa una política local simple. Por eso el autito puede encontrar las 3 celdas en mapas compatibles con esa heurística, pero no está garantizado que las encuentre en todos los mapas.
-
-Cuando se detectan 3 celdas especiales:
+Finalizaciones posibles:
 
 ```text
-- se detienen las acciones portables;
-- se ponen motores en 0;
-- el supervisor vuelve a IDLE;
-- active = 0;
-- last_result = APP_NAV_SUPERVISOR_RESULT_FIND_CELLS_COMPLETE.
+FIND_CELLS_COMPLETE
+    Se detectaron 3 celdas especiales únicas.
+
+FIND_CELLS_INCOMPLETE_NO_FRONTIER
+    No quedan fronteras alcanzables y se encontraron menos de 3 especiales.
+
+ERROR
+    Falló una primitiva, argumento, start, o acción no soportada.
 ```
 
-`GO_A_TO_B` existe como modo reservado, pero no está implementado y no debe mover el robot.
-
-La mejora pendiente principal es reemplazar la política local actual por una navegación más inteligente basada en mapa, celdas visitadas/no visitadas y retorno/exploración planificada.
+`GO_A_TO_B` existe como modo reservado, pero no está implementado y debe mantenerse seguro: iniciarlo no debe mover el robot.
 
 ---
 
 ## Inicio de FIND_CELLS
 
-El supervisor no exige arrancar con el sensor trasero sobre cinta.
+Al iniciar el supervisor:
+
+```text
+App_NavSupervisor_SetMission(APP_NAV_SUPERVISOR_MISSION_FIND_CELLS)
+App_NavSupervisor_Start()
+```
 
 Flujo inicial:
 
 ```text
 START_INITIAL_ADVANCE
 -> RUN_INITIAL_ADVANCE
--> DONE_REAR_TAPE
--> App_Maze_AdvanceRobotPosition()
 -> DECIDE
 ```
 
-La celda inicial no puede ser especial.
-
-La primera acción de `FIND_CELLS` es avanzar desde la celda inicial hasta confirmar la primera línea con el sensor trasero.
+El avance inicial confirma una cinta trasera válida antes de empezar a tomar decisiones de celda.
 
 ---
 
 ## Punto de decisión
 
-Las decisiones de navegación de alto nivel se toman cuando el robot está en un punto lógico válido, normalmente confirmado por el sensor trasero sobre una cinta de frontera de celda.
-
 Regla conceptual:
 
 ```text
-Cuando el sensor trasero pisa cinta, el robot ya ingresó/confirmó la celda nueva.
+Cuando el sensor trasero pisa cinta,
+el robot ya ingresó/confirmó la celda nueva.
 Desde esa celda lógica actual se decide la próxima acción.
 ```
 
-La decisión no debe interpretarse como “completar la entrada” a esa celda, sino como “salir desde la celda actual hacia la próxima”.
+La decisión no significa “terminar de entrar a la celda actual”; significa:
+
+```text
+salir desde la celda lógica actual hacia la próxima celda
+```
+
+Por eso el supervisor actualiza mapa/pose cuando las primitivas confirman eventos físicos como:
+
+```text
+AdvanceAction DONE_REAR_TAPE
+SmoothAction DONE_REAR_TAPE
+SmoothAction DONE_POST_YAW_REAR_TAPE
+PivotAction DONE
+```
 
 ---
 
-## Política de navegación actual en FIND_CELLS
+## Política inteligente de FIND_CELLS
 
-La política actual no usa todavía un planner ni flood fill. Tampoco prioriza explícitamente celdas no visitadas.
+La política de exploración está en:
 
-El supervisor llama a:
+```text
+app_find_cells_policy.c/h
+```
+
+No es shadow/debug; es lógica de producción.
+
+### Prioridad general
+
+En cada punto de decisión:
+
+```text
+1. Mapear celda actual.
+2. Si ya hay 3 especiales, terminar con FIND_CELLS_COMPLETE.
+3. Intentar vecino inmediato no visitado:
+       frente -> derecha -> izquierda.
+4. Si no hay vecino inmediato ejecutable:
+       usar flood fill/BFS multi-source hacia frontera.
+5. Si la ruta hacia frontera empieza:
+       frente  -> ADVANCE
+       derecha -> SMOOTH_RIGHT
+       izquierda -> SMOOTH_LEFT
+       atrás   -> BACKTRACK_REQUIRED
+6. Si no hay frontera:
+       FIND_CELLS_INCOMPLETE_NO_FRONTIER.
+```
+
+### Desempate
+
+Cuando varias opciones tienen el mismo costo:
+
+```text
+frente -> derecha -> izquierda -> atrás
+```
+
+Esta prioridad se usa tanto para:
+
+```text
+vecinos inmediatos no visitados
+```
+
+como para:
+
+```text
+elección de vecino con menor distancia hacia frontera
+```
+
+---
+
+## Fronteras de exploración
+
+Una frontera de exploración es:
+
+```text
+celda visitada
++ edge conocida abierta
++ vecino no visitado
+```
+
+Formalmente:
+
+```text
+App_Maze_IsCellVisited(x, y)
+&& App_Maze_IsKnownOpenEdge(x, y, dir)
+&& App_Maze_GetNeighbor(x, y, dir, &nx, &ny)
+&& !App_Maze_IsCellVisited(nx, ny)
+```
+
+El robot se mueve por celdas visitadas hasta una celda frontera, y desde ahí entra a una celda no visitada.
+
+---
+
+## Flood fill / BFS
+
+Para `FIND_CELLS` se usa flood fill conceptual implementado como BFS multi-source iterativo con arreglos estáticos.
+
+Características:
+
+```text
+- sin heap;
+- sin malloc;
+- sin recursión;
+- sin Dijkstra;
+- sin A*;
+- costos uniformes por celda;
+- apto para STM32F103/Bluepill.
+```
+
+Buffers internos:
+
+```text
+frontier_distance[MAZE_WIDTH * MAZE_HEIGHT]
+bfs_queue[MAZE_WIDTH * MAZE_HEIGHT]
+```
+
+Con `15 x 15`:
+
+```text
+225 bytes + 225 bytes = 450 bytes
+```
+
+Flujo del BFS:
+
+```text
+1. Inicializar distancias en INF.
+2. Buscar todas las celdas frontera.
+3. Poner todas las fronteras en cola con distancia 0.
+4. Propagar por celdas visitadas usando solo edges conocidas abiertas.
+5. Desde la celda actual, elegir el vecino con menor distancia.
+```
+
+La propagación no atraviesa celdas no visitadas. La entrada a una celda no visitada ocurre solo desde una frontera local.
+
+---
+
+## Decisiones de app_find_cells_policy
+
+`App_FindCellsPolicy_Evaluate(...)` puede devolver:
 
 ```c
-App_Nav_RecommendAction(0U, &recommended_action)
+APP_FIND_CELLS_DECISION_REASON_NONE
+APP_FIND_CELLS_DECISION_REASON_IMMEDIATE_UNVISITED
+APP_FIND_CELLS_DECISION_REASON_ROUTE_TO_FRONTIER
+APP_FIND_CELLS_DECISION_REASON_BACKTRACK_REQUIRED
+APP_FIND_CELLS_DECISION_REASON_NO_FRONTIER
 ```
 
-`App_Nav_RecommendAction()` arma las opciones disponibles según las paredes percibidas en este orden:
+Interpretación:
 
 ```text
-1. frente, si no hay pared frontal;
-2. derecha, si no hay pared derecha;
-3. izquierda, si no hay pared izquierda.
+IMMEDIATE_UNVISITED
+    Hay vecino no visitado inmediato en frente/derecha/izquierda.
+
+ROUTE_TO_FRONTIER
+    No hay vecino inmediato no visitado, pero existe una frontera alcanzable
+    por camino conocido. El próximo paso es frente/derecha/izquierda.
+
+BACKTRACK_REQUIRED
+    Existe ruta hacia frontera, pero el próximo paso requerido es hacia atrás.
+    No debe traducirse a APP_NAV_ACTION_GO_BACK.
+
+NO_FRONTIER
+    No queda ninguna frontera alcanzable.
 ```
 
-Como el valor usado para elegir es `random_value = 0`, se elige la primera opción válida de esa lista. La prioridad efectiva actual es:
+Regla crítica:
 
 ```text
-frente -> derecha -> izquierda -> volver/pivot 180
+BACKTRACK_REQUIRED != APP_NAV_ACTION_GO_BACK
 ```
 
-Si no hay salida al frente, derecha ni izquierda, la acción recomendada es `APP_NAV_ACTION_GO_BACK`, que el supervisor convierte en la secuencia de dead-end:
+`APP_NAV_ACTION_GO_BACK` queda reservado para la recomendación local de dead-end. El supervisor maneja `BACKTRACK_REQUIRED` con una preparación de pivot elegida según la geometría frontal.
+
+---
+
+## Manejo de BACKTRACK_REQUIRED
+
+Cuando la policy devuelve:
 
 ```text
-approach front wall
--> pivot 180
--> advance hasta confirmar cinta trasera
+APP_FIND_CELLS_DECISION_REASON_BACKTRACK_REQUIRED
+```
+
+el supervisor interpreta:
+
+```text
+la ruta hacia la próxima frontera empieza detrás del robot
+```
+
+La preparación física del giro 180 depende del frente actual:
+
+```text
+si hay pared frontal conocida:
+    RUN_APPROACH_FRONT_WALL_FOR_PIVOT
+    -> RUN_PIVOT_180
+    -> RUN_ADVANCE
+
+si el frente está abierto:
+    RUN_CENTER_FRONT_TAPE_FOR_PIVOT
+    -> RUN_PIVOT_180
+    -> RUN_ADVANCE
+```
+
+La selección se hace en el supervisor, no en la policy.
+
+Motivo:
+
+```text
+BACKTRACK_REQUIRED es una decisión lógica.
+La forma física de preparar el pivot depende de la geometría actual.
+```
+
+---
+
+## Dead-end
+
+Un dead-end local ocurre cuando no hay salida abierta conocida en:
+
+```text
+frente
+derecha
+izquierda
+```
+
+En ese caso `app_find_cells_policy` no reporta `BACKTRACK_REQUIRED`, sino que deja caer al fallback local.
+
+El fallback local (`App_Nav_RecommendAction`) devuelve:
+
+```text
+APP_NAV_ACTION_GO_BACK
+```
+
+y el supervisor ejecuta la secuencia clásica:
+
+```text
+RUN_APPROACH_FRONT_WALL_FOR_PIVOT
+-> RUN_PIVOT_180
+-> RUN_ADVANCE
 -> DECIDE
 ```
 
-Consecuencia práctica:
-
-```text
-Esta política puede recorrer mapas simples, pero puede ciclar, dejar ramas sin explorar o no llegar a las 3 celdas especiales en mapas más complejos.
-```
-
-La siguiente etapa del proyecto debería diseñar una política de exploración real para `FIND_CELLS`, por ejemplo usando memoria de celdas visitadas/no visitadas, fronteras, flood fill o una estrategia equivalente apta para STM32.
+Esto se mantiene separado de `BACKTRACK_REQUIRED`.
 
 ---
 
@@ -243,9 +538,9 @@ La siguiente etapa del proyecto debería diseñar una política de exploración 
 
 ### AdvanceAction
 
-Avanza hasta que el sensor trasero confirma la próxima cinta de frontera.
+Avanza hasta que el sensor trasero confirma la siguiente cinta de frontera.
 
-Puede usar distintos perfiles de cinta trasera:
+Perfiles traseros:
 
 ```c
 APP_NAV_REAR_TAPE_PROFILE_NORMAL_CELL
@@ -253,7 +548,15 @@ APP_NAV_REAR_TAPE_PROFILE_SPECIAL_CELL
 APP_NAV_REAR_TAPE_PROFILE_SPECIAL_CELL_AFTER_PIVOT
 ```
 
-Estos perfiles existen porque en una celda especial el sensor trasero puede ver:
+Secuencia en celda normal:
+
+```text
+cinta de entrada
+-> blanco
+-> cinta de salida
+```
+
+Secuencia al salir desde celda especial:
 
 ```text
 cinta de entrada
@@ -263,21 +566,32 @@ cinta de entrada
 -> cinta de salida
 ```
 
-En una celda normal ve:
+Secuencia desde celda especial después de pivot:
 
 ```text
-cinta de entrada
+posible inicio sobre cartulina especial
 -> blanco
 -> cinta de salida
 ```
+
+`AdvanceAction` actualiza pose lógica solo a través del supervisor, cuando termina correctamente.
+
+---
 
 ### SmoothAction
 
 Ejecuta un giro suave izquierda/derecha.
 
-La acción smooth no se considera completa hasta que el sensor trasero confirma la cinta de frontera de la celda destino.
+Condición lógica de finalización válida:
 
-Puede tener fases:
+```text
+DONE_REAR_TAPE
+DONE_POST_YAW_REAR_TAPE
+```
+
+El smooth no debe considerarse completo solo por detectar pared/diagonal. La fase post-yaw continúa hasta confirmar cinta trasera.
+
+Flujo conceptual:
 
 ```text
 TURNING
@@ -285,248 +599,255 @@ TURNING
 -> DONE_POST_YAW_REAR_TAPE
 ```
 
-o terminar directamente por:
+o:
 
 ```text
-DONE_REAR_TAPE
+TURNING
+-> DONE_REAR_TAPE
 ```
 
-si el sensor trasero detecta la cinta durante la fase de giro.
+Al terminar un smooth válido:
+
+```text
+App_Maze_UpdateRobotHeading(...)
+App_Maze_AdvanceRobotPosition()
+mapear/detectar especial si corresponde
+```
+
+---
 
 ### PivotAction
 
 Pivote en celda.
 
-Actualiza orientación lógica, pero no avanza celda.
+En el supervisor se usa principalmente para:
 
-### ApproachFrontWallForPivotAction
+```text
+giro 180 de dead-end
+giro 180 de backtracking hacia frontera
+```
 
-Avance controlado hacia pared frontal antes de un pivot 180 en dead-end.
+Al terminar:
 
-No actualiza mapa por sí solo.
+```text
+App_Maze_UpdateRobotHeading(TURN_AROUND)
+```
+
+Si está armado el latch:
+
+```text
+pivot_180_exit_requires_advance != 0
+```
+
+el supervisor inicia:
+
+```text
+RUN_ADVANCE
+```
+
+Esto hace que después del pivot 180 el robot salga de la celda y confirme la próxima cinta trasera antes de decidir de nuevo.
 
 ---
 
-## Smooth: yaw, diagonal y post-yaw
+### ApproachFrontWallAction
 
-Decisión importante tomada:
+Prepara un pivot 180 usando pared frontal.
 
-```text
-La detección por sensor diagonal/pared durante un smooth NO termina la acción smooth.
-Solo termina la fase curva del giro.
-```
-
-Antes, cuando el diagonal detectaba pared, el smooth podía terminar como:
+Uso actual:
 
 ```text
-APP_NAV_SMOOTH_ACTION_DONE_WALL
+dead-end clásico
+BACKTRACK_REQUIRED con pared frontal conocida
 ```
 
-Eso hacía que el supervisor:
+Secuencia:
 
 ```text
-- actualizara heading;
-- no actualizara celda;
-- iniciara un ADVANCE separado.
+avanzar con wall-follow/yaw-hold
+-> terminar por distancia frontal objetivo
+-> frenar
+-> pivot 180
 ```
 
-Ese flujo podía atrasar el mapa lógico una celda, especialmente al salir de una celda especial.
+No actualiza mapa ni pose por sí misma.
 
-Ahora la detección por diagonal/pared entra a:
+---
+
+### CenterByFrontTapeForPivotAction
+
+Prepara un pivot 180 usando el sensor delantero de suelo.
+
+Uso actual:
 
 ```text
-APP_NAV_SMOOTH_ACTION_POST_YAW_SEEK_REAR_TAPE
+BACKTRACK_REQUIRED con frente abierto
 ```
 
-igual que cuando el smooth termina la fase curva por yaw target.
-
-Flujo actual correcto:
+Secuencia:
 
 ```text
-diagonal/wall detectado
--> POST_YAW_SEEK_REAR_TAPE
--> avanzar recto con yaw-hold
--> esperar cinta trasera
--> DONE_POST_YAW_REAR_TAPE
--> supervisor actualiza heading + celda
+avanzar con wall-follow/yaw-hold
+-> detectar flanco positivo válido de cinta frontal
+-> frenar
+-> pivot 180
 ```
 
-`APP_NAV_SMOOTH_ACTION_DONE_WALL` queda como estado legacy/defensivo. Si llega al supervisor, se trata como error de primitiva.
+No actualiza mapa ni pose por sí misma.
+
+Reglas importantes:
+
+```text
+- no usa timer de ignore;
+- no usa debounce por ticks adicional;
+- no usa safety por pared frontal;
+- usa input->floor_front_black;
+- se apoya en la histéresis/percepción existente;
+- si arranca en negro, espera salir a blanco antes de armar la detección;
+- luego el próximo flanco positivo es la cinta límite.
+```
+
+Regla física fijada:
+
+```text
+En una celda NORMAL, cuando el sensor trasero está detectando negro en punto
+de decisión, el sensor delantero no debe estar negro. Si aparece negro inicial,
+no se acepta como DONE inmediato; primero se espera blanco y luego flanco.
+```
+
+En celda especial, si el sensor delantero está negro al inicio, se interpreta como cartulina especial y también se espera blanco antes de buscar la cinta límite.
 
 ---
 
 ## Detección de celdas especiales
 
-Una celda especial se detecta al confirmar la entrada a una celda.
+Una celda especial se detecta al confirmar entrada a una celda.
 
-Condición base:
+Condición física base:
 
 ```text
 floor_front_black == true
 floor_rear_black  == true
 ```
 
-Pero no se evalúa en cualquier momento. Se evalúa justo después de actualizar la posición lógica de celda.
+La condición no se evalúa en cualquier tick, sino después de actualizar la posición lógica.
 
-Ejemplo para avance:
+### Advance
 
 ```text
-AdvanceAction termina por DONE_REAR_TAPE
+AdvanceAction DONE_REAR_TAPE
 -> App_Maze_AdvanceRobotPosition()
 -> si front_black && rear_black:
        App_Maze_MarkCurrentCellSpecial()
 ```
 
-Ejemplo para smooth:
+### Smooth
 
 ```text
-SmoothAction termina por DONE_REAR_TAPE o DONE_POST_YAW_REAR_TAPE
+SmoothAction DONE_REAR_TAPE o DONE_POST_YAW_REAR_TAPE
 -> App_Maze_UpdateRobotHeading(turn)
 -> App_Maze_AdvanceRobotPosition()
 -> si front_black && rear_black:
        App_Maze_MarkCurrentCellSpecial()
 ```
 
-Esto evita marcar la celda anterior por error.
-
-`App_Maze_MarkCurrentCellSpecial()` devuelve:
-
-```text
-true  si CELL_SPECIAL se marcó por primera vez;
-false si la celda ya estaba marcada como especial.
-```
-
-El supervisor incrementa el contador solo cuando la función devuelve `true`.
+`App_Maze_MarkCurrentCellSpecial()` devuelve true solo si la celda no estaba marcada antes. El supervisor incrementa `special_found_count` solo en ese caso.
 
 ---
 
 ## Salida desde celda especial
 
-Si la celda actual está marcada con `CELL_SPECIAL`, el supervisor inicia `AdvanceAction` o `SmoothAction` con perfil especial.
+Si la celda actual está marcada como `CELL_SPECIAL`, el supervisor selecciona perfiles especiales al iniciar `AdvanceAction` o `SmoothAction`.
 
-Caso normal:
+Caso general:
 
 ```text
 APP_NAV_REAR_TAPE_PROFILE_SPECIAL_CELL
 ```
 
-Caso especial después de pivot 180 en dead-end:
+Caso después de pivot 180 dentro de celda especial:
 
 ```text
 APP_NAV_REAR_TAPE_PROFILE_SPECIAL_CELL_AFTER_PIVOT
 ```
 
-Ese tercer perfil existe porque después de:
-
-```text
-approach front wall
--> pivot 180
--> advance de salida
-```
-
-el sensor trasero puede arrancar ya sobre la cartulina especial, no sobre la cinta de entrada.
+Esto evita confundir la cartulina central con la cinta de salida.
 
 ---
 
-## Dead-end
+## Supervisor state/action
 
-Cuando el supervisor decide volver en un callejón sin salida:
+Estados principales:
 
-```text
-GO_BACK
--> RUN_APPROACH_FRONT_WALL_FOR_PIVOT
--> RUN_PIVOT_180
--> RUN_ADVANCE
--> DECIDE
+```c
+APP_NAV_SUPERVISOR_IDLE = 0
+APP_NAV_SUPERVISOR_START_INITIAL_ADVANCE = 1
+APP_NAV_SUPERVISOR_RUN_INITIAL_ADVANCE = 2
+APP_NAV_SUPERVISOR_DECIDE = 3
+APP_NAV_SUPERVISOR_RUN_ADVANCE = 4
+APP_NAV_SUPERVISOR_RUN_APPROACH_FRONT_WALL_FOR_PIVOT = 5
+APP_NAV_SUPERVISOR_RUN_SMOOTH_LEFT = 6
+APP_NAV_SUPERVISOR_RUN_SMOOTH_RIGHT = 7
+APP_NAV_SUPERVISOR_RUN_PIVOT_180 = 8
+APP_NAV_SUPERVISOR_ERROR = 9
+APP_NAV_SUPERVISOR_RUN_CENTER_FRONT_TAPE_FOR_PIVOT = 10
 ```
 
-Después del pivot 180, el robot no decide inmediatamente. Primero avanza hasta confirmar cinta trasera, para salir correctamente de la celda.
+Acciones principales:
+
+```c
+APP_NAV_SUPERVISOR_ACTION_NONE = 0
+APP_NAV_SUPERVISOR_ACTION_INITIAL_ADVANCE = 1
+APP_NAV_SUPERVISOR_ACTION_ADVANCE = 2
+APP_NAV_SUPERVISOR_ACTION_APPROACH_FRONT_WALL_FOR_PIVOT = 3
+APP_NAV_SUPERVISOR_ACTION_SMOOTH_LEFT = 4
+APP_NAV_SUPERVISOR_ACTION_SMOOTH_RIGHT = 5
+APP_NAV_SUPERVISOR_ACTION_PIVOT_180 = 6
+APP_NAV_SUPERVISOR_ACTION_CENTER_FRONT_TAPE_FOR_PIVOT = 7
+```
+
+Importante:
+
+```text
+APP_NAV_SUPERVISOR_ERROR se mantiene en 9 por compatibilidad con HMI/debug.
+El nuevo estado CENTER_FRONT_TAPE_FOR_PIVOT se agregó como 10.
+```
 
 ---
 
-## Supervisor result codes
+## Result codes
 
 Valores públicos de `last_result`:
 
 ```c
-APP_NAV_SUPERVISOR_RESULT_OK                  = 0
-APP_NAV_SUPERVISOR_RESULT_INVALID_ARGUMENT    = 1
-APP_NAV_SUPERVISOR_RESULT_START_FAILED        = 2
-APP_NAV_SUPERVISOR_RESULT_PRIMITIVE_ERROR     = 3
-APP_NAV_SUPERVISOR_RESULT_UNSUPPORTED_ACTION  = 4
+APP_NAV_SUPERVISOR_RESULT_OK = 0
+APP_NAV_SUPERVISOR_RESULT_INVALID_ARGUMENT = 1
+APP_NAV_SUPERVISOR_RESULT_START_FAILED = 2
+APP_NAV_SUPERVISOR_RESULT_PRIMITIVE_ERROR = 3
+APP_NAV_SUPERVISOR_RESULT_UNSUPPORTED_ACTION = 4
 APP_NAV_SUPERVISOR_RESULT_FIND_CELLS_COMPLETE = 5
+APP_NAV_SUPERVISOR_RESULT_FIND_CELLS_INCOMPLETE_NO_FRONTIER = 6
 ```
 
-Cuando `FIND_CELLS` termina correctamente:
+Cuando `FIND_CELLS` termina:
 
 ```text
-state       = APP_NAV_SUPERVISOR_IDLE
-active      = 0
-last_result = APP_NAV_SUPERVISOR_RESULT_FIND_CELLS_COMPLETE
+active = 0
+state = IDLE
+action = NONE
+last_result = resultado correspondiente
 ```
 
 ---
 
-## Flujo STM32 app_core
+## Debug supervisor / comando 0x9C
 
-El loop de control prioriza:
-
-```text
-1. primitive_test.active
-2. supervisor_run_active
-3. motores en 0 si no hay flujo activo
-```
-
-Esquema conceptual:
-
-```text
-Run_Control_Step()
-    ADC_Filter_Task()
-    Update sensor snapshot
-    Run_Portable_Nav_Tick()           // percepción/debug
-    Apply perception to snapshot
-
-    if primitive_test.active:
-        PrimitiveTest_Tick()
-        return
-
-    if supervisor_run_active:
-        Tick_Supervisor_Run()
-        return
-
-    Set_Motor_Speeds(0, 0)
-```
-
-`App_Nav_Tick()` se conserva como shell de percepción/debug. No ejecuta misión.
-
-La misión real se ejecuta mediante:
-
-```text
-Tick_Supervisor_Run()
--> App_NavSupervisor_Tick()
--> AppNavOutput
--> motores
-```
-
----
-
-## Comandos HMI relevantes
-
-Comandos nuevos/importantes:
+Comando:
 
 ```c
-CMD_SET_SUPERVISOR_INITIAL_POSE  = 0x98
-CMD_GET_SUPERVISOR_INITIAL_POSE  = 0x99
-CMD_START_SUPERVISOR_RUN         = 0x9A
-CMD_STOP_SUPERVISOR_RUN          = 0x9B
-CMD_GET_SUPERVISOR_DEBUG_STATUS  = 0x9C
+CMD_GET_SUPERVISOR_DEBUG_STATUS = 0x9C
 ```
 
-También existen comandos de configuración para parámetros de navegación, primitive test y sincronización de mapa.
-
-La pose inicial se configura desde la HMI. El start del supervisor usa la pose/configuración ya cargada en STM32. No debe reconstruir defaults ni enviar configuración automáticamente desde la HMI al iniciar.
-
-`CMD_GET_SUPERVISOR_DEBUG_STATUS` devuelve un payload de 9 bytes:
+Payload de 9 bytes:
 
 ```text
 [0] state
@@ -540,196 +861,250 @@ La pose inicial se configura desde la HMI. El start del supervisor usa la pose/c
 [8] special_found_count
 ```
 
-`maze_cell` es el byte completo de celda, con paredes, `CELL_VISITED` y `CELL_SPECIAL`. `special_found_count` es el contador de celdas especiales únicas detectadas por `FIND_CELLS`.
+La HMI muestra:
+
+```text
+Activo
+Estado
+Acción
+Resultado
+Pose
+Celda
+Especiales
+```
+
+El campo `maze_cell` contiene el byte completo con:
+
+```text
+WALL_* / CELL_VISITED / CELL_SPECIAL
+```
 
 ---
 
-## HMI y mapa
+## Flujo STM32 app_core
 
-La página principal de operación real es `pageLaberinth`. Debe entenderse como un panel operativo STM32, no como simulador local.
-
-Estado actual de esa página:
+`app_core.c` hace de adaptador hardware:
 
 ```text
-- Reset vista local: limpia solo la representación local de la HMI, no la memoria STM32.
-- Sincronizar mapa con STM32: solicita columnas del mapa real mantenido por firmware.
-- Pose inicial: envía/lee celda X/Y y heading inicial del supervisor.
-- Run del laberinto: permite iniciar/detener FIND_CELLS; GO_A_TO_B aparece como modo reservado.
-- Estado supervisor: muestra active, state, action, result, pose, cell byte y special_count.
+1. Lee sensores reales.
+2. Construye AppNavInput.
+3. Ejecuta App_NavSupervisor_Tick(&input, &output).
+4. Aplica AppNavOutput a motores.
+5. Expone telemetría/comandos UNERBUS.
 ```
 
-La HMI puede sincronizar manualmente el mapa desde STM32 por columnas.
-
-La sincronización envía el byte completo de cada celda, incluyendo:
+Cuando se detiene navegación portable, deben pararse todas las primitivas:
 
 ```text
-paredes
-CELL_VISITED
-CELL_SPECIAL
+App_NavSupervisor_Stop()
+App_Nav_StopAdvanceAction()
+App_Nav_StopSmoothAction()
+App_Nav_StopPivotAction()
+App_Nav_StopApproachFrontWallAction()
+App_Nav_StopCenterByFrontTapeForPivotAction()
 ```
-
-Las celdas especiales detectadas por firmware deben visualizarse a partir del bit `CELL_SPECIAL`.
 
 ---
 
-## Simulador
+## HMI y comandos relevantes
+
+Comandos principales relacionados con mapa/supervisor:
+
+```text
+CMD_UPDATE_MAZE_CELL                 = 0x92
+CMD_SYNC_MAZE_COLUMN                 = 0x93
+CMD_GET_NAV_DEBUG_STATUS             = 0x94
+CMD_PRIMITIVE_TEST                   = 0x95
+CMD_SET_APPROACH_FRONT_WALL_TARGET   = 0x96
+CMD_GET_APPROACH_FRONT_WALL_TARGET   = 0x97
+CMD_SET_SUPERVISOR_INITIAL_POSE      = 0x98
+CMD_GET_SUPERVISOR_INITIAL_POSE      = 0x99
+CMD_START_SUPERVISOR_RUN             = 0x9A
+CMD_STOP_SUPERVISOR_RUN              = 0x9B
+CMD_GET_SUPERVISOR_DEBUG_STATUS      = 0x9C
+```
+
+La HMI no debe reinterpretar coordenadas lógicas internamente como visuales. La conversión de Y se hace solo al dibujar.
+
+`pageLaberinth` se entiende como panel operativo del STM32:
+
+```text
+- sincroniza mapa desde STM32;
+- configura pose inicial;
+- inicia/detiene run;
+- muestra estado de supervisor;
+- muestra mapa lógico recibido desde STM32.
+```
+
+---
+
+## Simulador y bridge
 
 El simulador usa una copia sincronizada del firmware portable bajo `firmware_core`.
 
-Flujo de trabajo:
-
-```cmd
-tools\sync_firmware_core_from_stm32.cmd "<RUTA_AL_REPO_STM32>"
-
-Ejemplos en uso:
-
-tools\sync_firmware_core_from_stm32.cmd "C:\Users\GAMING\Desktop\MICROCONTROLADORES\MICROCONTROLADORES-STM32" en computadora desktop
-tools\sync_firmware_core_from_stm32.cmd "C:\Users\ivanl\OneDrive\Escritorio\MICROS_ACTUALIZADO\MICROCONTROLADORES\MICROCONTROLADORES-STM32" en notebook
-```
-
-El simulador representa celdas especiales físicas desde JSON mediante `special_cells`.
-
-Importante:
+Cuando se agregan nuevos estados/acciones de supervisor, el bridge del simulador debe actualizar:
 
 ```text
-La marca física del JSON es ground truth.
-CELL_SPECIAL en el overlay lógico representa lo que el firmware cree haber detectado.
+- textos de state/action;
+- whitelist de estados que permiten aplicar PWM;
+- telemetría de supervisor;
+- sincronización de firmware_core desde STM32.
 ```
 
-Ambas cosas deben distinguirse visualmente.
+Caso ya corregido conceptualmente:
+
+```text
+APP_NAV_SUPERVISOR_RUN_CENTER_FRONT_TAPE_FOR_PIVOT = 10
+APP_NAV_SUPERVISOR_ACTION_CENTER_FRONT_TAPE_FOR_PIVOT = 7
+```
+
+Si el bridge no reconoce esos valores, puede mostrar:
+
+```text
+state=unknown
+action=unknown
+left_pwm=0
+right_pwm=0
+```
+
+aunque el supervisor portable esté en `result=OK`.
 
 ---
 
-## Pruebas validadas
+## Casos corregidos importantes
 
-Estado validado hasta este punto:
+### 1. FIND_CELLS local incompleto
 
-```text
-- pasillo recto;
-- mapa L;
-- mapa U;
-- dead-end con approach + pivot 180 + advance;
-- detección de celdas especiales en mapas/escenarios de prueba compatibles con la política actual;
-- conteo de celdas especiales únicas en autito real;
-- salida desde celda especial normal;
-- salida desde celda especial con smooth;
-- salida desde celda especial en dead-end;
-- smooth con diagonal/wall entrando a post-yaw sin atrasar el mapa.
-```
-
----
-
-## Problemas ya corregidos
-
-### 1. Celda especial en dead-end
-
-Problema:
+Antes, `FIND_CELLS` usaba una recomendación local frente/derecha/izquierda/fallback. Ahora usa:
 
 ```text
-Después de pivot 180, el avance de salida desde una celda especial podía interpretar mal la cartulina.
+vecinos no visitados
+flood fill/BFS hacia frontera
+backtracking con pivot 180 si hace falta
 ```
 
-Solución:
+### 2. Smooth terminado por diagonal/pared
+
+La detección diagonal/pared durante smooth no debe cerrar la acción lógica. Debe pasar a fase post-yaw y seguir hasta cinta trasera.
+
+### 3. Celda especial en dead-end
+
+Se mantiene perfil:
 
 ```text
 APP_NAV_REAR_TAPE_PROFILE_SPECIAL_CELL_AFTER_PIVOT
 ```
 
-### 2. Smooth terminado por diagonal/pared
+para no confundir cartulina central con cinta de salida después de pivot 180.
 
-Problema:
+### 4. No frontier
+
+Si ya no hay fronteras alcanzables y faltan especiales:
 
 ```text
-DONE_WALL actualizaba heading pero no celda, y arrancaba un ADVANCE separado.
-Eso podía atrasar el mapa lógico una celda.
+FIND_CELLS_INCOMPLETE_NO_FRONTIER
 ```
 
-Solución:
+No se debe caer a navegación local indefinida.
+
+### 5. Backtracking abierto
+
+Si la ruta hacia frontera empieza atrás:
 
 ```text
-Diagonal/wall ya no termina la acción.
-Entra a POST_YAW_SEEK_REAR_TAPE y espera confirmación por sensor trasero.
+BACKTRACK_REQUIRED
 ```
 
-### 3. Detección prematura de especial
-
-Problema potencial:
+El supervisor elige:
 
 ```text
-Si se marcaba especial antes de actualizar posición lógica, podía marcarse la celda anterior.
+front wall known -> ApproachFrontWallForPivot
+front open       -> CenterByFrontTapeForPivot
 ```
 
-Solución:
+### 6. Dead-end vs backtracking
+
+Un dead-end puro no se reporta como `BACKTRACK_REQUIRED`. Se deja al fallback local para que use:
 
 ```text
-La detección especial se evalúa solo después de App_Maze_AdvanceRobotPosition().
+APP_NAV_ACTION_GO_BACK
+-> ApproachFrontWallForPivot
 ```
 
 ---
 
 ## Pendientes conocidos
 
-Pendiente principal inmediato:
+### GO_A_TO_B
+
+Reservado. No implementado.
+
+Requerimiento futuro ya definido:
 
 ```text
-- Completar FIND_CELLS con una navegación inteligente de exploración.
+Ir de una celda A a una celda B sin conocer previamente el mapa,
+usando navegación optimista.
 ```
 
-La misión actual no debe considerarse cerrada solo porque el contador de especiales y las primitivas funcionen. Falta una estrategia capaz de explorar el mapa de forma robusta, evitar ciclos y dirigirse hacia celdas/fronteras no exploradas cuando la heurística local ya no alcanza.
+No mezclar todavía con `FIND_CELLS`.
 
-No trabajar todavía en estos puntos salvo decisión explícita:
+### Validación real
+
+`FIND_CELLS` funciona correctamente en simulador sincronizado. Falta validar en el autito real con iluminación/sensores reales.
+
+Puntos esperables de ajuste real:
 
 ```text
-- GO_A_TO_B.
-- auto-sync continuo de mapa.
-- limpieza profunda de pageControl en HMI.
-- extracción grande de app_core.c en varios módulos.
-- cambio de protocolo UNERBUS.
+umbrales de suelo
+umbrales IR
+velocidad base
+target de approach a pared
+comportamiento de cinta frontal
 ```
 
-Posibles mejoras futuras:
+### Documentación secundaria
 
-```text
-- planner/floodfill/frontier o estrategia equivalente para FIND_CELLS;
-- mejorar telemetría de perfiles de cinta trasera;
-- documentar comandos UNERBUS por familia;
-- agregar pruebas sistemáticas para mapas con special_cells;
-- revisar si APP_NAV_SMOOTH_ACTION_DONE_WALL puede eliminarse definitivamente.
-```
+Este README es la referencia del supervisor. Si existe una guía externa de `FIND_CELLS`, debe mantenerse alineada con este estado.
 
 ---
 
-## Checklist antes de seguir desarrollando
+## Checklist de validación
 
-Antes de agregar lógica nueva, verificar:
+Antes de considerar estable un cambio futuro:
 
 ```text
 [ ] STM32 compila.
-[ ] HMI compila.
-[ ] Mapa simple/controlado con 3 especiales es recorrible con la política actual.
-[ ] Mapa con especial en dead-end funciona.
-[ ] Mapa con smooth desde celda especial funciona.
-[ ] Autito real encuentra 3 especiales en un mapa de prueba compatible.
-[ ] Sync manual de mapa STM32 -> HMI muestra CELL_SPECIAL correctamente.
-[ ] Start/Stop supervisor desde HMI funciona.
-[ ] Start/Stop por botón físico funciona.
-[ ] Primitive test smooth sigue funcionando.
+[ ] HMI compila si se tocaron textos/protocolo.
+[ ] Simulador sincronizado compila si se usa como banco de prueba.
+[ ] Start supervisor funciona.
+[ ] Stop supervisor funciona.
+[ ] FIND_CELLS_COMPLETE funciona al encontrar 3 especiales.
+[ ] FIND_CELLS_INCOMPLETE_NO_FRONTIER funciona al agotar fronteras.
+[ ] Dead-end clásico usa RUN_APPROACH_FRONT_WALL_FOR_PIVOT.
+[ ] Backtracking con frente abierto usa RUN_CENTER_FRONT_TAPE_FOR_PIVOT.
+[ ] Backtracking con pared frontal usa RUN_APPROACH_FRONT_WALL_FOR_PIVOT.
+[ ] Después de pivot 180 se ejecuta ADVANCE antes de volver a DECIDE.
+[ ] Celdas especiales se cuentan una sola vez.
+[ ] Mapa sincronizado HMI mantiene coordenadas lógicas correctas.
 ```
 
 ---
 
 ## Regla de mantenimiento
 
-Para esta etapa, la fuente de verdad es el repo STM32 + Qt real. No modificar el simulador salvo que se decida explícitamente volver a usarlo como banco de pruebas.
-
-Cuando se agregue navegación nueva:
+Cambios futuros deben respetar:
 
 ```text
-1. Primero analizar el cambio y el contrato esperado.
-2. Implementar en código portable cuando corresponda.
-3. Probar en autito real con mapa simple/controlado.
-4. Recién después probar casos límite.
-5. Si se decide usar simulador, sincronizar firmware portable desde STM32 hacia Sim_Autito y probar ahí como banco adicional.
+1. No poner lógica de misión en app_core.c.
+2. No poner control de motores en app_nav_supervisor.c.
+3. No hacer que app_find_cells_policy ejecute primitivas.
+4. No usar APP_NAV_ACTION_GO_BACK para BACKTRACK_REQUIRED.
+5. No modificar el byte de celda sincronizado sin revisar HMI/simulador.
+6. No agregar heap, malloc ni recursión en planificación portable.
+7. Cuando se agregue un estado/action de supervisor:
+      actualizar STM32,
+      HMI,
+      simulador/bridge,
+      textos/debug,
+      y whitelists de PWM si existen.
 ```
-
-No poner lógica de misión directamente en `app_core.c` si puede vivir en `app_nav_supervisor.c`.
