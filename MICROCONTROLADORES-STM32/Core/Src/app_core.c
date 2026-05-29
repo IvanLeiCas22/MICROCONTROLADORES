@@ -2387,12 +2387,50 @@ static bool Start_Supervisor_Run(MenuModeTypeDef requested_mode)
 
     if (requested_mode == MENU_MODE_GO_TO_B)
     {
-        (void)App_NavSupervisor_SetMission(APP_NAV_SUPERVISOR_MISSION_GO_A_TO_B);
+        uint8_t goal_x = 0U;
+        uint8_t goal_y = 0U;
+        bool goal_valid = false;
+
+        if (!App_NavSupervisor_SetMission(APP_NAV_SUPERVISOR_MISSION_GO_A_TO_B))
+        {
+            return false;
+        }
+
         menu_mode = MENU_MODE_GO_TO_B;
-        app_state = APP_STATE_MENU;
-        Set_Motor_Speeds(0, 0);
+
+        (void)App_NavSupervisor_GetGoalCell(&goal_x, &goal_y, &goal_valid);
+        if (!goal_valid)
+        {
+            (void)App_NavSupervisor_Start();
+            app_state = APP_STATE_MENU;
+            Set_Motor_Speeds(0, 0);
+            Request_Display_Update();
+            return false;
+        }
+
+        if (!App_NavSupervisor_ResetWithInitialPose(supervisor_initial_x,
+                                                   supervisor_initial_y,
+                                                   supervisor_initial_heading))
+        {
+            Set_Motor_Speeds(0, 0);
+            app_state = APP_STATE_MENU;
+            Request_Display_Update();
+            return false;
+        }
+
+        if (!App_NavSupervisor_Start())
+        {
+            Set_Motor_Speeds(0, 0);
+            app_state = APP_STATE_MENU;
+            Request_Display_Update();
+            return false;
+        }
+
+        supervisor_run_active = App_NavSupervisor_IsActive();
+        app_state = supervisor_run_active ? APP_STATE_RUNNING : APP_STATE_MENU;
+        Set_Robot_State(STATE_IDLE);
         Request_Display_Update();
-        return false;
+        return true;
     }
 
     menu_mode = MENU_MODE_IDLE;

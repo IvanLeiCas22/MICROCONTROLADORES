@@ -86,15 +86,16 @@ typedef enum
 /*
  * Supervisor mission selector.
  *
- * FIND_CELLS is the currently implemented mission. It explores the maze using
- * app_find_cells_policy: immediate unvisited neighbors first, then flood
- * fill/BFS toward the nearest exploration frontier. It finishes successfully
- * when three unique CELL_SPECIAL cells have been detected, or as incomplete
- * when no reachable frontier remains.
+ * FIND_CELLS explores the maze using app_find_cells_policy: immediate
+ * unvisited neighbors first, then flood fill/BFS toward the nearest exploration
+ * frontier. It finishes successfully when three unique CELL_SPECIAL cells have
+ * been detected, or as incomplete when no reachable frontier remains.
  *
- * GO_A_TO_B is reserved for target-cell navigation. Its destination can be
- * configured independently, but starting the mission must remain safe until the
- * navigation policy is implemented.
+ * GO_A_TO_B navigates from the configured initial/current pose to the configured
+ * goal cell using app_go_to_b_policy. It resets the logical map at mission
+ * start through the existing supervisor reset flow, starts with the initial
+ * advance acquisition, and then replans optimistically after each confirmed
+ * cell transition.
  */
 
 typedef enum
