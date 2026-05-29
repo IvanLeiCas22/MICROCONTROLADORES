@@ -568,7 +568,8 @@ void MainWindow::onPacketReceived(quint8 command, const QByteArray &payload) {
     updateSupervisorGoalCellUI(payload);
     break;
   }
-  case Unerbus::CommandId::CMD_GET_SUPERVISOR_DEBUG_STATUS: {
+  case Unerbus::CommandId::CMD_GET_SUPERVISOR_DEBUG_STATUS:
+  case Unerbus::CommandId::CMD_SUPERVISOR_STATUS_UPDATE: {
       updateSupervisorDebugStatusUI(payload);
       break;
   }
@@ -2469,6 +2470,33 @@ void MainWindow::updateSupervisorDebugStatusUI(const QByteArray &payload) {
     lblSupervisorCell->setText(
         QString("0x%1").arg(maze_cell, 2, 16, QChar('0')).toUpper());
     lblSupervisorSpecials->setText(QString("%1/3").arg(special_found_count));
+
+    if ((maze_x < MAZE_WIDTH) &&
+        (maze_y < MAZE_HEIGHT) &&
+        (maze_heading <= static_cast<quint8>(HEADING_WEST))) {
+        const int logical_x = static_cast<int>(maze_x);
+        const int logical_y = static_cast<int>(maze_y);
+
+        robot_maze_map[logical_x][logical_y] = maze_cell;
+
+        if ((maze_cell & WALL_NORTH) && (logical_y < MAZE_HEIGHT - 1))
+            robot_maze_map[logical_x][logical_y + 1] |= WALL_SOUTH;
+
+        if ((maze_cell & WALL_SOUTH) && (logical_y > 0))
+            robot_maze_map[logical_x][logical_y - 1] |= WALL_NORTH;
+
+        if ((maze_cell & WALL_EAST) && (logical_x < MAZE_WIDTH - 1))
+            robot_maze_map[logical_x + 1][logical_y] |= WALL_WEST;
+
+        if ((maze_cell & WALL_WEST) && (logical_x > 0))
+            robot_maze_map[logical_x - 1][logical_y] |= WALL_EAST;
+
+        current_x = maze_x;
+        current_y = maze_y;
+        current_heading = static_cast<Heading>(maze_heading);
+
+        drawMaze();
+    }
 }
 
 void MainWindow::on_btnSetSupervisorInitialPose_clicked() {

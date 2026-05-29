@@ -298,6 +298,8 @@ uint8_t wall_fade_ticks = WALL_FADE_TICKS_DEFAULT;
 static SensorSnapshotTypeDef sensor_snapshot;
 static PrimitiveTestContextTypeDef primitive_test;
 static bool supervisor_run_active = false;
+static uint8_t supervisor_status_update_100ms_counter = 0U;
+static _sUNERBUSHandle *supervisor_status_update_bus = NULL;
 
 /* MPU yaw integration state. Yaw is stored as Q16.16 degrees. */
 
@@ -370,6 +372,9 @@ static void Set_Pid_Gains_From_U16(PID_Role_t role, uint16_t kp_x100, uint16_t k
 static void Write_Pid_Gains_To_Buffer(PID_Role_t role, uint8_t *buffer);
 static void Write_Nav_Debug_Status_To_Buffer(uint8_t *buffer);
 static void Write_Supervisor_Debug_Status_To_Buffer(uint8_t *buffer);
+static void Select_Supervisor_Status_Update_Bus(_sUNERBUSHandle *aBus);
+static void Send_Supervisor_Status_Update(void);
+static void Tick_Supervisor_Status_Update_100ms(void);
 static void Nav_Debug_SetTransitionReason(NavDebugTransitionReason reason);
 static void Nav_Debug_ClearYawTarget(void);
 static int32_t Gain_Hundredths_To_Fixed(uint16_t gain_x100);
@@ -718,6 +723,48 @@ static void Write_Nav_Debug_Status_To_Buffer(uint8_t *buffer)
     buffer[idx++] = (uint8_t)((nav_debug.transition_sequence >> 8) & 0xFFU);
 }
 
+
+static void Select_Supervisor_Status_Update_Bus(_sUNERBUSHandle *aBus)
+{
+    if ((aBus == &unerbus_pc_handle) || (aBus == &unerbus_esp01_handle))
+    {
+        supervisor_status_update_bus = aBus;
+    }
+}
+
+static void Send_Supervisor_Status_Update(void)
+{
+    uint8_t supervisor_debug_buffer[UNERBUS_SUPERVISOR_DEBUG_STATUS_SIZE];
+    _sUNERBUSHandle *target_bus = supervisor_status_update_bus;
+
+    if (target_bus == NULL)
+    {
+        target_bus = &unerbus_pc_handle;
+    }
+
+    Write_Supervisor_Debug_Status_To_Buffer(supervisor_debug_buffer);
+    UNERBUS_Write(target_bus, supervisor_debug_buffer, UNERBUS_SUPERVISOR_DEBUG_STATUS_SIZE);
+    UNERBUS_Send(target_bus,
+                 CMD_SUPERVISOR_STATUS_UPDATE,
+                 UNERBUS_CMD_ID_SIZE + UNERBUS_SUPERVISOR_DEBUG_STATUS_SIZE);
+}
+
+static void Tick_Supervisor_Status_Update_100ms(void)
+{
+    if (!supervisor_run_active)
+    {
+        supervisor_status_update_100ms_counter = 0U;
+        return;
+    }
+
+    supervisor_status_update_100ms_counter++;
+    if (supervisor_status_update_100ms_counter >= SUPERVISOR_STATUS_UPDATE_PERIOD_100MS_TICKS)
+    {
+        supervisor_status_update_100ms_counter = 0U;
+        Send_Supervisor_Status_Update();
+    }
+}
+
 static void Write_Supervisor_Debug_Status_To_Buffer(uint8_t *buffer)
 {
     AppNavSupervisorDebug debug;
@@ -842,6 +889,12 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
     uint16_t vel_kd_int = 0;
 
     id = UNERBUS_GetUInt8(aBus);
+    if ((id >= (uint8_t)CMD_SET_SUPERVISOR_INITIAL_POSE) &&
+        (id <= (uint8_t)CMD_GET_SUPERVISOR_GOAL_CELL))
+    {
+        Select_Supervisor_Status_Update_Bus(aBus);
+    }
+
     switch ((CommandIdTypeDef)id)
     {
     case CMD_GET_LOCAL_IP_ADDRESS: // GET LOCAL IP
@@ -1556,6 +1609,8 @@ void Do100ms(void)
 
     if (timeout_alive_udp)
         timeout_alive_udp--;
+
+    Tick_Supervisor_Status_Update_100ms();
 
 }
 
@@ -2343,6 +2398,7 @@ static void Stop_Portable_Nav_Actions(void)
 static void Supervisor_Run_SetInactiveMenuState(void)
 {
     supervisor_run_active = false;
+    supervisor_status_update_100ms_counter = 0U;
     app_state = APP_STATE_MENU;
     Set_Robot_State(STATE_IDLE);
 }
@@ -2378,6 +2434,7 @@ static bool Start_Supervisor_Run(MenuModeTypeDef requested_mode)
         }
 
         supervisor_run_active = true;
+        supervisor_status_update_100ms_counter = 0U;
         app_state = APP_STATE_RUNNING;
         menu_mode = MENU_MODE_FIND_CELLS;
         Set_Robot_State(STATE_IDLE);
@@ -2427,6 +2484,7 @@ static bool Start_Supervisor_Run(MenuModeTypeDef requested_mode)
         }
 
         supervisor_run_active = App_NavSupervisor_IsActive();
+        supervisor_status_update_100ms_counter = 0U;
         app_state = supervisor_run_active ? APP_STATE_RUNNING : APP_STATE_MENU;
         Set_Robot_State(STATE_IDLE);
         Request_Display_Update();
@@ -2465,6 +2523,7 @@ static void Tick_Supervisor_Run(uint32_t dt_ms)
     if ((supervisor_state == APP_NAV_SUPERVISOR_ERROR) ||
         (supervisor_state == APP_NAV_SUPERVISOR_IDLE))
     {
+        Send_Supervisor_Status_Update();
     	Set_Motor_Speeds(0, 0);
     	Supervisor_Run_SetInactiveMenuState();
     	Request_Display_Update();
