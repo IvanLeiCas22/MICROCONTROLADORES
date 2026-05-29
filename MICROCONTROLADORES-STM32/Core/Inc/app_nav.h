@@ -141,4 +141,16 @@ AppNavApproachFrontWallActionState App_Nav_TickApproachFrontWallAction(const App
                                                                        AppNavOutput *output);
 void App_Nav_StopApproachFrontWallAction(void);
 
+/*
+ * Center the robot before an in-cell 180° pivot using the front floor sensor.
+ *
+ * This action advances until the front floor sensor detects a valid boundary
+ * tape rising edge. It does not update logical pose by itself.
+ */
+bool App_Nav_StartCenterByFrontTapeForPivotAction(AppNavFrontTapeProfile front_tape_profile);
+
+AppNavCenterFrontTapeActionState App_Nav_TickCenterByFrontTapeForPivotAction(const AppNavInput *input,
+                                                                             AppNavOutput *output);
+void App_Nav_StopCenterByFrontTapeForPivotAction(void);
+
 #endif /* INC_APP_NAV_H_ */
