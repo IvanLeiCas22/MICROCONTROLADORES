@@ -322,6 +322,20 @@ static bool App_NavSupervisor_StartApproachFrontWallForPivot(const AppNavInput *
     return true;
 }
 
+static bool App_NavSupervisor_CurrentCellHasFrontWall(void)
+{
+    uint8_t x = 0U;
+    uint8_t y = 0U;
+    HeadingTypeDef heading = HEADING_NORTH;
+
+    if (!App_Maze_GetRobotPose(&x, &y, &heading))
+    {
+        return false;
+    }
+
+    return App_Maze_CellHasWall(x, y, heading);
+}
+
 static bool App_NavSupervisor_StartCenterFrontTapeForPivot(const AppNavInput *input)
 {
     AppNavFrontTapeProfile front_tape_profile = APP_NAV_FRONT_TAPE_PROFILE_NORMAL_CELL;
@@ -353,6 +367,23 @@ static bool App_NavSupervisor_StartCenterFrontTapeForPivot(const AppNavInput *in
                                APP_NAV_SUPERVISOR_ACTION_CENTER_FRONT_TAPE_FOR_PIVOT,
                                APP_NAV_SUPERVISOR_RESULT_OK);
     return true;
+}
+
+static bool App_NavSupervisor_StartRouteBacktrackingPivotPrep(const AppNavInput *input)
+{
+    /*
+     * BACKTRACK_REQUIRED means that the next route step is behind the robot.
+     * The physical preparation depends on the current front edge:
+     *
+     * - front wall present: use the existing front-wall approach sequence;
+     * - front open: use the front floor sensor boundary-tape sequence.
+     */
+    if (App_NavSupervisor_CurrentCellHasFrontWall())
+    {
+        return App_NavSupervisor_StartApproachFrontWallForPivot(input);
+    }
+
+    return App_NavSupervisor_StartCenterFrontTapeForPivot(input);
 }
 
 static bool App_NavSupervisor_StartPivot180(const AppNavInput *input)
@@ -467,7 +498,7 @@ static AppNavSupervisorState App_NavSupervisor_HandleDecide(const AppNavInput *i
     }
     else if (find_cells_decision.reason == APP_FIND_CELLS_DECISION_REASON_BACKTRACK_REQUIRED)
     {
-        if (!App_NavSupervisor_StartCenterFrontTapeForPivot(input))
+        if (!App_NavSupervisor_StartRouteBacktrackingPivotPrep(input))
         {
             return App_NavSupervisor_SetError(APP_NAV_SUPERVISOR_RESULT_START_FAILED);
         }
