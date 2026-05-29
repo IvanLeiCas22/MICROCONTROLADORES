@@ -230,11 +230,6 @@ static AppNavSupervisorState App_NavSupervisor_FinishFindCells(AppNavOutput *out
 
 static bool App_NavSupervisor_CheckSpecialAtConfirmedCellEntry(const AppNavInput *input)
 {
-    if (app_nav_supervisor_mission != APP_NAV_SUPERVISOR_MISSION_FIND_CELLS)
-    {
-        return false;
-    }
-
     if (input == NULL)
     {
         return false;
@@ -248,12 +243,20 @@ static bool App_NavSupervisor_CheckSpecialAtConfirmedCellEntry(const AppNavInput
 
     if (App_Maze_MarkCurrentCellSpecial())
     {
-        if (app_nav_supervisor_special_found_count < 255U)
-        {
-            app_nav_supervisor_special_found_count++;
-        }
-
         App_NavSupervisor_UpdateMazeDebug();
+
+        if (app_nav_supervisor_mission == APP_NAV_SUPERVISOR_MISSION_FIND_CELLS)
+        {
+            if (app_nav_supervisor_special_found_count < 255U)
+            {
+                app_nav_supervisor_special_found_count++;
+            }
+        }
+    }
+
+    if (app_nav_supervisor_mission != APP_NAV_SUPERVISOR_MISSION_FIND_CELLS)
+    {
+        return false;
     }
 
     return (app_nav_supervisor_special_found_count >= APP_NAV_SUPERVISOR_SPECIAL_TARGET_COUNT);
