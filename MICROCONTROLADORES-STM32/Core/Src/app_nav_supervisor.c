@@ -83,11 +83,6 @@ static void App_NavSupervisor_SetDefaultInitialPose(void)
     app_nav_supervisor_initial_pose_valid = 1U;
 }
 
-static bool App_NavSupervisor_IsValidCell(uint8_t x, uint8_t y)
-{
-    return ((x < MAZE_WIDTH) && (y < MAZE_HEIGHT));
-}
-
 static void App_NavSupervisor_ClearActionYawReference(void)
 {
     app_nav_supervisor_action_yaw_reference_q16_deg = 0;
@@ -980,7 +975,7 @@ bool App_NavSupervisor_ResetWithInitialPose(uint8_t x,
 
 bool App_NavSupervisor_SetGoalCell(uint8_t x, uint8_t y)
 {
-    if (!App_NavSupervisor_IsValidCell(x, y))
+    if (!App_Maze_IsValidCell(x, y))
     {
         app_nav_supervisor_goal_x = 0U;
         app_nav_supervisor_goal_y = 0U;

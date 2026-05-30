@@ -81,6 +81,18 @@ uint8_t App_Maze_GetCurrentCellData(void);
 /* Read-only map query API for planning                                        */
 /* -------------------------------------------------------------------------- */
 
+bool App_Maze_IsValidCell(uint8_t x,
+                           uint8_t y);
+
+HeadingTypeDef App_Maze_RotateRight(HeadingTypeDef heading);
+HeadingTypeDef App_Maze_RotateLeft(HeadingTypeDef heading);
+HeadingTypeDef App_Maze_GetOppositeDirection(HeadingTypeDef dir);
+
+uint8_t App_Maze_CellIndex(uint8_t x,
+                           uint8_t y);
+uint8_t App_Maze_IndexToX(uint8_t index);
+uint8_t App_Maze_IndexToY(uint8_t index);
+
 bool App_Maze_GetRobotPose(uint8_t *x,
                            uint8_t *y,
                            HeadingTypeDef *heading);

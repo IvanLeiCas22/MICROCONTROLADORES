@@ -36,7 +36,7 @@ static AppMazePosition_t current_pos;
 /* Internal helpers                                                            */
 /* -------------------------------------------------------------------------- */
 
-static bool App_Maze_IsValidCell(uint8_t x, uint8_t y)
+bool App_Maze_IsValidCell(uint8_t x, uint8_t y)
 {
     return ((x < MAZE_WIDTH) && (y < MAZE_HEIGHT));
 }
@@ -83,7 +83,7 @@ static uint8_t App_Maze_DirectionToKnownBit(HeadingTypeDef dir)
     }
 }
 
-static HeadingTypeDef App_Maze_GetOppositeDirection(HeadingTypeDef dir)
+HeadingTypeDef App_Maze_GetOppositeDirection(HeadingTypeDef dir)
 {
     switch (dir)
     {
@@ -100,14 +100,29 @@ static HeadingTypeDef App_Maze_GetOppositeDirection(HeadingTypeDef dir)
     }
 }
 
-static HeadingTypeDef App_Maze_RotateRight(HeadingTypeDef heading)
+HeadingTypeDef App_Maze_RotateRight(HeadingTypeDef heading)
 {
     return (HeadingTypeDef)((heading + 1) % 4);
 }
 
-static HeadingTypeDef App_Maze_RotateLeft(HeadingTypeDef heading)
+HeadingTypeDef App_Maze_RotateLeft(HeadingTypeDef heading)
 {
     return (HeadingTypeDef)((heading + 3) % 4);
+}
+
+uint8_t App_Maze_CellIndex(uint8_t x, uint8_t y)
+{
+    return (uint8_t)((y * MAZE_WIDTH) + x);
+}
+
+uint8_t App_Maze_IndexToX(uint8_t index)
+{
+    return (uint8_t)(index % MAZE_WIDTH);
+}
+
+uint8_t App_Maze_IndexToY(uint8_t index)
+{
+    return (uint8_t)(index / MAZE_WIDTH);
 }
 
 static bool App_Maze_GetNeighborInternal(uint8_t x,

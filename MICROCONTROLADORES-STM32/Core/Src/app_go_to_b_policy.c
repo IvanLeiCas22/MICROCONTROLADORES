@@ -16,41 +16,6 @@ typedef struct
 static uint8_t goal_distance[APP_GO_TO_B_CELL_COUNT];
 static uint8_t bfs_queue[APP_GO_TO_B_CELL_COUNT];
 
-static HeadingTypeDef App_GoToBPolicy_RotateRight(HeadingTypeDef heading)
-{
-    return (HeadingTypeDef)((heading + 1) % 4);
-}
-
-static HeadingTypeDef App_GoToBPolicy_RotateLeft(HeadingTypeDef heading)
-{
-    return (HeadingTypeDef)((heading + 3) % 4);
-}
-
-static HeadingTypeDef App_GoToBPolicy_GetOppositeDirection(HeadingTypeDef heading)
-{
-    return (HeadingTypeDef)((heading + 2) % 4);
-}
-
-static uint8_t App_GoToBPolicy_CellIndex(uint8_t x, uint8_t y)
-{
-    return (uint8_t)((y * MAZE_WIDTH) + x);
-}
-
-static uint8_t App_GoToBPolicy_IndexToX(uint8_t index)
-{
-    return (uint8_t)(index % MAZE_WIDTH);
-}
-
-static uint8_t App_GoToBPolicy_IndexToY(uint8_t index)
-{
-    return (uint8_t)(index / MAZE_WIDTH);
-}
-
-static bool App_GoToBPolicy_IsValidCell(uint8_t x, uint8_t y)
-{
-    return ((x < MAZE_WIDTH) && (y < MAZE_HEIGHT));
-}
-
 static void App_GoToBPolicy_ClearDecision(AppGoToBDecision *decision)
 {
     if (decision == NULL)
@@ -108,7 +73,7 @@ static bool App_GoToBPolicy_RunOptimisticFloodFill(uint8_t goal_x,
         HEADING_WEST
     };
 
-    if (!App_GoToBPolicy_IsValidCell(goal_x, goal_y))
+    if (!App_Maze_IsValidCell(goal_x, goal_y))
     {
         return false;
     }
@@ -119,15 +84,15 @@ static bool App_GoToBPolicy_RunOptimisticFloodFill(uint8_t goal_x,
         bfs_queue[i] = 0U;
     }
 
-    goal_distance[App_GoToBPolicy_CellIndex(goal_x, goal_y)] = 0U;
-    bfs_queue[queue_tail] = App_GoToBPolicy_CellIndex(goal_x, goal_y);
+    goal_distance[App_Maze_CellIndex(goal_x, goal_y)] = 0U;
+    bfs_queue[queue_tail] = App_Maze_CellIndex(goal_x, goal_y);
     queue_tail++;
 
     while (queue_head < queue_tail)
     {
         uint8_t current_idx = bfs_queue[queue_head];
-        uint8_t current_x = App_GoToBPolicy_IndexToX(current_idx);
-        uint8_t current_y = App_GoToBPolicy_IndexToY(current_idx);
+        uint8_t current_x = App_Maze_IndexToX(current_idx);
+        uint8_t current_y = App_Maze_IndexToY(current_idx);
         uint8_t current_dist = goal_distance[current_idx];
 
         queue_head++;
@@ -152,7 +117,7 @@ static bool App_GoToBPolicy_RunOptimisticFloodFill(uint8_t goal_x,
                 continue;
             }
 
-            neighbor_idx = App_GoToBPolicy_CellIndex(nx, ny);
+            neighbor_idx = App_Maze_CellIndex(nx, ny);
 
             if (goal_distance[neighbor_idx] != APP_GO_TO_B_DISTANCE_INF)
             {
@@ -176,12 +141,12 @@ static bool App_GoToBPolicy_SelectRouteStep(uint8_t x,
     const AppGoToBCandidate candidates[4] =
     {
         {heading, APP_NAV_ACTION_GO_FRONT_NAVIGATING},
-        {App_GoToBPolicy_RotateRight(heading), APP_NAV_ACTION_SMOOTH_RIGHT},
-        {App_GoToBPolicy_RotateLeft(heading), APP_NAV_ACTION_SMOOTH_LEFT},
-        {App_GoToBPolicy_GetOppositeDirection(heading), APP_NAV_ACTION_NONE}
+        {App_Maze_RotateRight(heading), APP_NAV_ACTION_SMOOTH_RIGHT},
+        {App_Maze_RotateLeft(heading), APP_NAV_ACTION_SMOOTH_LEFT},
+        {App_Maze_GetOppositeDirection(heading), APP_NAV_ACTION_NONE}
     };
 
-    uint8_t current_idx = App_GoToBPolicy_CellIndex(x, y);
+    uint8_t current_idx = App_Maze_CellIndex(x, y);
     uint8_t current_cost = goal_distance[current_idx];
     uint8_t best_cost = APP_GO_TO_B_DISTANCE_INF;
     uint8_t best_candidate_index = APP_GO_TO_B_INVALID_COORD;
@@ -215,7 +180,7 @@ static bool App_GoToBPolicy_SelectRouteStep(uint8_t x,
             continue;
         }
 
-        neighbor_idx = App_GoToBPolicy_CellIndex(nx, ny);
+        neighbor_idx = App_Maze_CellIndex(nx, ny);
         neighbor_cost = goal_distance[neighbor_idx];
 
         if (neighbor_cost == APP_GO_TO_B_DISTANCE_INF)
@@ -274,7 +239,7 @@ bool App_GoToBPolicy_Evaluate(uint8_t goal_x,
 
     App_GoToBPolicy_ClearDecision(decision_out);
 
-    if (!App_GoToBPolicy_IsValidCell(goal_x, goal_y))
+    if (!App_Maze_IsValidCell(goal_x, goal_y))
     {
         decision_out->reason = APP_GO_TO_B_DECISION_REASON_NO_PATH;
         return false;

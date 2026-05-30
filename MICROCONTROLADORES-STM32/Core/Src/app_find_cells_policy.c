@@ -16,36 +16,6 @@ typedef struct
 static uint8_t frontier_distance[APP_FIND_CELLS_CELL_COUNT];
 static uint8_t bfs_queue[APP_FIND_CELLS_CELL_COUNT];
 
-static HeadingTypeDef App_FindCellsPolicy_RotateRight(HeadingTypeDef heading)
-{
-    return (HeadingTypeDef)((heading + 1) % 4);
-}
-
-static HeadingTypeDef App_FindCellsPolicy_RotateLeft(HeadingTypeDef heading)
-{
-    return (HeadingTypeDef)((heading + 3) % 4);
-}
-
-static HeadingTypeDef App_FindCellsPolicy_GetOppositeDirection(HeadingTypeDef heading)
-{
-    return (HeadingTypeDef)((heading + 2) % 4);
-}
-
-static uint8_t App_FindCellsPolicy_CellIndex(uint8_t x, uint8_t y)
-{
-    return (uint8_t)((y * MAZE_WIDTH) + x);
-}
-
-static uint8_t App_FindCellsPolicy_IndexToX(uint8_t index)
-{
-    return (uint8_t)(index % MAZE_WIDTH);
-}
-
-static uint8_t App_FindCellsPolicy_IndexToY(uint8_t index)
-{
-    return (uint8_t)(index / MAZE_WIDTH);
-}
-
 static void App_FindCellsPolicy_ClearDecision(AppFindCellsDecision *decision)
 {
     if (decision == NULL)
@@ -101,8 +71,8 @@ static bool App_FindCellsPolicy_HasOpenNonBackExit(uint8_t x,
     const HeadingTypeDef dirs[3] =
     {
         heading,
-        App_FindCellsPolicy_RotateRight(heading),
-        App_FindCellsPolicy_RotateLeft(heading)
+        App_Maze_RotateRight(heading),
+        App_Maze_RotateLeft(heading)
     };
 
     for (uint8_t i = 0U; i < 3U; i++)
@@ -177,7 +147,7 @@ static bool App_FindCellsPolicy_RunFrontierFloodFill(void)
         {
             if (App_FindCellsPolicy_IsFrontierCell(x, y))
             {
-                uint8_t idx = App_FindCellsPolicy_CellIndex(x, y);
+                uint8_t idx = App_Maze_CellIndex(x, y);
 
                 frontier_distance[idx] = 0U;
                 bfs_queue[queue_tail] = idx;
@@ -202,8 +172,8 @@ static bool App_FindCellsPolicy_RunFrontierFloodFill(void)
         };
 
         uint8_t current_idx = bfs_queue[queue_head];
-        uint8_t current_x = App_FindCellsPolicy_IndexToX(current_idx);
-        uint8_t current_y = App_FindCellsPolicy_IndexToY(current_idx);
+        uint8_t current_x = App_Maze_IndexToX(current_idx);
+        uint8_t current_y = App_Maze_IndexToY(current_idx);
         uint8_t current_dist = frontier_distance[current_idx];
 
         queue_head++;
@@ -238,7 +208,7 @@ static bool App_FindCellsPolicy_RunFrontierFloodFill(void)
                 continue;
             }
 
-            neighbor_idx = App_FindCellsPolicy_CellIndex(nx, ny);
+            neighbor_idx = App_Maze_CellIndex(nx, ny);
 
             if (frontier_distance[neighbor_idx] != APP_FIND_CELLS_DISTANCE_INF)
             {
@@ -262,9 +232,9 @@ static bool App_FindCellsPolicy_SelectRouteStep(uint8_t x,
     const AppFindCellsCandidate candidates[4] =
     {
         {heading, APP_NAV_ACTION_GO_FRONT_NAVIGATING},
-        {App_FindCellsPolicy_RotateRight(heading), APP_NAV_ACTION_SMOOTH_RIGHT},
-        {App_FindCellsPolicy_RotateLeft(heading), APP_NAV_ACTION_SMOOTH_LEFT},
-        {App_FindCellsPolicy_GetOppositeDirection(heading), APP_NAV_ACTION_NONE}
+        {App_Maze_RotateRight(heading), APP_NAV_ACTION_SMOOTH_RIGHT},
+        {App_Maze_RotateLeft(heading), APP_NAV_ACTION_SMOOTH_LEFT},
+        {App_Maze_GetOppositeDirection(heading), APP_NAV_ACTION_NONE}
     };
 
     uint8_t best_cost = APP_FIND_CELLS_DISTANCE_INF;
@@ -303,7 +273,7 @@ static bool App_FindCellsPolicy_SelectRouteStep(uint8_t x,
             continue;
         }
 
-        neighbor_idx = App_FindCellsPolicy_CellIndex(nx, ny);
+        neighbor_idx = App_Maze_CellIndex(nx, ny);
         neighbor_cost = frontier_distance[neighbor_idx];
 
         if (neighbor_cost == APP_FIND_CELLS_DISTANCE_INF)
@@ -378,8 +348,8 @@ bool App_FindCellsPolicy_Evaluate(AppFindCellsDecision *decision_out)
     const AppFindCellsCandidate immediate_candidates[3] =
     {
         {heading, APP_NAV_ACTION_GO_FRONT_NAVIGATING},
-        {App_FindCellsPolicy_RotateRight(heading), APP_NAV_ACTION_SMOOTH_RIGHT},
-        {App_FindCellsPolicy_RotateLeft(heading), APP_NAV_ACTION_SMOOTH_LEFT}
+        {App_Maze_RotateRight(heading), APP_NAV_ACTION_SMOOTH_RIGHT},
+        {App_Maze_RotateLeft(heading), APP_NAV_ACTION_SMOOTH_LEFT}
     };
 
     for (uint8_t i = 0U; i < 3U; i++)
@@ -422,7 +392,7 @@ bool App_FindCellsPolicy_Evaluate(AppFindCellsDecision *decision_out)
     {
         uint8_t back_target_x = 0U;
         uint8_t back_target_y = 0U;
-        HeadingTypeDef back_dir = App_FindCellsPolicy_GetOppositeDirection(heading);
+        HeadingTypeDef back_dir = App_Maze_GetOppositeDirection(heading);
 
         if (App_FindCellsPolicy_IsReachableUnvisitedNeighbor(x,
                                                              y,
