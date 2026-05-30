@@ -1,11 +1,10 @@
 #include "app_go_to_b_policy.h"
 
 #include "app_maze.h"
+#include "app_route_planner.h"
 #include <stddef.h>
 
 #define APP_GO_TO_B_INVALID_COORD 0xFFU
-#define APP_GO_TO_B_DISTANCE_INF 0xFFU
-#define APP_GO_TO_B_CELL_COUNT (MAZE_WIDTH * MAZE_HEIGHT)
 
 static const AppNavRecommendedAction app_go_to_b_relative_actions[APP_MAZE_REL_COUNT] =
 {
@@ -14,9 +13,6 @@ static const AppNavRecommendedAction app_go_to_b_relative_actions[APP_MAZE_REL_C
     APP_NAV_ACTION_SMOOTH_LEFT,
     APP_NAV_ACTION_NONE
 };
-
-static uint8_t goal_distance[APP_GO_TO_B_CELL_COUNT];
-static uint8_t bfs_queue[APP_GO_TO_B_CELL_COUNT];
 
 static void App_GoToBPolicy_ClearDecision(AppGoToBDecision *decision)
 {
@@ -32,109 +28,6 @@ static void App_GoToBPolicy_ClearDecision(AppGoToBDecision *decision)
     decision->reason = APP_GO_TO_B_DECISION_REASON_NONE;
 }
 
-static bool App_GoToBPolicy_CanCrossOptimistic(uint8_t x,
-                                               uint8_t y,
-                                               HeadingTypeDef dir,
-                                               uint8_t *neighbor_x,
-                                               uint8_t *neighbor_y)
-{
-    uint8_t nx = 0U;
-    uint8_t ny = 0U;
-
-    if ((neighbor_x == NULL) || (neighbor_y == NULL))
-    {
-        return false;
-    }
-
-    if (!App_Maze_GetNeighbor(x, y, dir, &nx, &ny))
-    {
-        return false;
-    }
-
-    if (App_Maze_CellHasWall(x, y, dir))
-    {
-        return false;
-    }
-
-    *neighbor_x = nx;
-    *neighbor_y = ny;
-    return true;
-}
-
-static bool App_GoToBPolicy_RunOptimisticFloodFill(uint8_t goal_x,
-                                                   uint8_t goal_y)
-{
-    uint16_t queue_head = 0U;
-    uint16_t queue_tail = 0U;
-
-    static const HeadingTypeDef dirs[4] =
-    {
-        HEADING_NORTH,
-        HEADING_EAST,
-        HEADING_SOUTH,
-        HEADING_WEST
-    };
-
-    if (!App_Maze_IsValidCell(goal_x, goal_y))
-    {
-        return false;
-    }
-
-    for (uint16_t i = 0U; i < APP_GO_TO_B_CELL_COUNT; i++)
-    {
-        goal_distance[i] = APP_GO_TO_B_DISTANCE_INF;
-        bfs_queue[i] = 0U;
-    }
-
-    goal_distance[App_Maze_CellIndex(goal_x, goal_y)] = 0U;
-    bfs_queue[queue_tail] = App_Maze_CellIndex(goal_x, goal_y);
-    queue_tail++;
-
-    while (queue_head < queue_tail)
-    {
-        uint8_t current_idx = bfs_queue[queue_head];
-        uint8_t current_x = App_Maze_IndexToX(current_idx);
-        uint8_t current_y = App_Maze_IndexToY(current_idx);
-        uint8_t current_dist = goal_distance[current_idx];
-
-        queue_head++;
-
-        if (current_dist >= (APP_GO_TO_B_DISTANCE_INF - 1U))
-        {
-            continue;
-        }
-
-        for (uint8_t i = 0U; i < 4U; i++)
-        {
-            uint8_t nx = 0U;
-            uint8_t ny = 0U;
-            uint8_t neighbor_idx = 0U;
-
-            if (!App_GoToBPolicy_CanCrossOptimistic(current_x,
-                                                    current_y,
-                                                    dirs[i],
-                                                    &nx,
-                                                    &ny))
-            {
-                continue;
-            }
-
-            neighbor_idx = App_Maze_CellIndex(nx, ny);
-
-            if (goal_distance[neighbor_idx] != APP_GO_TO_B_DISTANCE_INF)
-            {
-                continue;
-            }
-
-            goal_distance[neighbor_idx] = (uint8_t)(current_dist + 1U);
-            bfs_queue[queue_tail] = neighbor_idx;
-            queue_tail++;
-        }
-    }
-
-    return true;
-}
-
 static bool App_GoToBPolicy_SelectRouteStep(uint8_t x,
                                             uint8_t y,
                                             HeadingTypeDef heading,
@@ -142,8 +35,8 @@ static bool App_GoToBPolicy_SelectRouteStep(uint8_t x,
 {
     HeadingTypeDef relative_dirs[APP_MAZE_REL_COUNT];
     uint8_t current_idx = App_Maze_CellIndex(x, y);
-    uint8_t current_cost = goal_distance[current_idx];
-    uint8_t best_cost = APP_GO_TO_B_DISTANCE_INF;
+    uint8_t current_cost = App_RoutePlanner_GetDistanceByIndex(current_idx);
+    uint8_t best_cost = APP_ROUTE_DISTANCE_INF;
     uint8_t best_candidate_index = APP_GO_TO_B_INVALID_COORD;
     uint8_t best_target_x = APP_GO_TO_B_INVALID_COORD;
     uint8_t best_target_y = APP_GO_TO_B_INVALID_COORD;
@@ -153,7 +46,7 @@ static bool App_GoToBPolicy_SelectRouteStep(uint8_t x,
         return false;
     }
 
-    if (current_cost == APP_GO_TO_B_DISTANCE_INF)
+    if (current_cost == APP_ROUTE_DISTANCE_INF)
     {
         decision_out->reason = APP_GO_TO_B_DECISION_REASON_NO_PATH;
         return false;
@@ -166,21 +59,22 @@ static bool App_GoToBPolicy_SelectRouteStep(uint8_t x,
         uint8_t nx = 0U;
         uint8_t ny = 0U;
         uint8_t neighbor_idx = 0U;
-        uint8_t neighbor_cost = APP_GO_TO_B_DISTANCE_INF;
+        uint8_t neighbor_cost = APP_ROUTE_DISTANCE_INF;
 
-        if (!App_GoToBPolicy_CanCrossOptimistic(x,
-                                                y,
-                                                relative_dirs[i],
-                                                &nx,
-                                                &ny))
+        if (!App_RoutePlanner_CanCross(x,
+                                        y,
+                                        relative_dirs[i],
+                                        APP_ROUTE_TRAVERSAL_OPTIMISTIC_UNKNOWN_ALLOWED,
+                                        &nx,
+                                        &ny))
         {
             continue;
         }
 
         neighbor_idx = App_Maze_CellIndex(nx, ny);
-        neighbor_cost = goal_distance[neighbor_idx];
+        neighbor_cost = App_RoutePlanner_GetDistanceByIndex(neighbor_idx);
 
-        if (neighbor_cost == APP_GO_TO_B_DISTANCE_INF)
+        if (neighbor_cost == APP_ROUTE_DISTANCE_INF)
         {
             continue;
         }
@@ -255,7 +149,15 @@ bool App_GoToBPolicy_Evaluate(uint8_t goal_x,
         return true;
     }
 
-    if (!App_GoToBPolicy_RunOptimisticFloodFill(goal_x, goal_y))
+    App_RoutePlanner_Reset();
+
+    if (!App_RoutePlanner_AddSeed(goal_x, goal_y))
+    {
+        decision_out->reason = APP_GO_TO_B_DECISION_REASON_NO_PATH;
+        return false;
+    }
+
+    if (!App_RoutePlanner_Run(APP_ROUTE_TRAVERSAL_OPTIMISTIC_UNKNOWN_ALLOWED))
     {
         decision_out->reason = APP_GO_TO_B_DECISION_REASON_NO_PATH;
         return false;

@@ -1,11 +1,10 @@
 #include "app_find_cells_policy.h"
 
 #include "app_maze.h"
+#include "app_route_planner.h"
 #include <stddef.h>
 
 #define APP_FIND_CELLS_INVALID_COORD 0xFFU
-#define APP_FIND_CELLS_DISTANCE_INF 0xFFU
-#define APP_FIND_CELLS_CELL_COUNT (MAZE_WIDTH * MAZE_HEIGHT)
 
 static const AppNavRecommendedAction app_find_cells_relative_actions[APP_MAZE_REL_COUNT] =
 {
@@ -14,9 +13,6 @@ static const AppNavRecommendedAction app_find_cells_relative_actions[APP_MAZE_RE
     APP_NAV_ACTION_SMOOTH_LEFT,
     APP_NAV_ACTION_NONE
 };
-
-static uint8_t frontier_distance[APP_FIND_CELLS_CELL_COUNT];
-static uint8_t bfs_queue[APP_FIND_CELLS_CELL_COUNT];
 
 static void App_FindCellsPolicy_ClearDecision(AppFindCellsDecision *decision)
 {
@@ -126,14 +122,9 @@ static bool App_FindCellsPolicy_IsFrontierCell(uint8_t x, uint8_t y)
 
 static bool App_FindCellsPolicy_RunFrontierFloodFill(void)
 {
-    uint16_t queue_head = 0U;
-    uint16_t queue_tail = 0U;
+    bool has_seed = false;
 
-    for (uint16_t i = 0U; i < APP_FIND_CELLS_CELL_COUNT; i++)
-    {
-        frontier_distance[i] = APP_FIND_CELLS_DISTANCE_INF;
-        bfs_queue[i] = 0U;
-    }
+    App_RoutePlanner_Reset();
 
     /*
      * Multi-source BFS:
@@ -146,81 +137,20 @@ static bool App_FindCellsPolicy_RunFrontierFloodFill(void)
         {
             if (App_FindCellsPolicy_IsFrontierCell(x, y))
             {
-                uint8_t idx = App_Maze_CellIndex(x, y);
-
-                frontier_distance[idx] = 0U;
-                bfs_queue[queue_tail] = idx;
-                queue_tail++;
+                if (App_RoutePlanner_AddSeed(x, y))
+                {
+                    has_seed = true;
+                }
             }
         }
     }
 
-    if (queue_tail == 0U)
+    if (!has_seed)
     {
         return false;
     }
 
-    while (queue_head < queue_tail)
-    {
-        static const HeadingTypeDef dirs[4] =
-        {
-            HEADING_NORTH,
-            HEADING_EAST,
-            HEADING_SOUTH,
-            HEADING_WEST
-        };
-
-        uint8_t current_idx = bfs_queue[queue_head];
-        uint8_t current_x = App_Maze_IndexToX(current_idx);
-        uint8_t current_y = App_Maze_IndexToY(current_idx);
-        uint8_t current_dist = frontier_distance[current_idx];
-
-        queue_head++;
-
-        if (current_dist >= (APP_FIND_CELLS_DISTANCE_INF - 1U))
-        {
-            continue;
-        }
-
-        for (uint8_t i = 0U; i < 4U; i++)
-        {
-            uint8_t nx = 0U;
-            uint8_t ny = 0U;
-            uint8_t neighbor_idx = 0U;
-
-            if (!App_Maze_IsKnownOpenEdge(current_x, current_y, dirs[i]))
-            {
-                continue;
-            }
-
-            if (!App_Maze_GetNeighbor(current_x, current_y, dirs[i], &nx, &ny))
-            {
-                continue;
-            }
-
-            /*
-             * Routing to a frontier is safe-only in FIND_CELLS:
-             * flood propagation crosses only already visited cells.
-             */
-            if (!App_Maze_IsCellVisited(nx, ny))
-            {
-                continue;
-            }
-
-            neighbor_idx = App_Maze_CellIndex(nx, ny);
-
-            if (frontier_distance[neighbor_idx] != APP_FIND_CELLS_DISTANCE_INF)
-            {
-                continue;
-            }
-
-            frontier_distance[neighbor_idx] = (uint8_t)(current_dist + 1U);
-            bfs_queue[queue_tail] = neighbor_idx;
-            queue_tail++;
-        }
-    }
-
-    return true;
+    return App_RoutePlanner_Run(APP_ROUTE_TRAVERSAL_KNOWN_OPEN_VISITED_ONLY);
 }
 
 static bool App_FindCellsPolicy_SelectRouteStep(uint8_t x,
@@ -229,7 +159,7 @@ static bool App_FindCellsPolicy_SelectRouteStep(uint8_t x,
                                                 AppFindCellsDecision *decision_out)
 {
     HeadingTypeDef relative_dirs[APP_MAZE_REL_COUNT];
-    uint8_t best_cost = APP_FIND_CELLS_DISTANCE_INF;
+    uint8_t best_cost = APP_ROUTE_DISTANCE_INF;
     uint8_t best_candidate_index = APP_FIND_CELLS_INVALID_COORD;
     uint8_t best_target_x = APP_FIND_CELLS_INVALID_COORD;
     uint8_t best_target_y = APP_FIND_CELLS_INVALID_COORD;
@@ -249,28 +179,21 @@ static bool App_FindCellsPolicy_SelectRouteStep(uint8_t x,
     {
         uint8_t nx = 0U;
         uint8_t ny = 0U;
-        uint8_t neighbor_idx = 0U;
-        uint8_t neighbor_cost = APP_FIND_CELLS_DISTANCE_INF;
+        uint8_t neighbor_cost = APP_ROUTE_DISTANCE_INF;
 
-        if (!App_Maze_IsKnownOpenEdge(x, y, relative_dirs[i]))
+        if (!App_RoutePlanner_CanCross(x,
+                                       y,
+                                       relative_dirs[i],
+                                       APP_ROUTE_TRAVERSAL_KNOWN_OPEN_VISITED_ONLY,
+                                       &nx,
+                                       &ny))
         {
             continue;
         }
 
-        if (!App_Maze_GetNeighbor(x, y, relative_dirs[i], &nx, &ny))
-        {
-            continue;
-        }
+        neighbor_cost = App_RoutePlanner_GetDistance(nx, ny);
 
-        if (!App_Maze_IsCellVisited(nx, ny))
-        {
-            continue;
-        }
-
-        neighbor_idx = App_Maze_CellIndex(nx, ny);
-        neighbor_cost = frontier_distance[neighbor_idx];
-
-        if (neighbor_cost == APP_FIND_CELLS_DISTANCE_INF)
+        if (neighbor_cost == APP_ROUTE_DISTANCE_INF)
         {
             continue;
         }
