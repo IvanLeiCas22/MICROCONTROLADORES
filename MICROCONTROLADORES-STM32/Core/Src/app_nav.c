@@ -36,6 +36,12 @@ typedef enum
     APP_NAV_FRONT_TAPE_GATE_ARMED_FOR_BOUNDARY_TAPE
 } AppNavFrontTapeGateState;
 
+typedef enum
+{
+    APP_NAV_FORWARD_GUIDANCE_WALL_FOLLOW = 0,
+    APP_NAV_FORWARD_GUIDANCE_YAW_HOLD
+} AppNavForwardGuidanceMode;
+
 static AppNavConfig app_nav_config;
 static AppNavDebug app_nav_debug;
 static PID_Controller_t app_nav_advance_pid;
@@ -1569,16 +1575,26 @@ bool App_Nav_ComputeWallFollowPwm(const AppNavInput *input,
     return true;
 }
 
-static bool App_Nav_ComputeAdvanceActionPwm(const AppNavInput *input,
-                                            AppNavOutput *output)
+static bool App_Nav_ComputeForwardGuidedPwm(const AppNavInput *input,
+                                            AppNavOutput *output,
+                                            uint8_t force_yaw_hold,
+                                            uint8_t *yaw_hold_started,
+                                            AppNavForwardGuidanceMode *guidance_mode)
 {
-    if ((app_nav_advance_action_state == APP_NAV_ADVANCE_ACTION_RUNNING_YAW_HOLD) ||
-        (app_nav_advance_yaw_hold_started != 0U))
+    if ((input == NULL) ||
+        (output == NULL) ||
+        (yaw_hold_started == NULL) ||
+        (guidance_mode == NULL))
     {
-        if (app_nav_advance_yaw_hold_started == 0U)
+        return false;
+    }
+
+    if ((force_yaw_hold != 0U) || (*yaw_hold_started != 0U))
+    {
+        if (*yaw_hold_started == 0U)
         {
             (void)App_Nav_StartYawHoldAdvanceInternal(input->yaw_q16_deg, 0U);
-            app_nav_advance_yaw_hold_started = 1U;
+            *yaw_hold_started = 1U;
         }
 
         if (!App_Nav_ComputeYawHoldAdvancePwm(input,
@@ -1589,7 +1605,7 @@ static bool App_Nav_ComputeAdvanceActionPwm(const AppNavInput *input,
             return false;
         }
 
-        app_nav_advance_action_state = APP_NAV_ADVANCE_ACTION_RUNNING_YAW_HOLD;
+        *guidance_mode = APP_NAV_FORWARD_GUIDANCE_YAW_HOLD;
         return true;
     }
 
@@ -1598,12 +1614,12 @@ static bool App_Nav_ComputeAdvanceActionPwm(const AppNavInput *input,
                                      app_nav_config.left_motor_base_speed,
                                      output))
     {
-        app_nav_advance_action_state = APP_NAV_ADVANCE_ACTION_RUNNING_WALL_FOLLOW;
+        *guidance_mode = APP_NAV_FORWARD_GUIDANCE_WALL_FOLLOW;
         return true;
     }
 
     (void)App_Nav_StartYawHoldAdvanceInternal(input->yaw_q16_deg, 0U);
-    app_nav_advance_yaw_hold_started = 1U;
+    *yaw_hold_started = 1U;
 
     if (!App_Nav_ComputeYawHoldAdvancePwm(input,
                                           app_nav_config.right_motor_base_speed,
@@ -1613,7 +1629,37 @@ static bool App_Nav_ComputeAdvanceActionPwm(const AppNavInput *input,
         return false;
     }
 
-    app_nav_advance_action_state = APP_NAV_ADVANCE_ACTION_RUNNING_YAW_HOLD;
+    *guidance_mode = APP_NAV_FORWARD_GUIDANCE_YAW_HOLD;
+    return true;
+}
+
+static bool App_Nav_ComputeAdvanceActionPwm(const AppNavInput *input,
+                                            AppNavOutput *output)
+{
+    AppNavForwardGuidanceMode guidance_mode;
+    uint8_t force_yaw_hold;
+
+    force_yaw_hold =
+        (app_nav_advance_action_state == APP_NAV_ADVANCE_ACTION_RUNNING_YAW_HOLD) ? 1U : 0U;
+
+    if (!App_Nav_ComputeForwardGuidedPwm(input,
+                                         output,
+                                         force_yaw_hold,
+                                         &app_nav_advance_yaw_hold_started,
+                                         &guidance_mode))
+    {
+        return false;
+    }
+
+    if (guidance_mode == APP_NAV_FORWARD_GUIDANCE_YAW_HOLD)
+    {
+        app_nav_advance_action_state = APP_NAV_ADVANCE_ACTION_RUNNING_YAW_HOLD;
+    }
+    else
+    {
+        app_nav_advance_action_state = APP_NAV_ADVANCE_ACTION_RUNNING_WALL_FOLLOW;
+    }
+
     return true;
 }
 
@@ -1854,7 +1900,9 @@ bool App_Nav_StartApproachFrontWallAction(void)
 AppNavApproachFrontWallActionState App_Nav_TickApproachFrontWallAction(const AppNavInput *input,
                                                                        AppNavOutput *output)
 {
+    AppNavForwardGuidanceMode guidance_mode;
     uint16_t front_avg_mm;
+    uint8_t force_yaw_hold;
 
     App_Nav_ClearOutput(output);
     app_nav_debug.pwm_right_cmd = 0;
@@ -1896,50 +1944,31 @@ AppNavApproachFrontWallActionState App_Nav_TickApproachFrontWallAction(const App
         return app_nav_approach_front_wall_action_state;
     }
 
-    if ((app_nav_approach_front_wall_action_state == APP_NAV_APPROACH_FRONT_WALL_ACTION_RUNNING_YAW_HOLD) ||
-        (app_nav_approach_front_wall_yaw_hold_started != 0U))
-    {
-        if (app_nav_approach_front_wall_yaw_hold_started == 0U)
-        {
-            (void)App_Nav_StartYawHoldAdvanceInternal(input->yaw_q16_deg, 0U);
-            app_nav_approach_front_wall_yaw_hold_started = 1U;
-        }
+    force_yaw_hold =
+        (app_nav_approach_front_wall_action_state ==
+         APP_NAV_APPROACH_FRONT_WALL_ACTION_RUNNING_YAW_HOLD) ? 1U : 0U;
 
-        if (!App_Nav_ComputeYawHoldAdvancePwm(input,
-                                              app_nav_config.right_motor_base_speed,
-                                              app_nav_config.left_motor_base_speed,
-                                              output))
-        {
-            App_Nav_SetApproachFrontWallActionTerminal(APP_NAV_APPROACH_FRONT_WALL_ACTION_ERROR);
-            return app_nav_approach_front_wall_action_state;
-        }
-
-        app_nav_approach_front_wall_action_state = APP_NAV_APPROACH_FRONT_WALL_ACTION_RUNNING_YAW_HOLD;
-        return app_nav_approach_front_wall_action_state;
-    }
-
-    if (App_Nav_ComputeWallFollowPwm(input,
-                                     app_nav_config.right_motor_base_speed,
-                                     app_nav_config.left_motor_base_speed,
-                                     output))
-    {
-        app_nav_approach_front_wall_action_state = APP_NAV_APPROACH_FRONT_WALL_ACTION_RUNNING_WALL_FOLLOW;
-        return app_nav_approach_front_wall_action_state;
-    }
-
-    (void)App_Nav_StartYawHoldAdvanceInternal(input->yaw_q16_deg, 0U);
-    app_nav_approach_front_wall_yaw_hold_started = 1U;
-
-    if (!App_Nav_ComputeYawHoldAdvancePwm(input,
-                                          app_nav_config.right_motor_base_speed,
-                                          app_nav_config.left_motor_base_speed,
-                                          output))
+    if (!App_Nav_ComputeForwardGuidedPwm(input,
+                                         output,
+                                         force_yaw_hold,
+                                         &app_nav_approach_front_wall_yaw_hold_started,
+                                         &guidance_mode))
     {
         App_Nav_SetApproachFrontWallActionTerminal(APP_NAV_APPROACH_FRONT_WALL_ACTION_ERROR);
         return app_nav_approach_front_wall_action_state;
     }
 
-    app_nav_approach_front_wall_action_state = APP_NAV_APPROACH_FRONT_WALL_ACTION_RUNNING_YAW_HOLD;
+    if (guidance_mode == APP_NAV_FORWARD_GUIDANCE_YAW_HOLD)
+    {
+        app_nav_approach_front_wall_action_state =
+            APP_NAV_APPROACH_FRONT_WALL_ACTION_RUNNING_YAW_HOLD;
+    }
+    else
+    {
+        app_nav_approach_front_wall_action_state =
+            APP_NAV_APPROACH_FRONT_WALL_ACTION_RUNNING_WALL_FOLLOW;
+    }
+
     return app_nav_approach_front_wall_action_state;
 }
 
@@ -2044,7 +2073,9 @@ bool App_Nav_StartCenterByFrontTapeForPivotAction(AppNavFrontTapeProfile front_t
 AppNavCenterFrontTapeActionState App_Nav_TickCenterByFrontTapeForPivotAction(const AppNavInput *input,
                                                                              AppNavOutput *output)
 {
+    AppNavForwardGuidanceMode guidance_mode;
     bool current_front_tape;
+    uint8_t force_yaw_hold;
 
     App_Nav_ClearOutput(output);
     app_nav_debug.pwm_right_cmd = 0;
@@ -2089,50 +2120,31 @@ AppNavCenterFrontTapeActionState App_Nav_TickCenterByFrontTapeForPivotAction(con
         return app_nav_center_front_tape_action_state;
     }
 
-    if ((app_nav_center_front_tape_action_state == APP_NAV_CENTER_FRONT_TAPE_ACTION_RUNNING_YAW_HOLD) ||
-        (app_nav_center_front_tape_yaw_hold_started != 0U))
-    {
-        if (app_nav_center_front_tape_yaw_hold_started == 0U)
-        {
-            (void)App_Nav_StartYawHoldAdvanceInternal(input->yaw_q16_deg, 0U);
-            app_nav_center_front_tape_yaw_hold_started = 1U;
-        }
+    force_yaw_hold =
+        (app_nav_center_front_tape_action_state ==
+         APP_NAV_CENTER_FRONT_TAPE_ACTION_RUNNING_YAW_HOLD) ? 1U : 0U;
 
-        if (!App_Nav_ComputeYawHoldAdvancePwm(input,
-                                              app_nav_config.right_motor_base_speed,
-                                              app_nav_config.left_motor_base_speed,
-                                              output))
-        {
-            App_Nav_SetCenterFrontTapeActionTerminal(APP_NAV_CENTER_FRONT_TAPE_ACTION_ERROR);
-            return app_nav_center_front_tape_action_state;
-        }
-
-        app_nav_center_front_tape_action_state = APP_NAV_CENTER_FRONT_TAPE_ACTION_RUNNING_YAW_HOLD;
-        return app_nav_center_front_tape_action_state;
-    }
-
-    if (App_Nav_ComputeWallFollowPwm(input,
-                                     app_nav_config.right_motor_base_speed,
-                                     app_nav_config.left_motor_base_speed,
-                                     output))
-    {
-        app_nav_center_front_tape_action_state = APP_NAV_CENTER_FRONT_TAPE_ACTION_RUNNING_WALL_FOLLOW;
-        return app_nav_center_front_tape_action_state;
-    }
-
-    (void)App_Nav_StartYawHoldAdvanceInternal(input->yaw_q16_deg, 0U);
-    app_nav_center_front_tape_yaw_hold_started = 1U;
-
-    if (!App_Nav_ComputeYawHoldAdvancePwm(input,
-                                          app_nav_config.right_motor_base_speed,
-                                          app_nav_config.left_motor_base_speed,
-                                          output))
+    if (!App_Nav_ComputeForwardGuidedPwm(input,
+                                         output,
+                                         force_yaw_hold,
+                                         &app_nav_center_front_tape_yaw_hold_started,
+                                         &guidance_mode))
     {
         App_Nav_SetCenterFrontTapeActionTerminal(APP_NAV_CENTER_FRONT_TAPE_ACTION_ERROR);
         return app_nav_center_front_tape_action_state;
     }
 
-    app_nav_center_front_tape_action_state = APP_NAV_CENTER_FRONT_TAPE_ACTION_RUNNING_YAW_HOLD;
+    if (guidance_mode == APP_NAV_FORWARD_GUIDANCE_YAW_HOLD)
+    {
+        app_nav_center_front_tape_action_state =
+            APP_NAV_CENTER_FRONT_TAPE_ACTION_RUNNING_YAW_HOLD;
+    }
+    else
+    {
+        app_nav_center_front_tape_action_state =
+            APP_NAV_CENTER_FRONT_TAPE_ACTION_RUNNING_WALL_FOLLOW;
+    }
+
     return app_nav_center_front_tape_action_state;
 }
 
