@@ -6,14 +6,16 @@ Este documento resume el estado actual de la navegación portable del autito mic
 
 - supervisor portable `app_nav_supervisor`;
 - modo `FIND_CELLS`;
+- modo `GO_A_TO_B`;
 - política inteligente `app_find_cells_policy`;
+- política optimista `app_go_to_b_policy`;
 - mapa lógico `app_maze`;
 - primitivas de navegación `app_nav`;
-- integración con HMI Qt y simulador.
+- integración con HMI Qt, publicación autónoma de estado y simulador.
 
 La intención es que este archivo sea la referencia principal para continuar el desarrollo sin reconstruir contexto desde chats anteriores.
 
-> Fuente de verdad funcional al actualizar este README: repo STM32+Qt real versión `repomix-output-resumido-autitoReal-15.xml`.
+> Fuente de verdad funcional al actualizar este README: repo STM32+Qt real versión `repomix-output-resumido-autitoReal-6.xml`.
 
 ---
 
@@ -52,14 +54,25 @@ app_find_cells_policy.c
     - no accede a HAL;
     - no ejecuta primitivas.
 
+app_go_to_b_policy.c
+    Política portable de alto nivel para GO_A_TO_B:
+    - decide próxima acción conceptual hacia una celda objetivo B;
+    - calcula ruta optimista con BFS/flood fill hacia B;
+    - bloquea solo paredes conocidas;
+    - permite edges desconocidas como hipótesis de camino;
+    - no mueve motores;
+    - no accede a HAL;
+    - no ejecuta primitivas.
+
 app_nav_supervisor.c
     Supervisor portable de misión:
     - mapea celda actual;
-    - consulta app_find_cells_policy;
+    - consulta app_find_cells_policy o app_go_to_b_policy según misión;
     - decide qué primitiva arrancar;
     - secuencia primitivas;
     - actualiza pose lógica después de movimientos confirmados;
-    - cuenta celdas especiales;
+    - marca celdas especiales para perfiles de suelo;
+    - cuenta celdas especiales solo en FIND_CELLS;
     - finaliza la misión.
 
 app_maze.c
@@ -76,7 +89,8 @@ Regla estricta:
 ```text
 app_core adapta hardware.
 app_nav ejecuta primitivas.
-app_find_cells_policy decide exploración.
+app_find_cells_policy decide exploración FIND_CELLS.
+app_go_to_b_policy decide navegación optimista GO_A_TO_B.
 app_nav_supervisor secuencia misión y actualiza mapa.
 app_maze guarda el mapa lógico.
 ```
@@ -254,7 +268,132 @@ ERROR
     Falló una primitiva, argumento, start, o acción no soportada.
 ```
 
-`GO_A_TO_B` existe como modo reservado, pero no está implementado y debe mantenerse seguro: iniciarlo no debe mover el robot.
+
+---
+
+## Modo GO_A_TO_B
+
+`GO_A_TO_B` es una misión implementada y validada inicialmente en Bluepill.
+
+Objetivo:
+
+```text
+Ir desde la celda A actual/inicial hasta una celda objetivo B
+sin asumir conocimiento previo del mapa.
+```
+
+Reglas fijadas:
+
+```text
+A = pose lógica inicial/current pose configurada desde HMI.
+B = celda objetivo configurada desde HMI.
+Al iniciar GO_A_TO_B se resetea el mapa lógico.
+GO_A_TO_B no depende de haber ejecutado FIND_CELLS antes.
+```
+
+Finalizaciones posibles:
+
+```text
+GO_TO_B_COMPLETE
+    La pose lógica actual coincide con B.
+
+GO_TO_B_INVALID_TARGET
+    B no fue configurada o está fuera del mapa.
+    Debe fallar sin mover.
+
+GO_TO_B_NO_PATH
+    Durante la ejecución, las paredes descubiertas hacen imposible llegar a B
+    incluso permitiendo edges desconocidas de forma optimista.
+
+ERROR / PRIMITIVE_ERROR
+    Falló una primitiva o el arranque de una acción física.
+```
+
+### Inicio de GO_A_TO_B
+
+Si `A == B`:
+
+```text
+termina sin mover con GO_TO_B_COMPLETE
+```
+
+Si `A != B`:
+
+```text
+START_INITIAL_ADVANCE
+-> RUN_INITIAL_ADVANCE
+-> DECIDE
+```
+
+Esto es intencional. El robot se asume físicamente en el centro de una celda al arrancar, por lo que debe hacer la adquisición inicial/controlada antes de tomar decisiones de ruta. No debe arrancar directamente en `DECIDE`.
+
+### Policy de GO_A_TO_B
+
+La política está en:
+
+```text
+app_go_to_b_policy.c/h
+```
+
+No es shadow/debug; es lógica de producción.
+
+`App_GoToBPolicy_Evaluate(...)` devuelve una decisión conceptual:
+
+```text
+GOAL_REACHED
+    La celda actual ya es B.
+
+ROUTE_STEP
+    Existe un próximo paso de ruta hacia B.
+
+BACKTRACK_REQUIRED
+    La ruta hacia B empieza hacia atrás respecto al heading actual.
+    No debe traducirse a APP_NAV_ACTION_GO_BACK.
+
+NO_PATH
+    No hay ruta posible hacia B con el mapa parcial actual,
+    aun suponiendo transitables las edges desconocidas.
+```
+
+### BFS optimista
+
+`GO_A_TO_B` usa BFS/flood fill optimista hacia B.
+
+Criterio de cruce:
+
+```text
+si la celda vecina no existe:
+    no cruzar
+
+si hay pared conocida:
+    no cruzar
+
+si la edge está abierta conocida:
+    cruzar
+
+si la edge es desconocida:
+    cruzar optimistamente
+```
+
+Diferencia central con `FIND_CELLS`:
+
+```text
+FIND_CELLS cruza solo edges conocidas abiertas para ir hacia fronteras.
+GO_A_TO_B bloquea solo paredes conocidas y permite desconocido.
+```
+
+El planner recalcula en cada `DECIDE`, por lo que al descubrir una pared nueva puede elegir otra ruta o terminar con `GO_TO_B_NO_PATH`.
+
+### Desempate de ruta
+
+Cuando hay varios pasos equivalentes hacia B:
+
+```text
+frente -> derecha -> izquierda -> atrás
+```
+
+Si el siguiente paso elegido es atrás, la policy reporta `BACKTRACK_REQUIRED`. El supervisor decide la preparación física del pivot 180 según la geometría frontal actual.
+
 
 ---
 
@@ -750,7 +889,23 @@ SmoothAction DONE_REAR_TAPE o DONE_POST_YAW_REAR_TAPE
        App_Maze_MarkCurrentCellSpecial()
 ```
 
-`App_Maze_MarkCurrentCellSpecial()` devuelve true solo si la celda no estaba marcada antes. El supervisor incrementa `special_found_count` solo en ese caso.
+`App_Maze_MarkCurrentCellSpecial()` devuelve true solo si la celda no estaba marcada antes.
+
+Semántica por misión:
+
+```text
+FIND_CELLS:
+    marca CELL_SPECIAL;
+    si la celda era nueva, incrementa special_found_count;
+    al llegar a 3 especiales, finaliza con FIND_CELLS_COMPLETE.
+
+GO_A_TO_B:
+    marca CELL_SPECIAL;
+    no incrementa special_found_count;
+    no finaliza por detectar especiales.
+```
+
+Esto permite que `GO_A_TO_B` ignore las cartulinas como objetivo de misión, pero las reconozca como condición física para usar perfiles de suelo correctos al salir de una celda especial.
 
 ---
 
@@ -826,15 +981,37 @@ APP_NAV_SUPERVISOR_RESULT_PRIMITIVE_ERROR = 3
 APP_NAV_SUPERVISOR_RESULT_UNSUPPORTED_ACTION = 4
 APP_NAV_SUPERVISOR_RESULT_FIND_CELLS_COMPLETE = 5
 APP_NAV_SUPERVISOR_RESULT_FIND_CELLS_INCOMPLETE_NO_FRONTIER = 6
+APP_NAV_SUPERVISOR_RESULT_GO_TO_B_COMPLETE = 7
+APP_NAV_SUPERVISOR_RESULT_GO_TO_B_INVALID_TARGET = 8
+APP_NAV_SUPERVISOR_RESULT_GO_TO_B_NO_PATH = 9
 ```
 
-Cuando `FIND_CELLS` termina:
+Cuando una misión termina:
 
 ```text
 active = 0
 state = IDLE
 action = NONE
 last_result = resultado correspondiente
+```
+
+Interpretación de resultados específicos:
+
+```text
+FIND_CELLS_COMPLETE
+    Se encontraron 3 celdas especiales únicas.
+
+FIND_CELLS_INCOMPLETE_NO_FRONTIER
+    No quedan fronteras alcanzables y faltan especiales.
+
+GO_TO_B_COMPLETE
+    La celda actual coincide con B.
+
+GO_TO_B_INVALID_TARGET
+    B no fue configurada o está fuera del mapa. No debe mover.
+
+GO_TO_B_NO_PATH
+    B era válida, pero las paredes descubiertas hacen imposible llegar.
 ```
 
 ---
@@ -881,6 +1058,52 @@ WALL_* / CELL_VISITED / CELL_SPECIAL
 
 ---
 
+## Publicación autónoma de estado supervisor / comando 0x9F
+
+Además del pedido manual `CMD_GET_SUPERVISOR_DEBUG_STATUS = 0x9C`, el STM32 publica estado operativo hacia Qt:
+
+```c
+CMD_SUPERVISOR_STATUS_UPDATE = 0x9F
+```
+
+Payload de 9 bytes, igual al de `0x9C`:
+
+```text
+[0] state
+[1] current_action
+[2] active
+[3] last_result
+[4] maze_x
+[5] maze_y
+[6] maze_heading
+[7] maze_cell
+[8] special_found_count
+```
+
+Uso:
+
+```text
+Durante una corrida de supervisor:
+    enviar cada 200 ms.
+
+Al finalizar la misión:
+    enviar una última actualización final.
+```
+
+Objetivo:
+
+```text
+permitir que la HMI Qt grafique posición, heading y celda actual
+en tiempo real sin tener que pedir todo el mapa.
+```
+
+La sincronización completa por columnas sigue existiendo como herramienta secundaria/manual para resincronizar el mapa completo.
+
+No se debe usar este comando para enviar telemetría pesada como sensores IR, yaw físico, PWM o datos de bajo nivel. Es estado operativo compacto de la misión.
+
+
+---
+
 ## Flujo STM32 app_core
 
 `app_core.c` hace de adaptador hardware:
@@ -922,6 +1145,9 @@ CMD_GET_SUPERVISOR_INITIAL_POSE      = 0x99
 CMD_START_SUPERVISOR_RUN             = 0x9A
 CMD_STOP_SUPERVISOR_RUN              = 0x9B
 CMD_GET_SUPERVISOR_DEBUG_STATUS      = 0x9C
+CMD_SET_SUPERVISOR_GOAL_CELL         = 0x9D
+CMD_GET_SUPERVISOR_GOAL_CELL         = 0x9E
+CMD_SUPERVISOR_STATUS_UPDATE         = 0x9F
 ```
 
 La HMI no debe reinterpretar coordenadas lógicas internamente como visuales. La conversión de Y se hace solo al dibujar.
@@ -931,9 +1157,18 @@ La HMI no debe reinterpretar coordenadas lógicas internamente como visuales. La
 ```text
 - sincroniza mapa desde STM32;
 - configura pose inicial;
+- configura celda objetivo B para GO_A_TO_B;
 - inicia/detiene run;
 - muestra estado de supervisor;
-- muestra mapa lógico recibido desde STM32.
+- muestra mapa lógico recibido desde STM32;
+- actualiza pose/celda en tiempo real con CMD_SUPERVISOR_STATUS_UPDATE.
+```
+
+Regla de coordenadas:
+
+```text
+HMI envía y recibe x/y lógicos STM32.
+La inversión de Y solo ocurre al dibujar.
 ```
 
 ---
@@ -1031,28 +1266,56 @@ APP_NAV_ACTION_GO_BACK
 -> ApproachFrontWallForPivot
 ```
 
+### 7. GO_A_TO_B optimista
+
+`GO_A_TO_B` quedó implementado con BFS optimista:
+
+```text
+- resetea mapa al iniciar;
+- usa A como pose inicial/current pose;
+- usa B como destino configurado desde HMI;
+- permite edges desconocidas;
+- bloquea paredes conocidas;
+- replanifica en cada DECIDE;
+- finaliza con COMPLETE o NO_PATH.
+```
+
+### 8. Cartulinas en GO_A_TO_B
+
+Las celdas especiales físicas permanecen en el laberinto aunque la misión no sea `FIND_CELLS`.
+
+Corrección aplicada:
+
+```text
+GO_A_TO_B marca CELL_SPECIAL si detecta cartulina,
+pero no incrementa el contador de especiales ni finaliza por ellas.
+```
+
+Esto permite que las primitivas posteriores usen perfiles especiales y no confundan cartulina central con cinta límite.
+
 ---
 
 ## Pendientes conocidos
 
 ### GO_A_TO_B
 
-Reservado. No implementado.
+Implementado y validado inicialmente en Bluepill.
 
-Requerimiento futuro ya definido:
+Pendientes posibles, no bloqueantes:
 
 ```text
-Ir de una celda A a una celda B sin conocer previamente el mapa,
-usando navegación optimista.
+- más pruebas de estrés con mapas largos;
+- documentar casos de uso desde HMI si la UI sigue creciendo;
+- evaluar si en el futuro conviene extraer un route planner común.
 ```
 
-No mezclar todavía con `FIND_CELLS`.
+No extraer `app_route_planner.c/h` mientras la duplicación no lo justifique.
 
 ### Validación real
 
-`FIND_CELLS` funciona correctamente en simulador sincronizado. Falta validar en el autito real con iluminación/sensores reales.
+`FIND_CELLS` y `GO_A_TO_B` tienen validación inicial correcta en Bluepill.
 
-Puntos esperables de ajuste real:
+Puntos esperables de ajuste real futuro:
 
 ```text
 umbrales de suelo
@@ -1060,6 +1323,8 @@ umbrales IR
 velocidad base
 target de approach a pared
 comportamiento de cinta frontal
+casos extremos de backtracking
+rutas largas con varias cartulinas
 ```
 
 ### Documentación secundaria
@@ -1080,11 +1345,20 @@ Antes de considerar estable un cambio futuro:
 [ ] Stop supervisor funciona.
 [ ] FIND_CELLS_COMPLETE funciona al encontrar 3 especiales.
 [ ] FIND_CELLS_INCOMPLETE_NO_FRONTIER funciona al agotar fronteras.
+[ ] GO_A_TO_B con B inválida no mueve y reporta GO_TO_B_INVALID_TARGET.
+[ ] GO_A_TO_B con A == B termina sin mover con GO_TO_B_COMPLETE.
+[ ] GO_A_TO_B arranca con START_INITIAL_ADVANCE si A != B.
+[ ] GO_A_TO_B llega a B al frente.
+[ ] GO_A_TO_B llega a B con smooth.
+[ ] GO_A_TO_B reporta GO_TO_B_NO_PATH si B queda inalcanzable.
+[ ] GO_A_TO_B atraviesa celdas especiales sin confundir cartulina con cinta límite.
 [ ] Dead-end clásico usa RUN_APPROACH_FRONT_WALL_FOR_PIVOT.
 [ ] Backtracking con frente abierto usa RUN_CENTER_FRONT_TAPE_FOR_PIVOT.
 [ ] Backtracking con pared frontal usa RUN_APPROACH_FRONT_WALL_FOR_PIVOT.
 [ ] Después de pivot 180 se ejecuta ADVANCE antes de volver a DECIDE.
-[ ] Celdas especiales se cuentan una sola vez.
+[ ] Celdas especiales se cuentan una sola vez en FIND_CELLS.
+[ ] Celdas especiales se marcan pero no se cuentan en GO_A_TO_B.
+[ ] CMD_SUPERVISOR_STATUS_UPDATE actualiza pose/celda en Qt cada 200 ms durante run.
 [ ] Mapa sincronizado HMI mantiene coordenadas lógicas correctas.
 ```
 
@@ -1097,11 +1371,14 @@ Cambios futuros deben respetar:
 ```text
 1. No poner lógica de misión en app_core.c.
 2. No poner control de motores en app_nav_supervisor.c.
-3. No hacer que app_find_cells_policy ejecute primitivas.
+3. No hacer que app_find_cells_policy ni app_go_to_b_policy ejecuten primitivas.
 4. No usar APP_NAV_ACTION_GO_BACK para BACKTRACK_REQUIRED.
-5. No modificar el byte de celda sincronizado sin revisar HMI/simulador.
-6. No agregar heap, malloc ni recursión en planificación portable.
-7. Cuando se agregue un estado/action de supervisor:
+5. GO_A_TO_B no debe arrancar directo en DECIDE si A != B; debe pasar por START_INITIAL_ADVANCE.
+6. No modificar el byte de celda sincronizado sin revisar HMI/simulador.
+7. No agregar heap, malloc ni recursión en planificación portable.
+8. No agregar telemetría pesada o temporal si no es necesaria para operación/debug real.
+9. No agregar comportamiento shadow; si se implementa un modo, debe estar conectado o permanecer explícitamente no soportado.
+10. Cuando se agregue un estado/action de supervisor:
       actualizar STM32,
       HMI,
       simulador/bridge,

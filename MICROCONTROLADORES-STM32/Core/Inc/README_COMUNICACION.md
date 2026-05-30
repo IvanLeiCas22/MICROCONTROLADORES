@@ -93,6 +93,64 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData) {
 - Se extrae el comando y el payload usando las funciones de UNERBUS.
 - Se recomienda validar la longitud del payload según el comando esperado.
 
+
+## 6c. Comandos de supervisor y mapa lógico
+
+Además de los comandos generales, el proyecto usa un conjunto de comandos UNERBUS para operar y visualizar el laberinto desde la HMI Qt.
+
+### Comandos principales
+
+| Comando | Dirección típica | Uso |
+|---|---:|---|
+| `CMD_UPDATE_MAZE_CELL` (`0x92`) | STM32 -> Qt | Actualiza una celda individual del mapa. |
+| `CMD_SYNC_MAZE_COLUMN` (`0x93`) | STM32 -> Qt | Sincroniza una columna completa del mapa lógico. |
+| `CMD_SET_SUPERVISOR_INITIAL_POSE` (`0x98`) | Qt -> STM32 | Configura pose inicial `A`: `x`, `y`, `heading`. |
+| `CMD_GET_SUPERVISOR_INITIAL_POSE` (`0x99`) | Qt -> STM32 | Solicita pose inicial guardada. |
+| `CMD_START_SUPERVISOR_RUN` (`0x9A`) | Qt -> STM32 | Inicia corrida del supervisor: `FIND_CELLS` o `GO_A_TO_B`. |
+| `CMD_STOP_SUPERVISOR_RUN` (`0x9B`) | Qt -> STM32 | Detiene corrida del supervisor. |
+| `CMD_GET_SUPERVISOR_DEBUG_STATUS` (`0x9C`) | Qt -> STM32 | Solicita estado compacto del supervisor. |
+| `CMD_SET_SUPERVISOR_GOAL_CELL` (`0x9D`) | Qt -> STM32 | Configura celda objetivo `B` para `GO_A_TO_B`. |
+| `CMD_GET_SUPERVISOR_GOAL_CELL` (`0x9E`) | Qt -> STM32 | Solicita celda objetivo `B` y flag de validez. |
+| `CMD_SUPERVISOR_STATUS_UPDATE` (`0x9F`) | STM32 -> Qt | Publica estado compacto del supervisor de forma autónoma. |
+
+### Payload de estado supervisor
+
+`CMD_GET_SUPERVISOR_DEBUG_STATUS` y `CMD_SUPERVISOR_STATUS_UPDATE` usan el mismo payload compacto de 9 bytes:
+
+```text
+[0] state
+[1] current_action
+[2] active
+[3] last_result
+[4] maze_x
+[5] maze_y
+[6] maze_heading
+[7] maze_cell
+[8] special_found_count
+```
+
+`CMD_GET_SUPERVISOR_DEBUG_STATUS` es una consulta manual desde la HMI.
+
+`CMD_SUPERVISOR_STATUS_UPDATE` es una publicación autónoma del STM32. Actualmente se envía cada 200 ms durante una corrida activa del supervisor y una vez más al finalizar la misión. Su objetivo es que Qt pueda graficar en tiempo real la pose lógica, heading y byte de celda actual sin pedir sincronización completa del mapa.
+
+### Sincronización de mapa
+
+La visualización en tiempo real debe usar preferentemente `CMD_SUPERVISOR_STATUS_UPDATE` para la celda/pose actual.
+
+`CMD_SYNC_MAZE_COLUMN` sigue existiendo como mecanismo secundario para:
+
+- sincronización manual completa;
+- recuperación si la HMI se conectó tarde;
+- verificación de consistencia del mapa.
+
+Regla de coordenadas:
+
+```text
+STM32 envía coordenadas lógicas.
+Qt guarda coordenadas lógicas.
+Qt invierte Y solo al dibujar.
+```
+
 ## 7. Extensibilidad y Recomendaciones
 - Para agregar nuevos comandos, definir nuevos CMD y su lógica en el callback.
 - Para nuevos canales, reutilizar la lógica de UNERBUS y adaptar el transporte físico.
