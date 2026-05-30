@@ -7,11 +7,13 @@
 #define APP_FIND_CELLS_DISTANCE_INF 0xFFU
 #define APP_FIND_CELLS_CELL_COUNT (MAZE_WIDTH * MAZE_HEIGHT)
 
-typedef struct
+static const AppNavRecommendedAction app_find_cells_relative_actions[APP_MAZE_REL_COUNT] =
 {
-    HeadingTypeDef dir;
-    AppNavRecommendedAction action;
-} AppFindCellsCandidate;
+    APP_NAV_ACTION_GO_FRONT_NAVIGATING,
+    APP_NAV_ACTION_SMOOTH_RIGHT,
+    APP_NAV_ACTION_SMOOTH_LEFT,
+    APP_NAV_ACTION_NONE
+};
 
 static uint8_t frontier_distance[APP_FIND_CELLS_CELL_COUNT];
 static uint8_t bfs_queue[APP_FIND_CELLS_CELL_COUNT];
@@ -68,16 +70,13 @@ static bool App_FindCellsPolicy_HasOpenNonBackExit(uint8_t x,
                                                    uint8_t y,
                                                    HeadingTypeDef heading)
 {
-    const HeadingTypeDef dirs[3] =
-    {
-        heading,
-        App_Maze_RotateRight(heading),
-        App_Maze_RotateLeft(heading)
-    };
+    HeadingTypeDef relative_dirs[APP_MAZE_REL_COUNT];
 
-    for (uint8_t i = 0U; i < 3U; i++)
+    App_Maze_BuildRelativeDirections(heading, relative_dirs);
+
+    for (uint8_t i = 0U; i < APP_MAZE_REL_DIRECT_COUNT; i++)
     {
-        if (App_Maze_IsKnownOpenEdge(x, y, dirs[i]))
+        if (App_Maze_IsKnownOpenEdge(x, y, relative_dirs[i]))
         {
             return true;
         }
@@ -229,14 +228,7 @@ static bool App_FindCellsPolicy_SelectRouteStep(uint8_t x,
                                                 HeadingTypeDef heading,
                                                 AppFindCellsDecision *decision_out)
 {
-    const AppFindCellsCandidate candidates[4] =
-    {
-        {heading, APP_NAV_ACTION_GO_FRONT_NAVIGATING},
-        {App_Maze_RotateRight(heading), APP_NAV_ACTION_SMOOTH_RIGHT},
-        {App_Maze_RotateLeft(heading), APP_NAV_ACTION_SMOOTH_LEFT},
-        {App_Maze_GetOppositeDirection(heading), APP_NAV_ACTION_NONE}
-    };
-
+    HeadingTypeDef relative_dirs[APP_MAZE_REL_COUNT];
     uint8_t best_cost = APP_FIND_CELLS_DISTANCE_INF;
     uint8_t best_candidate_index = APP_FIND_CELLS_INVALID_COORD;
     uint8_t best_target_x = APP_FIND_CELLS_INVALID_COORD;
@@ -247,23 +239,25 @@ static bool App_FindCellsPolicy_SelectRouteStep(uint8_t x,
         return false;
     }
 
+    App_Maze_BuildRelativeDirections(heading, relative_dirs);
+
     /*
-     * Tie-break priority is encoded by the candidate order:
+     * Tie-break priority is encoded by the relative slot order:
      * front -> right -> left -> back.
      */
-    for (uint8_t i = 0U; i < 4U; i++)
+    for (uint8_t i = 0U; i < APP_MAZE_REL_COUNT; i++)
     {
         uint8_t nx = 0U;
         uint8_t ny = 0U;
         uint8_t neighbor_idx = 0U;
         uint8_t neighbor_cost = APP_FIND_CELLS_DISTANCE_INF;
 
-        if (!App_Maze_IsKnownOpenEdge(x, y, candidates[i].dir))
+        if (!App_Maze_IsKnownOpenEdge(x, y, relative_dirs[i]))
         {
             continue;
         }
 
-        if (!App_Maze_GetNeighbor(x, y, candidates[i].dir, &nx, &ny))
+        if (!App_Maze_GetNeighbor(x, y, relative_dirs[i], &nx, &ny))
         {
             continue;
         }
@@ -296,11 +290,11 @@ static bool App_FindCellsPolicy_SelectRouteStep(uint8_t x,
         return false;
     }
 
-    decision_out->desired_dir = candidates[best_candidate_index].dir;
+    decision_out->desired_dir = relative_dirs[best_candidate_index];
     decision_out->target_x = best_target_x;
     decision_out->target_y = best_target_y;
 
-    if (candidates[best_candidate_index].action == APP_NAV_ACTION_NONE)
+    if (app_find_cells_relative_actions[best_candidate_index] == APP_NAV_ACTION_NONE)
     {
     	/*
     	 * The route exists, but the next step is behind the robot.
@@ -314,7 +308,7 @@ static bool App_FindCellsPolicy_SelectRouteStep(uint8_t x,
         return false;
     }
 
-    decision_out->action = candidates[best_candidate_index].action;
+    decision_out->action = app_find_cells_relative_actions[best_candidate_index];
     decision_out->reason = APP_FIND_CELLS_DECISION_REASON_ROUTE_TO_FRONTIER;
     return true;
 }
@@ -324,6 +318,7 @@ bool App_FindCellsPolicy_Evaluate(AppFindCellsDecision *decision_out)
     uint8_t x = 0U;
     uint8_t y = 0U;
     HeadingTypeDef heading = HEADING_NORTH;
+    HeadingTypeDef relative_dirs[APP_MAZE_REL_COUNT];
 
     if (decision_out == NULL)
     {
@@ -337,6 +332,8 @@ bool App_FindCellsPolicy_Evaluate(AppFindCellsDecision *decision_out)
         return false;
     }
 
+    App_Maze_BuildRelativeDirections(heading, relative_dirs);
+
     /*
      * First priority: immediately enter an unvisited neighbor if it is already
      * reachable from the current decision point.
@@ -345,26 +342,19 @@ bool App_FindCellsPolicy_Evaluate(AppFindCellsDecision *decision_out)
      * front/right/left options because it requires a 180° pivot preparation
      * selected by the supervisor.
      */
-    const AppFindCellsCandidate immediate_candidates[3] =
-    {
-        {heading, APP_NAV_ACTION_GO_FRONT_NAVIGATING},
-        {App_Maze_RotateRight(heading), APP_NAV_ACTION_SMOOTH_RIGHT},
-        {App_Maze_RotateLeft(heading), APP_NAV_ACTION_SMOOTH_LEFT}
-    };
-
-    for (uint8_t i = 0U; i < 3U; i++)
+    for (uint8_t i = 0U; i < APP_MAZE_REL_DIRECT_COUNT; i++)
     {
         uint8_t target_x = 0U;
         uint8_t target_y = 0U;
 
         if (App_FindCellsPolicy_IsReachableUnvisitedNeighbor(x,
                                                              y,
-                                                             immediate_candidates[i].dir,
+                                                             relative_dirs[i],
                                                              &target_x,
                                                              &target_y))
         {
-            decision_out->action = immediate_candidates[i].action;
-            decision_out->desired_dir = immediate_candidates[i].dir;
+            decision_out->action = app_find_cells_relative_actions[i];
+            decision_out->desired_dir = relative_dirs[i];
             decision_out->target_x = target_x;
             decision_out->target_y = target_y;
             decision_out->reason = APP_FIND_CELLS_DECISION_REASON_IMMEDIATE_UNVISITED;
@@ -392,7 +382,7 @@ bool App_FindCellsPolicy_Evaluate(AppFindCellsDecision *decision_out)
     {
         uint8_t back_target_x = 0U;
         uint8_t back_target_y = 0U;
-        HeadingTypeDef back_dir = App_Maze_GetOppositeDirection(heading);
+        HeadingTypeDef back_dir = relative_dirs[APP_MAZE_REL_BACK];
 
         if (App_FindCellsPolicy_IsReachableUnvisitedNeighbor(x,
                                                              y,

@@ -81,12 +81,26 @@ uint8_t App_Maze_GetCurrentCellData(void);
 /* Read-only map query API for planning                                        */
 /* -------------------------------------------------------------------------- */
 
+typedef enum
+{
+    APP_MAZE_REL_FRONT = 0,
+    APP_MAZE_REL_RIGHT = 1,
+    APP_MAZE_REL_LEFT = 2,
+    APP_MAZE_REL_BACK = 3,
+    APP_MAZE_REL_COUNT = 4
+} AppMazeRelativeSlot;
+
+#define APP_MAZE_REL_DIRECT_COUNT 3U
+
 bool App_Maze_IsValidCell(uint8_t x,
                            uint8_t y);
 
 HeadingTypeDef App_Maze_RotateRight(HeadingTypeDef heading);
 HeadingTypeDef App_Maze_RotateLeft(HeadingTypeDef heading);
 HeadingTypeDef App_Maze_GetOppositeDirection(HeadingTypeDef dir);
+
+void App_Maze_BuildRelativeDirections(HeadingTypeDef heading,
+                                      HeadingTypeDef directions[APP_MAZE_REL_COUNT]);
 
 uint8_t App_Maze_CellIndex(uint8_t x,
                            uint8_t y);

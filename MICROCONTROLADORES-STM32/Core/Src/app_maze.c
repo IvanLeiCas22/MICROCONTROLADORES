@@ -110,6 +110,20 @@ HeadingTypeDef App_Maze_RotateLeft(HeadingTypeDef heading)
     return (HeadingTypeDef)((heading + 3) % 4);
 }
 
+void App_Maze_BuildRelativeDirections(HeadingTypeDef heading,
+                                      HeadingTypeDef directions[APP_MAZE_REL_COUNT])
+{
+    if (directions == NULL)
+    {
+        return;
+    }
+
+    directions[APP_MAZE_REL_FRONT] = heading;
+    directions[APP_MAZE_REL_RIGHT] = App_Maze_RotateRight(heading);
+    directions[APP_MAZE_REL_LEFT] = App_Maze_RotateLeft(heading);
+    directions[APP_MAZE_REL_BACK] = App_Maze_GetOppositeDirection(heading);
+}
+
 uint8_t App_Maze_CellIndex(uint8_t x, uint8_t y)
 {
     return (uint8_t)((y * MAZE_WIDTH) + x);

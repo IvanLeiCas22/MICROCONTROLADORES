@@ -7,11 +7,13 @@
 #define APP_GO_TO_B_DISTANCE_INF 0xFFU
 #define APP_GO_TO_B_CELL_COUNT (MAZE_WIDTH * MAZE_HEIGHT)
 
-typedef struct
+static const AppNavRecommendedAction app_go_to_b_relative_actions[APP_MAZE_REL_COUNT] =
 {
-    HeadingTypeDef dir;
-    AppNavRecommendedAction action;
-} AppGoToBCandidate;
+    APP_NAV_ACTION_GO_FRONT_NAVIGATING,
+    APP_NAV_ACTION_SMOOTH_RIGHT,
+    APP_NAV_ACTION_SMOOTH_LEFT,
+    APP_NAV_ACTION_NONE
+};
 
 static uint8_t goal_distance[APP_GO_TO_B_CELL_COUNT];
 static uint8_t bfs_queue[APP_GO_TO_B_CELL_COUNT];
@@ -138,14 +140,7 @@ static bool App_GoToBPolicy_SelectRouteStep(uint8_t x,
                                             HeadingTypeDef heading,
                                             AppGoToBDecision *decision_out)
 {
-    const AppGoToBCandidate candidates[4] =
-    {
-        {heading, APP_NAV_ACTION_GO_FRONT_NAVIGATING},
-        {App_Maze_RotateRight(heading), APP_NAV_ACTION_SMOOTH_RIGHT},
-        {App_Maze_RotateLeft(heading), APP_NAV_ACTION_SMOOTH_LEFT},
-        {App_Maze_GetOppositeDirection(heading), APP_NAV_ACTION_NONE}
-    };
-
+    HeadingTypeDef relative_dirs[APP_MAZE_REL_COUNT];
     uint8_t current_idx = App_Maze_CellIndex(x, y);
     uint8_t current_cost = goal_distance[current_idx];
     uint8_t best_cost = APP_GO_TO_B_DISTANCE_INF;
@@ -164,7 +159,9 @@ static bool App_GoToBPolicy_SelectRouteStep(uint8_t x,
         return false;
     }
 
-    for (uint8_t i = 0U; i < 4U; i++)
+    App_Maze_BuildRelativeDirections(heading, relative_dirs);
+
+    for (uint8_t i = 0U; i < APP_MAZE_REL_COUNT; i++)
     {
         uint8_t nx = 0U;
         uint8_t ny = 0U;
@@ -173,7 +170,7 @@ static bool App_GoToBPolicy_SelectRouteStep(uint8_t x,
 
         if (!App_GoToBPolicy_CanCrossOptimistic(x,
                                                 y,
-                                                candidates[i].dir,
+                                                relative_dirs[i],
                                                 &nx,
                                                 &ny))
         {
@@ -208,18 +205,18 @@ static bool App_GoToBPolicy_SelectRouteStep(uint8_t x,
         return false;
     }
 
-    decision_out->desired_dir = candidates[best_candidate_index].dir;
+    decision_out->desired_dir = relative_dirs[best_candidate_index];
     decision_out->target_x = best_target_x;
     decision_out->target_y = best_target_y;
 
-    if (candidates[best_candidate_index].action == APP_NAV_ACTION_NONE)
+    if (app_go_to_b_relative_actions[best_candidate_index] == APP_NAV_ACTION_NONE)
     {
         decision_out->action = APP_NAV_ACTION_NONE;
         decision_out->reason = APP_GO_TO_B_DECISION_REASON_BACKTRACK_REQUIRED;
         return false;
     }
 
-    decision_out->action = candidates[best_candidate_index].action;
+    decision_out->action = app_go_to_b_relative_actions[best_candidate_index];
     decision_out->reason = APP_GO_TO_B_DECISION_REASON_ROUTE_STEP;
     return true;
 }
