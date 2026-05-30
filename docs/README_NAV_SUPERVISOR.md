@@ -180,7 +180,6 @@ Separación deseada:
 ```text
 percepción operativa = AppNavPerception
 estado de misión     = AppNavSupervisorDebug
-telemetría legacy    = nav_debug interno de app_core.c, si hace falta por HMI
 ```
 
 No se debe volver a usar una estructura de debug como fuente obligatoria para mapear paredes o detectar piso.
@@ -1263,12 +1262,6 @@ No se debe usar este comando para enviar telemetría pesada como sensores IR, ya
 8. Expone telemetría/comandos UNERBUS.
 ```
 
-Detalle importante:
-
-```text
-CMD_GET_NAV_DEBUG_STATUS = 0x94 puede seguir exponiendo sensor_snapshot/detection_flags,
-pero esos flags ya no provienen de AppNavDebug. Provienen de AppNavPerception.
-```
 
 Cuando se detiene navegación portable, deben pararse todas las primitivas:
 
@@ -1290,7 +1283,6 @@ Comandos principales relacionados con mapa/supervisor:
 ```text
 CMD_UPDATE_MAZE_CELL                 = 0x92
 CMD_SYNC_MAZE_COLUMN                 = 0x93
-CMD_GET_NAV_DEBUG_STATUS             = 0x94
 CMD_PRIMITIVE_TEST                   = 0x95
 CMD_SET_APPROACH_FRONT_WALL_TARGET   = 0x96
 CMD_GET_APPROACH_FRONT_WALL_TARGET   = 0x97
@@ -1303,9 +1295,6 @@ CMD_SET_SUPERVISOR_GOAL_CELL         = 0x9D
 CMD_GET_SUPERVISOR_GOAL_CELL         = 0x9E
 CMD_SUPERVISOR_STATUS_UPDATE         = 0x9F
 ```
-
-`CMD_GET_NAV_DEBUG_STATUS = 0x94` se mantiene como comando de diagnóstico/telemetría existente.
-No implica que exista `AppNavDebug` en `app_nav`; la percepción operativa actual se obtiene mediante `AppNavPerception`.
 
 La HMI no debe reinterpretar coordenadas lógicas internamente como visuales. La conversión de Y se hace solo al dibujar.
 

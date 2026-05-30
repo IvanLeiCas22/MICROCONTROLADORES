@@ -189,77 +189,6 @@ typedef struct
 } PrimitiveTestContextTypeDef;
 
 /*
- * Legacy navigation debug labels kept for telemetry compatibility.
- *
- * Live mission state should be read from AppNavSupervisorDebug. These labels
- * are still useful for old HMI fields and transition diagnostics.
- */
-
-typedef enum
-{
-    NAV_DBG_TRANSITION_NONE = 0,
-    NAV_DBG_TRANSITION_START_FIND_CELLS = 1,
-    NAV_DBG_TRANSITION_STOP_TO_MENU = 2,
-    NAV_DBG_TRANSITION_FRONT_WALL_BRAKING = 10,
-    NAV_DBG_TRANSITION_DIAGONALS_LOST_DECISION = 11,
-    NAV_DBG_TRANSITION_STRAIGHT_REAR_TAPE_NAVIGATING = 12,
-    NAV_DBG_TRANSITION_STRAIGHT_REAR_TAPE_DECIDING = 13,
-    NAV_DBG_TRANSITION_DECIDE_DEAD_END = 20,
-    NAV_DBG_TRANSITION_DECIDE_SMOOTH_LEFT = 21,
-    NAV_DBG_TRANSITION_DECIDE_SMOOTH_RIGHT = 22,
-    NAV_DBG_TRANSITION_DECIDE_FRONT_NAVIGATING = 23,
-    NAV_DBG_TRANSITION_DECIDE_FRONT_STRAIGHT = 24,
-    NAV_DBG_TRANSITION_BRAKING_DONE = 30,
-    NAV_DBG_TRANSITION_SMOOTH_DONE = 40,
-    NAV_DBG_TRANSITION_PIVOT_DONE = 50,
-    NAV_DBG_TRANSITION_TURN_START = 60
-} NavDebugTransitionReason;
-
-typedef enum
-{
-    NAV_DBG_SMOOTH_DIR_NONE = 0,
-    NAV_DBG_SMOOTH_DIR_LEFT = 1,
-    NAV_DBG_SMOOTH_DIR_RIGHT = 2
-} NavDebugSmoothDirection;
-
-typedef enum
-{
-    NAV_DBG_SMOOTH_FINISH_NONE = 0,
-    NAV_DBG_SMOOTH_FINISH_REAR_TAPE = 1,
-    NAV_DBG_SMOOTH_FINISH_YAW_TARGET = 2,
-    NAV_DBG_SMOOTH_FINISH_WALL = 3,
-    NAV_DBG_SMOOTH_FINISH_POST_YAW_REAR_TAPE = 4,
-    NAV_DBG_SMOOTH_FINISH_POST_YAW_TIMEOUT = 5,
-    NAV_DBG_SMOOTH_FINISH_FRONT_WALL_SAFETY = 6
-} NavDebugSmoothFinishReason;
-
-typedef struct
-{
-    RobotStateTypeDef previous_robot_state;
-    uint8_t last_transition_reason;
-    uint8_t pending_transition_reason;
-    uint8_t smooth_direction;
-    uint8_t smooth_finish_reason;
-    int16_t yaw_target_deg;
-    int16_t pwm_right_cmd;
-    int16_t pwm_left_cmd;
-    uint16_t transition_sequence;
-} NavDebugTelemetryTypeDef;
-
-#define NAV_DEBUG_YAW_TARGET_UNAVAILABLE ((int16_t)32767)
-
-static NavDebugTelemetryTypeDef nav_debug = {
-    .previous_robot_state = STATE_IDLE,
-    .last_transition_reason = NAV_DBG_TRANSITION_NONE,
-    .pending_transition_reason = NAV_DBG_TRANSITION_NONE,
-    .smooth_direction = NAV_DBG_SMOOTH_DIR_NONE,
-    .smooth_finish_reason = NAV_DBG_SMOOTH_FINISH_NONE,
-    .yaw_target_deg = NAV_DEBUG_YAW_TARGET_UNAVAILABLE,
-    .pwm_right_cmd = 0,
-    .pwm_left_cmd = 0,
-    .transition_sequence = 0};
-
-/*
  * Runtime navigation configuration exposed through HMI commands.
  *
  * Build_AppNavConfig_From_LegacyRuntime() is the single bridge that copies these
@@ -370,13 +299,10 @@ static void Update_Navigation_Perception(void);
 static void Init_Pid_Configs(void);
 static void Set_Pid_Gains_From_U16(PID_Role_t role, uint16_t kp_x100, uint16_t ki_x100, uint16_t kd_x100);
 static void Write_Pid_Gains_To_Buffer(PID_Role_t role, uint8_t *buffer);
-static void Write_Nav_Debug_Status_To_Buffer(uint8_t *buffer);
 static void Write_Supervisor_Debug_Status_To_Buffer(uint8_t *buffer);
 static void Select_Supervisor_Status_Update_Bus(_sUNERBUSHandle *aBus);
 static void Send_Supervisor_Status_Update(void);
 static void Tick_Supervisor_Status_Update_100ms(void);
-static void Nav_Debug_SetTransitionReason(NavDebugTransitionReason reason);
-static void Nav_Debug_ClearYawTarget(void);
 static int32_t Gain_Hundredths_To_Fixed(uint16_t gain_x100);
 static uint16_t Fixed_To_Gain_Hundredths(int32_t gain_fixed);
 static AppNavConfig Build_AppNavConfig_From_LegacyRuntime(void);
@@ -667,62 +593,6 @@ static void Write_Pid_Gains_To_Buffer(PID_Role_t role, uint8_t *buffer)
     buffer[5] = (uint8_t)((kd_x100 >> 8) & 0xFF);
 }
 
-static void Write_Nav_Debug_Status_To_Buffer(uint8_t *buffer)
-{
-    uint8_t idx = 0;
-    uint8_t nav_flags = 0;
-    int16_t yaw_deg = (int16_t)FIXED_TO_INT(current_yaw_fixed);
-
-    if ((sensor_snapshot.detection_flags & SENSOR_DET_FLOOR_REAR) != 0U)
-    {
-        nav_flags |= 0x01U;
-    }
-    if ((sensor_snapshot.detection_flags & SENSOR_DET_FLOOR_FRONT) != 0U)
-    {
-        nav_flags |= 0x02U;
-    }
-    if ((sensor_snapshot.detection_flags & SENSOR_DET_WALL_FRONT) != 0U)
-    {
-        nav_flags |= 0x04U;
-    }
-
-    buffer[idx++] = (uint8_t)robot_state;
-    buffer[idx++] = (uint8_t)nav_debug.previous_robot_state;
-    buffer[idx++] = nav_debug.last_transition_reason;
-    buffer[idx++] = nav_debug.smooth_direction;
-    buffer[idx++] = nav_debug.smooth_finish_reason;
-    buffer[idx++] = nav_flags;
-
-    buffer[idx++] = (uint8_t)(sensor_snapshot.dist_front_left_mm & 0xFFU);
-    buffer[idx++] = (uint8_t)((sensor_snapshot.dist_front_left_mm >> 8) & 0xFFU);
-    buffer[idx++] = (uint8_t)(sensor_snapshot.dist_front_right_mm & 0xFFU);
-    buffer[idx++] = (uint8_t)((sensor_snapshot.dist_front_right_mm >> 8) & 0xFFU);
-
-    buffer[idx++] = (uint8_t)(yaw_deg & 0xFF);
-    buffer[idx++] = (uint8_t)(((uint16_t)yaw_deg >> 8) & 0xFFU);
-    buffer[idx++] = (uint8_t)(nav_debug.yaw_target_deg & 0xFF);
-    buffer[idx++] = (uint8_t)(((uint16_t)nav_debug.yaw_target_deg >> 8) & 0xFFU);
-
-    buffer[idx++] = (uint8_t)(nav_debug.pwm_right_cmd & 0xFF);
-    buffer[idx++] = (uint8_t)(((uint16_t)nav_debug.pwm_right_cmd >> 8) & 0xFFU);
-    buffer[idx++] = (uint8_t)(nav_debug.pwm_left_cmd & 0xFF);
-    buffer[idx++] = (uint8_t)(((uint16_t)nav_debug.pwm_left_cmd >> 8) & 0xFFU);
-
-    buffer[idx++] = (uint8_t)(sensor_snapshot.adc_filtered[SENSOR_FLOOR_REAR_CH] & 0xFFU);
-    buffer[idx++] = (uint8_t)((sensor_snapshot.adc_filtered[SENSOR_FLOOR_REAR_CH] >> 8) & 0xFFU);
-    buffer[idx++] = (uint8_t)(sensor_snapshot.adc_filtered[SENSOR_FLOOR_FRONT_CH] & 0xFFU);
-    buffer[idx++] = (uint8_t)((sensor_snapshot.adc_filtered[SENSOR_FLOOR_FRONT_CH] >> 8) & 0xFFU);
-
-    buffer[idx++] = (uint8_t)app_state;
-    buffer[idx++] = (uint8_t)menu_mode;
-    buffer[idx++] = sensor_snapshot.detection_flags;
-    buffer[idx++] = 0U;
-
-    buffer[idx++] = (uint8_t)(nav_debug.transition_sequence & 0xFFU);
-    buffer[idx++] = (uint8_t)((nav_debug.transition_sequence >> 8) & 0xFFU);
-}
-
-
 static void Select_Supervisor_Status_Update_Bus(_sUNERBUSHandle *aBus)
 {
     if ((aBus == &unerbus_pc_handle) || (aBus == &unerbus_esp01_handle))
@@ -784,19 +654,6 @@ static void Write_Supervisor_Debug_Status_To_Buffer(uint8_t *buffer)
     buffer[6] = debug.maze_heading;
     buffer[7] = debug.maze_cell;
     buffer[8] = debug.special_found_count;
-}
-
-static void Nav_Debug_SetTransitionReason(NavDebugTransitionReason reason)
-{
-    if (nav_debug.pending_transition_reason == NAV_DBG_TRANSITION_NONE)
-    {
-        nav_debug.pending_transition_reason = (uint8_t)reason;
-    }
-}
-
-static void Nav_Debug_ClearYawTarget(void)
-{
-    nav_debug.yaw_target_deg = NAV_DEBUG_YAW_TARGET_UNAVAILABLE;
 }
 
 static void Init_Pid_Configs(void)
@@ -1501,14 +1358,6 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
             UNERBUS_Write(aBus, col_buffer, payload_len);
             length = UNERBUS_CMD_ID_SIZE + payload_len;
         }
-        break;
-    }
-    case CMD_GET_NAV_DEBUG_STATUS:
-    {
-        uint8_t nav_debug_buffer[UNERBUS_NAV_DEBUG_STATUS_SIZE];
-        Write_Nav_Debug_Status_To_Buffer(nav_debug_buffer);
-        UNERBUS_Write(aBus, nav_debug_buffer, UNERBUS_NAV_DEBUG_STATUS_SIZE);
-        length = UNERBUS_CMD_ID_SIZE + UNERBUS_NAV_DEBUG_STATUS_SIZE;
         break;
     }
     case CMD_PRIMITIVE_TEST:
@@ -2500,8 +2349,6 @@ static void Stop_Supervisor_Run(void)
 
     Supervisor_Run_SetInactiveMenuState();
     menu_mode = MENU_MODE_IDLE;
-    Nav_Debug_ClearYawTarget();
-    Nav_Debug_SetTransitionReason(NAV_DBG_TRANSITION_STOP_TO_MENU);
     Request_Display_Update();
 }
 
@@ -2637,8 +2484,6 @@ static void Set_Motor_Speeds(int16_t right_speed, int16_t left_speed)
         left_rev = (-left_speed > (pwm_max_value - 1)) ? (pwm_max_value - 1) : -left_speed;
     }
 
-    nav_debug.pwm_right_cmd = (right_fwd != 0U) ? (int16_t)right_fwd : (int16_t)(-((int16_t)right_rev));
-    nav_debug.pwm_left_cmd = (left_fwd != 0U) ? (int16_t)left_fwd : (int16_t)(-((int16_t)left_rev));
 
     // Motor derecho: ch2 adelante (TIM4_CH2), ch1 atrás (TIM4_CH1)
     __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, right_fwd);
@@ -2717,15 +2562,7 @@ static int32_t Get_Filtered_ADC_Value(uint8_t channel)
  */
 static void Set_Robot_State(RobotStateTypeDef new_state)
 {
-    if (robot_state != new_state)
-    {
-        nav_debug.previous_robot_state = robot_state;
-        nav_debug.last_transition_reason = nav_debug.pending_transition_reason;
-        nav_debug.transition_sequence++;
-        robot_state = new_state;
-    }
-
-    nav_debug.pending_transition_reason = NAV_DBG_TRANSITION_NONE;
+    robot_state = new_state;
 }
 
 /**

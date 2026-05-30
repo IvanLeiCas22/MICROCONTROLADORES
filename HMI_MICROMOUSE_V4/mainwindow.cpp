@@ -692,9 +692,6 @@ void MainWindow::populateCMDComboBox() {
       "GET_WALL_TARGET_ADC (0x63)",
       static_cast<quint8>(Unerbus::CommandId::CMD_GET_WALL_TARGET_ADC));
   ui->CMDComboBox->addItem(
-      "GET_NAV_DEBUG_STATUS (0x94)",
-      static_cast<quint8>(Unerbus::CommandId::CMD_GET_NAV_DEBUG_STATUS));
-  ui->CMDComboBox->addItem(
       "GET_SUPERVISOR_DEBUG_STATUS (0x9C)",
       static_cast<quint8>(Unerbus::CommandId::CMD_GET_SUPERVISOR_DEBUG_STATUS));
 }
