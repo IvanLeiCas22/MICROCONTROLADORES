@@ -396,6 +396,16 @@ static bool App_NavSupervisor_StartRouteBacktrackingPivotPrep(const AppNavInput 
     return App_NavSupervisor_StartCenterFrontTapeForPivot(input);
 }
 
+static AppNavSupervisorState App_NavSupervisor_HandleRouteBacktrackingRequired(const AppNavInput *input)
+{
+    if (!App_NavSupervisor_StartRouteBacktrackingPivotPrep(input))
+    {
+        return App_NavSupervisor_SetError(APP_NAV_SUPERVISOR_RESULT_START_FAILED);
+    }
+
+    return app_nav_supervisor_debug.state;
+}
+
 static bool App_NavSupervisor_StartPivot180(const AppNavInput *input)
 {
     if (!App_NavSupervisor_CaptureActionYawReference(input))
@@ -413,6 +423,18 @@ static bool App_NavSupervisor_StartPivot180(const AppNavInput *input)
                                APP_NAV_SUPERVISOR_ACTION_PIVOT_180,
                                APP_NAV_SUPERVISOR_RESULT_OK);
     return true;
+}
+
+static AppNavSupervisorState App_NavSupervisor_StartPivot180AfterPreparation(const AppNavInput *input)
+{
+    app_nav_supervisor_pivot_180_exit_requires_advance = 1U;
+
+    if (!App_NavSupervisor_StartPivot180(input))
+    {
+        return App_NavSupervisor_SetError(APP_NAV_SUPERVISOR_RESULT_START_FAILED);
+    }
+
+    return app_nav_supervisor_debug.state;
 }
 
 static bool App_NavSupervisor_StartSmoothWithState(const AppNavInput *input,
@@ -508,12 +530,7 @@ static AppNavSupervisorState App_NavSupervisor_HandleFindCellsDecide(const AppNa
     }
     else if (find_cells_decision.reason == APP_FIND_CELLS_DECISION_REASON_BACKTRACK_REQUIRED)
     {
-        if (!App_NavSupervisor_StartRouteBacktrackingPivotPrep(input))
-        {
-            return App_NavSupervisor_SetError(APP_NAV_SUPERVISOR_RESULT_START_FAILED);
-        }
-
-        return app_nav_supervisor_debug.state;
+        return App_NavSupervisor_HandleRouteBacktrackingRequired(input);
     }
     else
     {
@@ -549,12 +566,7 @@ static AppNavSupervisorState App_NavSupervisor_HandleGoToBDecide(const AppNavInp
 
         if (go_to_b_decision.reason == APP_GO_TO_B_DECISION_REASON_BACKTRACK_REQUIRED)
         {
-            if (!App_NavSupervisor_StartRouteBacktrackingPivotPrep(input))
-            {
-                return App_NavSupervisor_SetError(APP_NAV_SUPERVISOR_RESULT_START_FAILED);
-            }
-
-            return app_nav_supervisor_debug.state;
+            return App_NavSupervisor_HandleRouteBacktrackingRequired(input);
         }
 
         return App_NavSupervisor_SetError(APP_NAV_SUPERVISOR_RESULT_UNSUPPORTED_ACTION);
@@ -709,14 +721,7 @@ static AppNavSupervisorState App_NavSupervisor_HandleApproachFrontWallForPivot(c
     case APP_NAV_APPROACH_FRONT_WALL_ACTION_DONE_FRONT_WALL:
         App_NavSupervisor_ClearOutput(output);
         App_Nav_StopApproachFrontWallAction();
-        app_nav_supervisor_pivot_180_exit_requires_advance = 1U;
-
-        if (!App_NavSupervisor_StartPivot180(input))
-        {
-            return App_NavSupervisor_SetError(APP_NAV_SUPERVISOR_RESULT_START_FAILED);
-        }
-
-        return app_nav_supervisor_debug.state;
+        return App_NavSupervisor_StartPivot180AfterPreparation(input);
 
     case APP_NAV_APPROACH_FRONT_WALL_ACTION_TIMEOUT:
     case APP_NAV_APPROACH_FRONT_WALL_ACTION_ERROR:
@@ -753,14 +758,7 @@ static AppNavSupervisorState App_NavSupervisor_HandleCenterFrontTapeForPivot(con
     case APP_NAV_CENTER_FRONT_TAPE_ACTION_DONE_FRONT_TAPE:
         App_NavSupervisor_ClearOutput(output);
         App_Nav_StopCenterByFrontTapeForPivotAction();
-        app_nav_supervisor_pivot_180_exit_requires_advance = 1U;
-
-        if (!App_NavSupervisor_StartPivot180(input))
-        {
-            return App_NavSupervisor_SetError(APP_NAV_SUPERVISOR_RESULT_START_FAILED);
-        }
-
-        return app_nav_supervisor_debug.state;
+        return App_NavSupervisor_StartPivot180AfterPreparation(input);
 
     case APP_NAV_CENTER_FRONT_TAPE_ACTION_TIMEOUT:
     case APP_NAV_CENTER_FRONT_TAPE_ACTION_ERROR:
