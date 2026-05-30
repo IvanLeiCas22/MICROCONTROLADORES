@@ -11,12 +11,12 @@ Este documento resume el estado actual de la navegación portable del autito mic
 - política optimista `app_go_to_b_policy`;
 - planner común `app_route_planner`;
 - mapa lógico `app_maze`;
-- primitivas de navegación `app_nav`;
+- primitivas de navegación y percepción portable `app_nav`;
 - integración con HMI Qt, publicación autónoma de estado y simulador.
 
 La intención es que este archivo sea la referencia principal para continuar el desarrollo sin reconstruir contexto desde chats anteriores.
 
-> Fuente de verdad funcional al actualizar este README: repo STM32+Qt real versión `repomix-output-resumido-autitoReal-6.xml`.
+> Fuente de verdad funcional al actualizar este README: repo STM32+Qt real versión `repomix-output-resumido-autitoReal-2.xml` de este chat.
 
 ---
 
@@ -29,6 +29,8 @@ app_core.c
     Adaptador STM32:
     - lee sensores reales;
     - arma AppNavInput;
+    - evalúa percepción portable con App_Nav_EvaluatePerception(...);
+    - actualiza sensor_snapshot.detection_flags desde AppNavPerception;
     - ejecuta supervisor o primitive tests;
     - aplica AppNavOutput a motores;
     - atiende comandos UNERBUS/HMI;
@@ -37,7 +39,8 @@ app_core.c
 
 app_nav.c
     Capa portable de percepción, controladores y primitivas:
-    - percepción de paredes/suelo;
+    - convierte AppNavInput en AppNavPerception;
+    - aplica histéresis de paredes/suelo;
     - wall-follow;
     - yaw-hold;
     - AdvanceAction;
@@ -103,14 +106,84 @@ app_maze.c
 Regla estricta:
 
 ```text
-app_core adapta hardware.
-app_nav ejecuta primitivas.
+app_core adapta hardware y publica flags de detección derivados de AppNavPerception.
+app_nav evalúa percepción portable y ejecuta primitivas.
 app_find_cells_policy decide exploración FIND_CELLS.
 app_go_to_b_policy decide navegación optimista GO_A_TO_B.
 app_route_planner calcula distancias BFS/flood fill comunes.
 app_nav_supervisor secuencia misión y actualiza mapa.
 app_maze guarda el mapa lógico y helpers geométricos.
 ```
+
+---
+
+## Percepción portable `AppNavPerception`
+
+La percepción operativa de bajo nivel está separada del debug y se concentra en:
+
+```c
+bool App_Nav_EvaluatePerception(const AppNavInput *input,
+                                AppNavPerception *perception_out);
+```
+
+Entrada:
+
+```text
+AppNavInput
+    Lecturas ya disponibles para la capa portable:
+    - ADC de sensores de piso;
+    - flags de piso negro actuales;
+    - distancias IR en milímetros;
+    - yaw/yaw-rate y dt.
+```
+
+Salida:
+
+```text
+AppNavPerception
+    Interpretación portable filtrada:
+    - floor_front_black;
+    - floor_rear_black;
+    - wall_front;
+    - wall_left;
+    - wall_right;
+    - wall_diag_left;
+    - wall_diag_right;
+    - ADCs de piso;
+    - distancias IR copiadas.
+```
+
+Reglas importantes:
+
+```text
+- AppNavPerception es percepción de producción, no debug.
+- App_Nav_EvaluatePerception(...) aplica la histéresis de paredes y suelo.
+- app_nav.c conserva internamente el estado previo necesario para esa histéresis.
+- app_nav_supervisor usa AppNavPerception para mapear paredes de la celda actual.
+- app_core usa AppNavPerception para actualizar sensor_snapshot.detection_flags.
+- App_Nav_Tick(), App_Nav_GetDebug(), AppNavDebug y app_nav_debug.h fueron eliminados.
+```
+
+Flujo operativo actual:
+
+```text
+Sensores STM32 / simulador
+-> SensorSnapshotTypeDef
+-> AppNavInput
+-> App_Nav_EvaluatePerception(...)
+-> AppNavPerception
+-> detection_flags / mapeo de paredes / primitivas
+```
+
+Separación deseada:
+
+```text
+percepción operativa = AppNavPerception
+estado de misión     = AppNavSupervisorDebug
+telemetría legacy    = nav_debug interno de app_core.c, si hace falta por HMI
+```
+
+No se debe volver a usar una estructura de debug como fuente obligatoria para mapear paredes o detectar piso.
 
 ---
 
@@ -1181,10 +1254,20 @@ No se debe usar este comando para enviar telemetría pesada como sensores IR, ya
 
 ```text
 1. Lee sensores reales.
-2. Construye AppNavInput.
-3. Ejecuta App_NavSupervisor_Tick(&input, &output).
-4. Aplica AppNavOutput a motores.
-5. Expone telemetría/comandos UNERBUS.
+2. Construye AppNavInput desde SensorSnapshotTypeDef.
+3. Evalúa percepción portable con App_Nav_EvaluatePerception(...).
+4. Actualiza sensor_snapshot.detection_flags desde AppNavPerception.
+5. Construye el AppNavInput usado por supervisor/primitive tests con esos flags filtrados.
+6. Ejecuta App_NavSupervisor_Tick(&input, &output) o primitive tests.
+7. Aplica AppNavOutput a motores.
+8. Expone telemetría/comandos UNERBUS.
+```
+
+Detalle importante:
+
+```text
+CMD_GET_NAV_DEBUG_STATUS = 0x94 puede seguir exponiendo sensor_snapshot/detection_flags,
+pero esos flags ya no provienen de AppNavDebug. Provienen de AppNavPerception.
 ```
 
 Cuando se detiene navegación portable, deben pararse todas las primitivas:
@@ -1220,6 +1303,9 @@ CMD_SET_SUPERVISOR_GOAL_CELL         = 0x9D
 CMD_GET_SUPERVISOR_GOAL_CELL         = 0x9E
 CMD_SUPERVISOR_STATUS_UPDATE         = 0x9F
 ```
+
+`CMD_GET_NAV_DEBUG_STATUS = 0x94` se mantiene como comando de diagnóstico/telemetría existente.
+No implica que exista `AppNavDebug` en `app_nav`; la percepción operativa actual se obtiene mediante `AppNavPerception`.
 
 La HMI no debe reinterpretar coordenadas lógicas internamente como visuales. La conversión de Y se hace solo al dibujar.
 
@@ -1377,11 +1463,10 @@ Pendientes posibles, no bloqueantes:
 
 ```text
 - más pruebas de estrés con mapas largos;
-- documentar casos de uso desde HMI si la UI sigue creciendo;
-- evaluar si en el futuro conviene extraer un route planner común.
+- documentar casos de uso desde HMI si la UI sigue creciendo.
 ```
 
-No extraer `app_route_planner.c/h` mientras la duplicación no lo justifique.
+`app_route_planner.c/h` ya existe como planner común y es usado por `FIND_CELLS` y `GO_A_TO_B`.
 
 ### Validación real
 
@@ -1415,6 +1500,8 @@ Antes de considerar estable un cambio futuro:
 [ ] Simulador sincronizado compila si se usa como banco de prueba.
 [ ] Start supervisor funciona.
 [ ] Stop supervisor funciona.
+[ ] App_Nav_EvaluatePerception(...) mantiene histéresis correcta de paredes/suelo.
+[ ] sensor_snapshot.detection_flags se actualiza desde AppNavPerception.
 [ ] FIND_CELLS_COMPLETE funciona al encontrar 3 especiales.
 [ ] FIND_CELLS_INCOMPLETE_NO_FRONTIER funciona al agotar fronteras.
 [ ] GO_A_TO_B con B inválida no mueve y reporta GO_TO_B_INVALID_TARGET.
@@ -1449,9 +1536,11 @@ Cambios futuros deben respetar:
 6. No modificar el byte de celda sincronizado sin revisar HMI/simulador.
 7. No agregar heap, malloc ni recursión en planificación portable.
 8. No hacer que app_route_planner devuelva acciones, reasons de misión o modifique el mapa.
-9. No agregar telemetría pesada o temporal si no es necesaria para operación/debug real.
-10. No agregar comportamiento shadow; si se implementa un modo, debe estar conectado o permanecer explícitamente no soportado.
-11. Cuando se agregue un estado/action de supervisor:
+9. No usar estructuras de debug como fuente operativa de percepción; usar AppNavPerception.
+10. No reintroducir App_Nav_Tick/App_Nav_GetDebug/AppNavDebug como shell legacy.
+11. No agregar telemetría pesada o temporal si no es necesaria para operación/debug real.
+12. No agregar comportamiento shadow; si se implementa un modo, debe estar conectado o permanecer explícitamente no soportado.
+13. Cuando se agregue un estado/action de supervisor:
       actualizar STM32,
       HMI,
       simulador/bridge,
