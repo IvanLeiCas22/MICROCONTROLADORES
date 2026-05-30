@@ -5,84 +5,6 @@
 #include <stdint.h>
 
 #define APP_NAV_ADC_CHANNEL_COUNT 8U
-#define APP_NAV_YAW_TARGET_UNAVAILABLE ((int16_t)32767)
-
-/*
- * Legacy app_nav-level mode debug.
- *
- * The active FIND_CELLS / GO_A_TO_B mission owner is app_nav_supervisor, not
- * app_nav. These values are kept for AppNavDebug compatibility and should not
- * be used to drive mission sequencing.
- */
-typedef enum
-{
-    APP_NAV_MODE_IDLE = 0,
-    APP_NAV_MODE_FIND_CELLS,
-    APP_NAV_MODE_MANUAL_CONTROL,
-    APP_NAV_MODE_DRIVE_STRAIGHT,
-    APP_NAV_MODE_GO_TO_B
-} AppNavMode;
-
-/*
- * Legacy app_nav-level state debug.
- *
- * Primitive actions expose their own states:
- * - AppNavAdvanceActionState
- * - AppNavSmoothActionState
- * - AppNavPivotActionState
- * - AppNavApproachFrontWallActionState
- *
- * Mission-level state is exposed by AppNavSupervisorState.
- */
-typedef enum
-{
-    APP_NAV_STATE_IDLE = 0,
-    APP_NAV_STATE_NAVIGATING,
-    APP_NAV_STATE_BRAKING,
-    APP_NAV_STATE_DECIDING,
-    APP_NAV_STATE_TURNING_LEFT,
-    APP_NAV_STATE_TURNING_RIGHT,
-    APP_NAV_STATE_SMOOTH_TURN_LEFT,
-    APP_NAV_STATE_SMOOTH_TURN_RIGHT,
-    APP_NAV_STATE_STRAIGHT_DRIVE,
-    APP_NAV_STATE_STRAIGHT_DRIVE_DECIDING,
-    APP_NAV_STATE_TURN_AROUND_RIGHT,
-    APP_NAV_STATE_TURN_AROUND_LEFT,
-    APP_NAV_STATE_ERROR
-} AppNavState;
-
-/*
- * Legacy app_nav-level transition debug.
- *
- * The old app_nav mission state machine has been removed. These values remain
- * only for compatibility with AppNavDebug layout and old diagnostic naming.
- */
-typedef enum
-{
-    APP_NAV_TRANSITION_NONE = 0,
-    APP_NAV_TRANSITION_START_FIND_CELLS = 1,
-    APP_NAV_TRANSITION_STOP_TO_MENU = 2,
-    APP_NAV_TRANSITION_FRONT_WALL_BRAKING = 10,
-    APP_NAV_TRANSITION_DIAGONALS_LOST_DECISION = 11,
-    APP_NAV_TRANSITION_STRAIGHT_REAR_TAPE_NAVIGATING = 12,
-    APP_NAV_TRANSITION_STRAIGHT_REAR_TAPE_DECIDING = 13,
-    APP_NAV_TRANSITION_DECIDE_DEAD_END = 20,
-    APP_NAV_TRANSITION_DECIDE_SMOOTH_LEFT = 21,
-    APP_NAV_TRANSITION_DECIDE_SMOOTH_RIGHT = 22,
-    APP_NAV_TRANSITION_DECIDE_FRONT_NAVIGATING = 23,
-    APP_NAV_TRANSITION_DECIDE_FRONT_STRAIGHT = 24,
-    APP_NAV_TRANSITION_BRAKING_DONE = 30,
-    APP_NAV_TRANSITION_SMOOTH_DONE = 40,
-    APP_NAV_TRANSITION_PIVOT_DONE = 50,
-    APP_NAV_TRANSITION_TURN_START = 60
-} AppNavTransitionReason;
-
-typedef enum
-{
-    APP_NAV_SMOOTH_DIR_NONE = 0,
-    APP_NAV_SMOOTH_DIR_LEFT = 1,
-    APP_NAV_SMOOTH_DIR_RIGHT = 2
-} AppNavSmoothDirection;
 
 typedef enum
 {
@@ -196,24 +118,6 @@ typedef enum
     APP_NAV_PIVOT_180_RIGHT
 } AppNavPivotActionType;
 
-/*
- * Debug reason for the latest smooth phase transition/finish.
- *
- * WALL means the diagonal/wall reference ended the curved part of the smooth
- * turn and moved the action into POST_YAW_SEEK_REAR_TAPE. It does not mean the
- * logical cell entry is complete.
- */
-typedef enum
-{
-    APP_NAV_SMOOTH_FINISH_NONE = 0,
-    APP_NAV_SMOOTH_FINISH_REAR_TAPE = 1,
-    APP_NAV_SMOOTH_FINISH_YAW_TARGET = 2,
-    APP_NAV_SMOOTH_FINISH_WALL = 3,
-    APP_NAV_SMOOTH_FINISH_POST_YAW_REAR_TAPE = 4,
-    APP_NAV_SMOOTH_FINISH_POST_YAW_TIMEOUT = 5,
-    APP_NAV_SMOOTH_FINISH_FRONT_WALL_SAFETY = 6
-} AppNavSmoothFinishReason;
-
 typedef enum
 {
     APP_NAV_ACTION_NONE = 0,
@@ -250,6 +154,28 @@ typedef struct
     int32_t yaw_q16_deg;
     int16_t yaw_rate_dps;
 } AppNavInput;
+
+typedef struct
+{
+    uint8_t floor_front_black;
+    uint8_t floor_rear_black;
+
+    uint8_t wall_front;
+    uint8_t wall_left;
+    uint8_t wall_right;
+    uint8_t wall_diag_left;
+    uint8_t wall_diag_right;
+
+    uint16_t floor_front_adc;
+    uint16_t floor_rear_adc;
+
+    uint16_t dist_front_left_mm;
+    uint16_t dist_front_right_mm;
+    uint16_t dist_left_lat_mm;
+    uint16_t dist_right_lat_mm;
+    uint16_t dist_diagonal_left_mm;
+    uint16_t dist_diagonal_right_mm;
+} AppNavPerception;
 
 typedef struct
 {
@@ -310,54 +236,5 @@ typedef struct
     int16_t braking_min_speed_pwm;
 } AppNavConfig;
 
-typedef struct
-{
-    /*
-     * Legacy app_nav-level debug fields.
-     *
-     * The live mission state should be read from AppNavSupervisorDebug.
-     * app_nav currently reports IDLE here while still exporting perception,
-     * controller and primitive debug data below.
-     */
-    AppNavMode mode;
-    AppNavState state;
-    AppNavState previous_state;
-
-    uint8_t last_transition_reason;
-    uint8_t pending_transition_reason;
-
-    /*
-     * Smooth primitive debug. smooth_finish_reason may report WALL when
-     * diagonal/wall reference moved the smooth action into post-yaw seek.
-     */
-    uint8_t smooth_direction;
-    uint8_t smooth_finish_reason;
-
-    int16_t yaw_target_deg;
-    int16_t pwm_right_cmd;
-    int16_t pwm_left_cmd;
-    uint16_t transition_sequence;
-
-    uint8_t floor_front_black;
-    uint8_t floor_rear_black;
-    uint8_t wall_front;
-    uint8_t wall_left;
-    uint8_t wall_right;
-    uint8_t wall_diag_left;
-    uint8_t wall_diag_right;
-
-    uint8_t available_options_mask;
-    uint8_t valid_option_count;
-    uint8_t last_recommended_action;
-
-    uint16_t floor_front_adc;
-    uint16_t floor_rear_adc;
-    uint16_t dist_front_left_mm;
-    uint16_t dist_front_right_mm;
-    uint16_t dist_left_lat_mm;
-    uint16_t dist_right_lat_mm;
-    uint16_t dist_diagonal_left_mm;
-    uint16_t dist_diagonal_right_mm;
-} AppNavDebug;
 
 #endif /* INC_APP_NAV_TYPES_H_ */

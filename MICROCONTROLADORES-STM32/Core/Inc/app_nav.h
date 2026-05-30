@@ -2,7 +2,6 @@
 #define INC_APP_NAV_H_
 
 #include "app_nav_config.h"
-#include "app_nav_debug.h"
 #include "app_nav_types.h"
 
 /*
@@ -21,9 +20,6 @@
  * - app_nav_supervisor:
  *   Mission-level sequencing. It decides which primitive to run, updates the
  *   logical maze, handles FIND_CELLS, and owns high-level navigation state.
- *
- * App_Nav_Tick() is kept as a perception/debug shell. It does not own the live
- * FIND_CELLS mission; the supervisor drives the active primitive actions.
  */
 
 /* -------------------------------------------------------------------------- */
@@ -36,17 +32,18 @@ void App_Nav_GetConfig(AppNavConfig *config_out);
 void App_Nav_Reset(void);
 
 /* -------------------------------------------------------------------------- */
-/* Legacy/perception shell                                                     */
+/* Perception                                                                  */
 /* -------------------------------------------------------------------------- */
 
 /*
- * Perception/debug shell.
+ * Evaluate the portable perception layer from the current sensor input.
  *
- * Current real navigation is orchestrated by app_nav_supervisor. App_Nav_Tick()
- * updates perception/debug data from AppNavInput, but it does not run a mission
- * state machine or command motors.
+ * The function applies the same hysteresis state used by the motion primitives
+ * and returns the filtered wall/tape interpretation. It does not command motors
+ * and does not update the logical maze.
  */
-void App_Nav_Tick(const AppNavInput *input, AppNavOutput *output);
+bool App_Nav_EvaluatePerception(const AppNavInput *input,
+                                AppNavPerception *perception_out);
 
 /* -------------------------------------------------------------------------- */
 /* Local recommendation policy                                                  */

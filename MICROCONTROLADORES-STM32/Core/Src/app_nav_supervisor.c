@@ -162,15 +162,16 @@ static void App_NavSupervisor_UpdateMazeDebug(void)
 
 static void App_NavSupervisor_MapCurrentCellFromInput(const AppNavInput *input)
 {
-    AppNavOutput dummy_output = {0};
-    AppNavDebug nav_debug = {0};
+    AppNavPerception perception = {0};
 
-    App_Nav_Tick(input, &dummy_output);
-    App_Nav_GetDebug(&nav_debug);
+    if (!App_Nav_EvaluatePerception(input, &perception))
+    {
+        return;
+    }
 
-    App_Maze_MapCurrentCell((nav_debug.wall_front != 0U),
-                            (nav_debug.wall_right != 0U),
-                            (nav_debug.wall_left != 0U));
+    App_Maze_MapCurrentCell((perception.wall_front != 0U),
+                            (perception.wall_right != 0U),
+                            (perception.wall_left != 0U));
     App_NavSupervisor_UpdateMazeDebug();
 }
 

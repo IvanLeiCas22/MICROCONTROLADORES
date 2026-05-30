@@ -382,9 +382,8 @@ static uint16_t Fixed_To_Gain_Hundredths(int32_t gain_fixed);
 static AppNavConfig Build_AppNavConfig_From_LegacyRuntime(void);
 static void Sync_AppNavConfig_From_LegacyRuntime(void);
 static void Build_AppNavInput_From_SensorSnapshot(uint32_t dt_ms, AppNavInput *input);
-static void Run_Portable_Nav_Tick(uint32_t dt_ms);
-static uint8_t Build_DetectionFlags_From_AppNavDebug(const AppNavDebug *debug);
-static void Apply_Portable_Nav_Perception_To_Snapshot(void);
+static void Update_Portable_Nav_Perception(uint32_t dt_ms);
+static uint8_t Build_DetectionFlags_From_AppNavPerception(const AppNavPerception *perception);
 static void PrimitiveTest_StartSmooth(uint8_t variant);
 static void PrimitiveTest_Stop(void);
 static void PrimitiveTest_Tick(uint32_t dt_ms);
@@ -2036,51 +2035,47 @@ static void Build_AppNavInput_From_SensorSnapshot(uint32_t dt_ms, AppNavInput *i
 }
 
 /* -------------------------------------------------------------------------- */
-/* Portable perception/debug update                                            */
+/* Portable perception update                                                  */
 /* -------------------------------------------------------------------------- */
 
-static void Run_Portable_Nav_Tick(uint32_t dt_ms)
-{
-    AppNavInput input = {0};
-    AppNavOutput output = {0};
-
-    Build_AppNavInput_From_SensorSnapshot(dt_ms, &input);
-    App_Nav_Tick(&input, &output);
-}
-
-static uint8_t Build_DetectionFlags_From_AppNavDebug(const AppNavDebug *debug)
+static uint8_t Build_DetectionFlags_From_AppNavPerception(const AppNavPerception *perception)
 {
     uint8_t flags = 0U;
 
-    if (debug == NULL)
+    if (perception == NULL)
     {
         return flags;
     }
 
-    if (debug->wall_front != 0U)
+    if (perception->wall_front != 0U)
         flags |= SENSOR_DET_WALL_FRONT;
-    if (debug->wall_left != 0U)
+    if (perception->wall_left != 0U)
         flags |= SENSOR_DET_WALL_LEFT;
-    if (debug->wall_right != 0U)
+    if (perception->wall_right != 0U)
         flags |= SENSOR_DET_WALL_RIGHT;
-    if (debug->wall_diag_left != 0U)
+    if (perception->wall_diag_left != 0U)
         flags |= SENSOR_DET_WALL_DIAG_LEFT;
-    if (debug->wall_diag_right != 0U)
+    if (perception->wall_diag_right != 0U)
         flags |= SENSOR_DET_WALL_DIAG_RIGHT;
-    if (debug->floor_front_black != 0U)
+    if (perception->floor_front_black != 0U)
         flags |= SENSOR_DET_FLOOR_FRONT;
-    if (debug->floor_rear_black != 0U)
+    if (perception->floor_rear_black != 0U)
         flags |= SENSOR_DET_FLOOR_REAR;
 
     return flags;
 }
 
-static void Apply_Portable_Nav_Perception_To_Snapshot(void)
+static void Update_Portable_Nav_Perception(uint32_t dt_ms)
 {
-    AppNavDebug debug = {0};
+    AppNavInput input = {0};
+    AppNavPerception perception = {0};
 
-    App_Nav_GetDebug(&debug);
-    sensor_snapshot.detection_flags = Build_DetectionFlags_From_AppNavDebug(&debug);
+    Build_AppNavInput_From_SensorSnapshot(dt_ms, &input);
+
+    if (App_Nav_EvaluatePerception(&input, &perception))
+    {
+        sensor_snapshot.detection_flags = Build_DetectionFlags_From_AppNavPerception(&perception);
+    }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -2539,8 +2534,7 @@ static void Run_Control_Step(uint32_t dt_ms)
     control_step_dt_ms = dt_ms;
     ADC_Filter_Task();
     Update_Navigation_Perception();
-    Run_Portable_Nav_Tick(dt_ms);
-    Apply_Portable_Nav_Perception_To_Snapshot();
+    Update_Portable_Nav_Perception(dt_ms);
 
     if (primitive_test.active)
     {
