@@ -9,6 +9,7 @@ Este documento resume el estado actual de la navegación portable del autito mic
 - modo `GO_A_TO_B`;
 - política inteligente `app_find_cells_policy`;
 - política optimista `app_go_to_b_policy`;
+- planner común `app_route_planner`;
 - mapa lógico `app_maze`;
 - primitivas de navegación `app_nav`;
 - integración con HMI Qt, publicación autónoma de estado y simulador.
@@ -43,13 +44,16 @@ app_nav.c
     - SmoothAction;
     - PivotAction;
     - ApproachFrontWallAction;
-    - CenterByFrontTapeForPivotAction.
+    - CenterByFrontTapeForPivotAction;
+    - helper interno común de avance guiado: wall-follow -> fallback yaw-hold.
 
 app_find_cells_policy.c
     Política portable de alto nivel para FIND_CELLS:
     - decide próxima acción conceptual de exploración;
     - prioriza vecinos no visitados;
-    - calcula ruta hacia frontera con flood fill/BFS;
+    - define qué es una frontera de exploración;
+    - carga fronteras como seeds del planner común;
+    - usa app_route_planner en modo KNOWN_OPEN_VISITED_ONLY;
     - no mueve motores;
     - no accede a HAL;
     - no ejecuta primitivas.
@@ -57,12 +61,23 @@ app_find_cells_policy.c
 app_go_to_b_policy.c
     Política portable de alto nivel para GO_A_TO_B:
     - decide próxima acción conceptual hacia una celda objetivo B;
-    - calcula ruta optimista con BFS/flood fill hacia B;
+    - carga B como seed del planner común;
+    - usa app_route_planner en modo OPTIMISTIC_UNKNOWN_ALLOWED;
     - bloquea solo paredes conocidas;
     - permite edges desconocidas como hipótesis de camino;
     - no mueve motores;
     - no accede a HAL;
     - no ejecuta primitivas.
+
+app_route_planner.c
+    Planner BFS/flood fill portable común:
+    - calcula campos de distancia sobre el mapa lógico;
+    - usa workspace estático compartido y no reentrante;
+    - soporta modo seguro por edges conocidas abiertas y celdas visitadas;
+    - soporta modo optimista bloqueando solo paredes conocidas;
+    - no decide acciones ni reasons de misión;
+    - no mueve motores;
+    - no modifica el mapa.
 
 app_nav_supervisor.c
     Supervisor portable de misión:
@@ -81,7 +96,8 @@ app_maze.c
     - celdas visitadas;
     - paredes presentes;
     - celdas especiales;
-    - edges conocidas/open/desconocidas para planificación.
+    - edges conocidas/open/desconocidas para planificación;
+    - helpers geométricos comunes de celda, heading, indexado y direcciones relativas.
 ```
 
 Regla estricta:
@@ -91,8 +107,9 @@ app_core adapta hardware.
 app_nav ejecuta primitivas.
 app_find_cells_policy decide exploración FIND_CELLS.
 app_go_to_b_policy decide navegación optimista GO_A_TO_B.
+app_route_planner calcula distancias BFS/flood fill comunes.
 app_nav_supervisor secuencia misión y actualiza mapa.
-app_maze guarda el mapa lógico.
+app_maze guarda el mapa lógico y helpers geométricos.
 ```
 
 ---
@@ -245,6 +262,58 @@ App_Maze_IsKnownOpenEdge(x, y, dir) == true
 
 ---
 
+## app_route_planner: BFS/flood fill común
+
+`app_route_planner` es el módulo común de planificación por BFS/flood fill sobre el mapa lógico.
+
+No es una policy de misión. No decide acciones, no devuelve reasons de misión, no mueve motores y no modifica el mapa. Su responsabilidad es generar un campo de distancias que luego interpretan las policies.
+
+Flujo de uso:
+
+```text
+1. App_RoutePlanner_Reset()
+2. App_RoutePlanner_AddSeed(...)
+3. App_RoutePlanner_Run(mode)
+4. App_RoutePlanner_GetDistance(...)
+```
+
+El workspace es estático y compartido. El módulo es no reentrante por diseño: una policy debe completar el ciclo reset -> seeds -> run -> query antes de que otra evaluación vuelva a usarlo.
+
+Modos actuales:
+
+```text
+APP_ROUTE_TRAVERSAL_KNOWN_OPEN_VISITED_ONLY
+    Cruza solo si:
+        - existe vecino;
+        - la edge es conocida abierta;
+        - el vecino está visitado.
+
+    Lo usa FIND_CELLS para rutas seguras hacia fronteras.
+
+APP_ROUTE_TRAVERSAL_OPTIMISTIC_UNKNOWN_ALLOWED
+    Cruza solo si:
+        - existe vecino;
+        - no hay pared conocida en esa dirección.
+
+    Permite edges desconocidas como hipótesis de camino.
+    Lo usa GO_A_TO_B para planificación optimista hacia B.
+```
+
+Separación correcta:
+
+```text
+app_route_planner:
+    calcula distancias.
+
+app_find_cells_policy / app_go_to_b_policy:
+    interpretan distancias y devuelven decisiones conceptuales.
+
+app_nav_supervisor:
+    convierte decisiones conceptuales en secuencias de primitivas.
+```
+
+---
+
 ## Modo FIND_CELLS
 
 `FIND_CELLS` es la misión implementada actualmente.
@@ -357,9 +426,17 @@ NO_PATH
 
 ### BFS optimista
 
-`GO_A_TO_B` usa BFS/flood fill optimista hacia B.
+`GO_A_TO_B` usa el planner común `app_route_planner`.
 
-Criterio de cruce:
+En cada evaluación, la policy carga B como única seed:
+
+```text
+App_RoutePlanner_Reset()
+App_RoutePlanner_AddSeed(goal_x, goal_y)
+App_RoutePlanner_Run(APP_ROUTE_TRAVERSAL_OPTIMISTIC_UNKNOWN_ALLOWED)
+```
+
+Criterio de cruce del modo optimista:
 
 ```text
 si la celda vecina no existe:
@@ -378,11 +455,11 @@ si la edge es desconocida:
 Diferencia central con `FIND_CELLS`:
 
 ```text
-FIND_CELLS cruza solo edges conocidas abiertas para ir hacia fronteras.
-GO_A_TO_B bloquea solo paredes conocidas y permite desconocido.
+FIND_CELLS usa APP_ROUTE_TRAVERSAL_KNOWN_OPEN_VISITED_ONLY.
+GO_A_TO_B usa APP_ROUTE_TRAVERSAL_OPTIMISTIC_UNKNOWN_ALLOWED.
 ```
 
-El planner recalcula en cada `DECIDE`, por lo que al descubrir una pared nueva puede elegir otra ruta o terminar con `GO_TO_B_NO_PATH`.
+El planner común recalcula distancias en cada `DECIDE`, por lo que al descubrir una pared nueva la policy puede elegir otra ruta o terminar con `GO_TO_B_NO_PATH`.
 
 ### Desempate de ruta
 
@@ -465,7 +542,7 @@ En cada punto de decisión:
 3. Intentar vecino inmediato no visitado:
        frente -> derecha -> izquierda.
 4. Si no hay vecino inmediato ejecutable:
-       usar flood fill/BFS multi-source hacia frontera.
+       usar app_route_planner con BFS multi-source hacia frontera.
 5. Si la ruta hacia frontera empieza:
        frente  -> ADVANCE
        derecha -> SMOOTH_RIGHT
@@ -522,7 +599,13 @@ El robot se mueve por celdas visitadas hasta una celda frontera, y desde ahí en
 
 ## Flood fill / BFS
 
-Para `FIND_CELLS` se usa flood fill conceptual implementado como BFS multi-source iterativo con arreglos estáticos.
+Para `FIND_CELLS` se usa el planner común `app_route_planner` como BFS multi-source hacia fronteras.
+
+La policy sigue definiendo qué es una frontera. Luego carga todas las fronteras como seeds del planner común y ejecuta:
+
+```text
+App_RoutePlanner_Run(APP_ROUTE_TRAVERSAL_KNOWN_OPEN_VISITED_ONLY)
+```
 
 Características:
 
@@ -533,29 +616,17 @@ Características:
 - sin Dijkstra;
 - sin A*;
 - costos uniformes por celda;
+- workspace estático compartido en app_route_planner;
 - apto para STM32F103/Bluepill.
 ```
 
-Buffers internos:
+Flujo del BFS para `FIND_CELLS`:
 
 ```text
-frontier_distance[MAZE_WIDTH * MAZE_HEIGHT]
-bfs_queue[MAZE_WIDTH * MAZE_HEIGHT]
-```
-
-Con `15 x 15`:
-
-```text
-225 bytes + 225 bytes = 450 bytes
-```
-
-Flujo del BFS:
-
-```text
-1. Inicializar distancias en INF.
+1. App_RoutePlanner_Reset().
 2. Buscar todas las celdas frontera.
-3. Poner todas las fronteras en cola con distancia 0.
-4. Propagar por celdas visitadas usando solo edges conocidas abiertas.
+3. Cargar todas las fronteras como seeds con distancia 0.
+4. Ejecutar APP_ROUTE_TRAVERSAL_KNOWN_OPEN_VISITED_ONLY.
 5. Desde la celda actual, elegir el vecino con menor distancia.
 ```
 
@@ -1214,7 +1285,7 @@ Antes, `FIND_CELLS` usaba una recomendación local frente/derecha/izquierda/fall
 
 ```text
 vecinos no visitados
-flood fill/BFS hacia frontera
+app_route_planner con BFS multi-source hacia frontera
 backtracking con pivot 180 si hace falta
 ```
 
@@ -1268,12 +1339,13 @@ APP_NAV_ACTION_GO_BACK
 
 ### 7. GO_A_TO_B optimista
 
-`GO_A_TO_B` quedó implementado con BFS optimista:
+`GO_A_TO_B` quedó implementado con el planner común en modo optimista:
 
 ```text
 - resetea mapa al iniciar;
 - usa A como pose inicial/current pose;
 - usa B como destino configurado desde HMI;
+- carga B como seed de app_route_planner;
 - permite edges desconocidas;
 - bloquea paredes conocidas;
 - replanifica en cada DECIDE;
@@ -1376,9 +1448,10 @@ Cambios futuros deben respetar:
 5. GO_A_TO_B no debe arrancar directo en DECIDE si A != B; debe pasar por START_INITIAL_ADVANCE.
 6. No modificar el byte de celda sincronizado sin revisar HMI/simulador.
 7. No agregar heap, malloc ni recursión en planificación portable.
-8. No agregar telemetría pesada o temporal si no es necesaria para operación/debug real.
-9. No agregar comportamiento shadow; si se implementa un modo, debe estar conectado o permanecer explícitamente no soportado.
-10. Cuando se agregue un estado/action de supervisor:
+8. No hacer que app_route_planner devuelva acciones, reasons de misión o modifique el mapa.
+9. No agregar telemetría pesada o temporal si no es necesaria para operación/debug real.
+10. No agregar comportamiento shadow; si se implementa un modo, debe estar conectado o permanecer explícitamente no soportado.
+11. Cuando se agregue un estado/action de supervisor:
       actualizar STM32,
       HMI,
       simulador/bridge,
