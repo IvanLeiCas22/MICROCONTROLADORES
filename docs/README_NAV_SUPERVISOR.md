@@ -16,7 +16,7 @@ Este documento resume el estado actual de la navegación portable del autito mic
 
 La intención es que este archivo sea la referencia principal para continuar el desarrollo sin reconstruir contexto desde chats anteriores.
 
-> Fuente de verdad funcional al actualizar este README: repo STM32+Qt real versión `repomix-output-resumido-autitoReal-2.xml` de este chat.
+> Fuente de verdad funcional al actualizar este README: repo STM32+Qt real versión `repomix-output-resumido-autitoReal-5.xml` de este chat, con actualización de percepción única por tick.
 
 ---
 
@@ -130,11 +130,13 @@ Entrada:
 
 ```text
 AppNavInput
-    Lecturas ya disponibles para la capa portable:
-    - ADC de sensores de piso;
-    - flags de piso negro actuales;
+    Mediciones ya disponibles para la capa portable:
+    - ADC filtrados de sensores de piso;
     - distancias IR en milímetros;
     - yaw/yaw-rate y dt.
+
+    No contiene flags de piso negro. Las flags se calculan en
+    AppNavPerception a partir de los ADC de piso.
 ```
 
 Salida:
@@ -158,8 +160,10 @@ Reglas importantes:
 ```text
 - AppNavPerception es percepción de producción, no debug.
 - App_Nav_EvaluatePerception(...) aplica la histéresis de paredes y suelo.
+- App_Nav_EvaluatePerception(...) se llama una sola vez por tick de control, desde app_core.c.
 - app_nav.c conserva internamente el estado previo necesario para esa histéresis.
-- app_nav_supervisor usa AppNavPerception para mapear paredes de la celda actual.
+- app_core pasa el mismo snapshot AppNavPerception al supervisor y a las primitivas.
+- app_nav_supervisor usa AppNavPerception para mapear paredes de la celda actual y detectar celdas especiales.
 - app_core usa AppNavPerception para actualizar sensor_snapshot.detection_flags.
 - App_Nav_Tick(), App_Nav_GetDebug(), AppNavDebug y app_nav_debug.h fueron eliminados.
 ```
@@ -170,9 +174,9 @@ Flujo operativo actual:
 Sensores STM32 / simulador
 -> SensorSnapshotTypeDef
 -> AppNavInput
--> App_Nav_EvaluatePerception(...)
+-> App_Nav_EvaluatePerception(...) una vez por tick
 -> AppNavPerception
--> detection_flags / mapeo de paredes / primitivas
+-> detection_flags / mapeo de paredes / detección de especiales / primitivas
 ```
 
 Separación deseada:
@@ -982,8 +986,8 @@ Reglas importantes:
 - no usa timer de ignore;
 - no usa debounce por ticks adicional;
 - no usa safety por pared frontal;
-- usa input->floor_front_black;
-- se apoya en la histéresis/percepción existente;
+- usa AppNavPerception.floor_front_black;
+- se apoya en la histéresis/percepción calculada una sola vez en el tick;
 - si arranca en negro, espera salir a blanco antes de armar la detección;
 - luego el próximo flanco positivo es la cinta límite.
 ```
@@ -1253,11 +1257,11 @@ No se debe usar este comando para enviar telemetría pesada como sensores IR, ya
 
 ```text
 1. Lee sensores reales.
-2. Construye AppNavInput desde SensorSnapshotTypeDef.
-3. Evalúa percepción portable con App_Nav_EvaluatePerception(...).
+2. Construye un AppNavInput desde SensorSnapshotTypeDef con mediciones: ADC, IR, yaw/yaw-rate y dt.
+3. Evalúa percepción portable una sola vez con App_Nav_EvaluatePerception(...).
 4. Actualiza sensor_snapshot.detection_flags desde AppNavPerception.
-5. Construye el AppNavInput usado por supervisor/primitive tests con esos flags filtrados.
-6. Ejecuta App_NavSupervisor_Tick(&input, &output) o primitive tests.
+5. Entrega el mismo par AppNavInput + AppNavPerception al supervisor o a primitive tests.
+6. Ejecuta App_NavSupervisor_Tick(&input, &perception, &output) o primitive tests.
 7. Aplica AppNavOutput a motores.
 8. Expone telemetría/comandos UNERBUS.
 ```

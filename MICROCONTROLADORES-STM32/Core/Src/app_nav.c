@@ -634,7 +634,8 @@ bool App_Nav_EvaluatePerception(const AppNavInput *input,
 /* Local recommendation policy                                                  */
 /* -------------------------------------------------------------------------- */
 
-bool App_Nav_RecommendAction(uint32_t random_value,
+bool App_Nav_RecommendAction(const AppNavPerception *perception,
+                              uint32_t random_value,
                               AppNavRecommendedAction *action_out)
 {
     uint8_t available_options = APP_NAV_OPTION_BACK_MASK;
@@ -643,26 +644,26 @@ bool App_Nav_RecommendAction(uint32_t random_value,
     uint8_t choice;
     AppNavRecommendedAction action = APP_NAV_ACTION_NONE;
 
-    if (action_out == NULL)
+    if ((perception == NULL) || (action_out == NULL))
     {
         return false;
     }
 
-    if (app_nav_perception.wall_front == 0U)
+    if (perception->wall_front == 0U)
     {
         available_options |= APP_NAV_OPTION_FRONT_MASK;
         valid_options[valid_count] = APP_NAV_DECISION_FRONT;
         valid_count++;
     }
 
-    if (app_nav_perception.wall_right == 0U)
+    if (perception->wall_right == 0U)
     {
         available_options |= APP_NAV_OPTION_RIGHT_MASK;
         valid_options[valid_count] = APP_NAV_DECISION_RIGHT;
         valid_count++;
     }
 
-    if (app_nav_perception.wall_left == 0U)
+    if (perception->wall_left == 0U)
     {
         available_options |= APP_NAV_OPTION_LEFT_MASK;
         valid_options[valid_count] = APP_NAV_DECISION_LEFT;
@@ -692,7 +693,7 @@ bool App_Nav_RecommendAction(uint32_t random_value,
         }
         else
         {
-            if ((app_nav_perception.wall_left != 0U) || (app_nav_perception.wall_right != 0U))
+            if ((perception->wall_left != 0U) || (perception->wall_right != 0U))
             {
                 action = APP_NAV_ACTION_GO_FRONT_NAVIGATING;
             }
@@ -989,6 +990,7 @@ bool App_Nav_StartSmoothActionWithRearTapeProfile(AppNavSmoothActionType action,
 }
 
 AppNavSmoothActionState App_Nav_TickSmoothAction(const AppNavInput *input,
+                                                 const AppNavPerception *perception,
                                                  AppNavOutput *output)
 {
     int32_t yaw_deg;
@@ -1000,13 +1002,11 @@ AppNavSmoothActionState App_Nav_TickSmoothAction(const AppNavInput *input,
 
     App_Nav_ClearOutput(output);
 
-    if ((input == NULL) || (output == NULL))
+    if ((input == NULL) || (perception == NULL) || (output == NULL))
     {
         app_nav_smooth_action_state = APP_NAV_SMOOTH_ACTION_ERROR;
         return app_nav_smooth_action_state;
     }
-
-    App_Nav_UpdatePerception(input);
 
     if (app_nav_smooth_action_state == APP_NAV_SMOOTH_ACTION_IDLE)
     {
@@ -1029,7 +1029,7 @@ AppNavSmoothActionState App_Nav_TickSmoothAction(const AppNavInput *input,
     }
 
     yaw_deg = FIXED_TO_INT(input->yaw_q16_deg);
-    current_rear_tape = (app_nav_perception.floor_rear_black != 0U);
+    current_rear_tape = (perception->floor_rear_black != 0U);
 
     rear_tape_detected = App_Nav_UpdateSmoothRearTapeGate(
         current_rear_tape,
@@ -1202,6 +1202,7 @@ bool App_Nav_StartPivotAction(AppNavPivotActionType action)
 }
 
 AppNavPivotActionState App_Nav_TickPivotAction(const AppNavInput *input,
+                                               const AppNavPerception *perception,
                                                AppNavOutput *output)
 {
     int32_t current_yaw_degrees;
@@ -1212,11 +1213,13 @@ AppNavPivotActionState App_Nav_TickPivotAction(const AppNavInput *input,
 
     App_Nav_ClearOutput(output);
 
-    if ((input == NULL) || (output == NULL))
+    if ((input == NULL) || (perception == NULL) || (output == NULL))
     {
         app_nav_pivot_action_state = APP_NAV_PIVOT_ACTION_ERROR;
         return app_nav_pivot_action_state;
     }
+
+    (void)perception;
 
     if (app_nav_pivot_action_state == APP_NAV_PIVOT_ACTION_IDLE)
     {
@@ -1286,6 +1289,7 @@ AppNavPivotActionState App_Nav_TickPivotAction(const AppNavInput *input,
 }
 
 bool App_Nav_ComputeWallFollowPwm(const AppNavInput *input,
+                                  const AppNavPerception *perception,
                                   uint16_t right_base_pwm,
                                   uint16_t left_base_pwm,
                                   AppNavOutput *output)
@@ -1298,7 +1302,7 @@ bool App_Nav_ComputeWallFollowPwm(const AppNavInput *input,
 
     App_Nav_ClearOutput(output);
 
-    if ((input == NULL) || (output == NULL))
+    if ((input == NULL) || (perception == NULL) || (output == NULL))
     {
         return false;
     }
@@ -1308,23 +1312,23 @@ bool App_Nav_ComputeWallFollowPwm(const AppNavInput *input,
         return false;
     }
 
-    if ((app_nav_perception.wall_diag_left != 0U) &&
-        (app_nav_perception.wall_diag_right != 0U) &&
-        (app_nav_perception.wall_left != 0U) &&
-        (app_nav_perception.wall_right != 0U))
+    if ((perception->wall_diag_left != 0U) &&
+        (perception->wall_diag_right != 0U) &&
+        (perception->wall_left != 0U) &&
+        (perception->wall_right != 0U))
     {
         measured_diff = (int32_t)input->dist_left_lat_mm -
                         (int32_t)input->dist_right_lat_mm;
     }
-    else if ((app_nav_perception.wall_diag_right != 0U) &&
-             (app_nav_perception.wall_right != 0U))
+    else if ((perception->wall_diag_right != 0U) &&
+             (perception->wall_right != 0U))
     {
         measured_diff = ((int32_t)app_nav_config.wall_target_mm -
                          (int32_t)input->dist_right_lat_mm) *
                         2;
     }
-    else if ((app_nav_perception.wall_diag_left != 0U) &&
-             (app_nav_perception.wall_left != 0U))
+    else if ((perception->wall_diag_left != 0U) &&
+             (perception->wall_left != 0U))
     {
         measured_diff = ((int32_t)input->dist_left_lat_mm -
                          (int32_t)app_nav_config.wall_target_mm) *
@@ -1351,12 +1355,14 @@ bool App_Nav_ComputeWallFollowPwm(const AppNavInput *input,
 }
 
 static bool App_Nav_ComputeForwardGuidedPwm(const AppNavInput *input,
+                                            const AppNavPerception *perception,
                                             AppNavOutput *output,
                                             uint8_t force_yaw_hold,
                                             uint8_t *yaw_hold_started,
                                             AppNavForwardGuidanceMode *guidance_mode)
 {
     if ((input == NULL) ||
+        (perception == NULL) ||
         (output == NULL) ||
         (yaw_hold_started == NULL) ||
         (guidance_mode == NULL))
@@ -1385,6 +1391,7 @@ static bool App_Nav_ComputeForwardGuidedPwm(const AppNavInput *input,
     }
 
     if (App_Nav_ComputeWallFollowPwm(input,
+                                     perception,
                                      app_nav_config.right_motor_base_speed,
                                      app_nav_config.left_motor_base_speed,
                                      output))
@@ -1409,6 +1416,7 @@ static bool App_Nav_ComputeForwardGuidedPwm(const AppNavInput *input,
 }
 
 static bool App_Nav_ComputeAdvanceActionPwm(const AppNavInput *input,
+                                            const AppNavPerception *perception,
                                             AppNavOutput *output)
 {
     AppNavForwardGuidanceMode guidance_mode;
@@ -1418,6 +1426,7 @@ static bool App_Nav_ComputeAdvanceActionPwm(const AppNavInput *input,
         (app_nav_advance_action_state == APP_NAV_ADVANCE_ACTION_RUNNING_YAW_HOLD) ? 1U : 0U;
 
     if (!App_Nav_ComputeForwardGuidedPwm(input,
+                                         perception,
                                          output,
                                          force_yaw_hold,
                                          &app_nav_advance_yaw_hold_started,
@@ -1493,19 +1502,18 @@ bool App_Nav_StartAdvanceActionWithRearTapeProfile(AppNavAdvanceActionMode mode,
 }
 
 AppNavAdvanceActionState App_Nav_TickAdvanceAction(const AppNavInput *input,
+                                                   const AppNavPerception *perception,
                                                    AppNavOutput *output)
 {
     bool current_rear_tape;
 
     App_Nav_ClearOutput(output);
 
-    if ((input == NULL) || (output == NULL))
+    if ((input == NULL) || (perception == NULL) || (output == NULL))
     {
         app_nav_advance_action_state = APP_NAV_ADVANCE_ACTION_ERROR;
         return app_nav_advance_action_state;
     }
-
-    App_Nav_UpdatePerception(input);
 
     if (app_nav_advance_action_state == APP_NAV_ADVANCE_ACTION_IDLE)
     {
@@ -1526,7 +1534,7 @@ AppNavAdvanceActionState App_Nav_TickAdvanceAction(const AppNavInput *input,
         return app_nav_advance_action_state;
     }
 
-    current_rear_tape = (app_nav_perception.floor_rear_black != 0U);
+    current_rear_tape = (perception->floor_rear_black != 0U);
 
     switch (app_nav_advance_rear_tape_gate_state)
     {
@@ -1542,7 +1550,7 @@ AppNavAdvanceActionState App_Nav_TickAdvanceAction(const AppNavInput *input,
                 break;
             }
 
-            if (!App_Nav_ComputeAdvanceActionPwm(input, output))
+            if (!App_Nav_ComputeAdvanceActionPwm(input, perception, output))
             {
                 App_Nav_SetAdvanceActionTerminal(APP_NAV_ADVANCE_ACTION_ERROR);
                 return app_nav_advance_action_state;
@@ -1619,7 +1627,7 @@ AppNavAdvanceActionState App_Nav_TickAdvanceAction(const AppNavInput *input,
         return app_nav_advance_action_state;
     }
 
-    if (!App_Nav_ComputeAdvanceActionPwm(input, output))
+    if (!App_Nav_ComputeAdvanceActionPwm(input, perception, output))
     {
         App_Nav_SetAdvanceActionTerminal(APP_NAV_ADVANCE_ACTION_ERROR);
         return app_nav_advance_action_state;
@@ -1656,6 +1664,7 @@ bool App_Nav_StartApproachFrontWallAction(void)
 }
 
 AppNavApproachFrontWallActionState App_Nav_TickApproachFrontWallAction(const AppNavInput *input,
+                                                                       const AppNavPerception *perception,
                                                                        AppNavOutput *output)
 {
     AppNavForwardGuidanceMode guidance_mode;
@@ -1664,13 +1673,11 @@ AppNavApproachFrontWallActionState App_Nav_TickApproachFrontWallAction(const App
 
     App_Nav_ClearOutput(output);
 
-    if ((input == NULL) || (output == NULL))
+    if ((input == NULL) || (perception == NULL) || (output == NULL))
     {
         app_nav_approach_front_wall_action_state = APP_NAV_APPROACH_FRONT_WALL_ACTION_ERROR;
         return app_nav_approach_front_wall_action_state;
     }
-
-    App_Nav_UpdatePerception(input);
 
     if (app_nav_approach_front_wall_action_state == APP_NAV_APPROACH_FRONT_WALL_ACTION_IDLE)
     {
@@ -1705,6 +1712,7 @@ AppNavApproachFrontWallActionState App_Nav_TickApproachFrontWallAction(const App
          APP_NAV_APPROACH_FRONT_WALL_ACTION_RUNNING_YAW_HOLD) ? 1U : 0U;
 
     if (!App_Nav_ComputeForwardGuidedPwm(input,
+                                         perception,
                                          output,
                                          force_yaw_hold,
                                          &app_nav_approach_front_wall_yaw_hold_started,
@@ -1824,6 +1832,7 @@ bool App_Nav_StartCenterByFrontTapeForPivotAction(AppNavFrontTapeProfile front_t
 }
 
 AppNavCenterFrontTapeActionState App_Nav_TickCenterByFrontTapeForPivotAction(const AppNavInput *input,
+                                                                             const AppNavPerception *perception,
                                                                              AppNavOutput *output)
 {
     AppNavForwardGuidanceMode guidance_mode;
@@ -1832,13 +1841,11 @@ AppNavCenterFrontTapeActionState App_Nav_TickCenterByFrontTapeForPivotAction(con
 
     App_Nav_ClearOutput(output);
 
-    if ((input == NULL) || (output == NULL))
+    if ((input == NULL) || (perception == NULL) || (output == NULL))
     {
         app_nav_center_front_tape_action_state = APP_NAV_CENTER_FRONT_TAPE_ACTION_ERROR;
         return app_nav_center_front_tape_action_state;
     }
-
-    App_Nav_UpdatePerception(input);
 
     if (app_nav_center_front_tape_action_state == APP_NAV_CENTER_FRONT_TAPE_ACTION_IDLE)
     {
@@ -1863,7 +1870,7 @@ AppNavCenterFrontTapeActionState App_Nav_TickCenterByFrontTapeForPivotAction(con
      * gates. No extra debounce/timer is added here; hysteresis belongs to the
      * perception layer that provides floor_front_black.
      */
-    current_front_tape = (app_nav_perception.floor_front_black != 0U);
+    current_front_tape = (perception->floor_front_black != 0U);
 
     if (App_Nav_UpdateCenterFrontTapeGate(current_front_tape))
     {
@@ -1876,6 +1883,7 @@ AppNavCenterFrontTapeActionState App_Nav_TickCenterByFrontTapeForPivotAction(con
          APP_NAV_CENTER_FRONT_TAPE_ACTION_RUNNING_YAW_HOLD) ? 1U : 0U;
 
     if (!App_Nav_ComputeForwardGuidedPwm(input,
+                                         perception,
                                          output,
                                          force_yaw_hold,
                                          &app_nav_center_front_tape_yaw_hold_started,

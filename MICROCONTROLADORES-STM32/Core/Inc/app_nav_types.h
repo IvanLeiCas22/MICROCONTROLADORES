@@ -133,9 +133,6 @@ typedef struct
 
     uint16_t adc_filtered[APP_NAV_ADC_CHANNEL_COUNT];
 
-    uint8_t floor_front_black;
-    uint8_t floor_rear_black;
-
     uint16_t dist_right_lat_mm;
     uint16_t dist_diagonal_right_mm;
     uint16_t dist_front_right_mm;

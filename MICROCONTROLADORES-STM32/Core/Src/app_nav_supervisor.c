@@ -160,18 +160,16 @@ static void App_NavSupervisor_UpdateMazeDebug(void)
     app_nav_supervisor_debug.special_found_count = app_nav_supervisor_special_found_count;
 }
 
-static void App_NavSupervisor_MapCurrentCellFromInput(const AppNavInput *input)
+static void App_NavSupervisor_MapCurrentCellFromPerception(const AppNavPerception *perception)
 {
-    AppNavPerception perception = {0};
-
-    if (!App_Nav_EvaluatePerception(input, &perception))
+    if (perception == NULL)
     {
         return;
     }
 
-    App_Maze_MapCurrentCell((perception.wall_front != 0U),
-                            (perception.wall_right != 0U),
-                            (perception.wall_left != 0U));
+    App_Maze_MapCurrentCell((perception->wall_front != 0U),
+                            (perception->wall_right != 0U),
+                            (perception->wall_left != 0U));
     App_NavSupervisor_UpdateMazeDebug();
 }
 
@@ -224,15 +222,15 @@ static AppNavSupervisorState App_NavSupervisor_FinishFindCells(AppNavOutput *out
         APP_NAV_SUPERVISOR_RESULT_FIND_CELLS_COMPLETE);
 }
 
-static bool App_NavSupervisor_CheckSpecialAtConfirmedCellEntry(const AppNavInput *input)
+static bool App_NavSupervisor_CheckSpecialAtConfirmedCellEntry(const AppNavPerception *perception)
 {
-    if (input == NULL)
+    if (perception == NULL)
     {
         return false;
     }
 
-    if ((input->floor_front_black == 0U) ||
-        (input->floor_rear_black == 0U))
+    if ((perception->floor_front_black == 0U) ||
+        (perception->floor_rear_black == 0U))
     {
         return false;
     }
@@ -503,6 +501,7 @@ static bool App_NavSupervisor_StartRecommendedAction(AppNavRecommendedAction act
 /* -------------------------------------------------------------------------- */
 
 static AppNavSupervisorState App_NavSupervisor_HandleFindCellsDecide(const AppNavInput *input,
+                                                                     const AppNavPerception *perception,
                                                                      AppNavOutput *output)
 {
     AppNavRecommendedAction recommended_action = APP_NAV_ACTION_NONE;
@@ -535,7 +534,7 @@ static AppNavSupervisorState App_NavSupervisor_HandleFindCellsDecide(const AppNa
     }
     else
     {
-        if (!App_Nav_RecommendAction(0U, &recommended_action))
+        if (!App_Nav_RecommendAction(perception, 0U, &recommended_action))
         {
             return App_NavSupervisor_SetError(APP_NAV_SUPERVISOR_RESULT_UNSUPPORTED_ACTION);
         }
@@ -595,14 +594,15 @@ static AppNavSupervisorState App_NavSupervisor_HandleGoToBDecide(const AppNavInp
 }
 
 static AppNavSupervisorState App_NavSupervisor_HandleDecide(const AppNavInput *input,
+                                                            const AppNavPerception *perception,
                                                             AppNavOutput *output)
 {
-    App_NavSupervisor_MapCurrentCellFromInput(input);
+    App_NavSupervisor_MapCurrentCellFromPerception(perception);
 
     switch (app_nav_supervisor_mission)
     {
     case APP_NAV_SUPERVISOR_MISSION_FIND_CELLS:
-        return App_NavSupervisor_HandleFindCellsDecide(input, output);
+        return App_NavSupervisor_HandleFindCellsDecide(input, perception, output);
 
     case APP_NAV_SUPERVISOR_MISSION_GO_A_TO_B:
         return App_NavSupervisor_HandleGoToBDecide(input, output);
@@ -613,10 +613,11 @@ static AppNavSupervisorState App_NavSupervisor_HandleDecide(const AppNavInput *i
 }
 
 static AppNavSupervisorState App_NavSupervisor_HandleStartInitialAdvance(const AppNavInput *input,
+                                                                         const AppNavPerception *perception,
                                                                          AppNavOutput *output)
 {
     App_NavSupervisor_ClearOutput(output);
-    App_NavSupervisor_MapCurrentCellFromInput(input);
+    App_NavSupervisor_MapCurrentCellFromPerception(perception);
 
     if (!App_NavSupervisor_StartInitialAdvance(input))
     {
@@ -627,6 +628,7 @@ static AppNavSupervisorState App_NavSupervisor_HandleStartInitialAdvance(const A
 }
 
 static AppNavSupervisorState App_NavSupervisor_HandleAdvanceWithState(const AppNavInput *input,
+                                                                      const AppNavPerception *perception,
                                                                       AppNavOutput *output,
                                                                       AppNavSupervisorState running_state,
                                                                       AppNavSupervisorAction running_action)
@@ -640,7 +642,7 @@ static AppNavSupervisorState App_NavSupervisor_HandleAdvanceWithState(const AppN
         return App_NavSupervisor_SetError(APP_NAV_SUPERVISOR_RESULT_PRIMITIVE_ERROR);
     }
 
-    advance_state = App_Nav_TickAdvanceAction(&action_input, output);
+    advance_state = App_Nav_TickAdvanceAction(&action_input, perception, output);
 
     switch (advance_state)
     {
@@ -656,7 +658,7 @@ static AppNavSupervisorState App_NavSupervisor_HandleAdvanceWithState(const AppN
         App_NavSupervisor_ClearOutput(output);
         App_Maze_AdvanceRobotPosition();
 
-        if (App_NavSupervisor_CheckSpecialAtConfirmedCellEntry(input))
+        if (App_NavSupervisor_CheckSpecialAtConfirmedCellEntry(perception))
         {
             return App_NavSupervisor_FinishFindCells(output);
         }
@@ -679,24 +681,29 @@ static AppNavSupervisorState App_NavSupervisor_HandleAdvanceWithState(const AppN
 }
 
 static AppNavSupervisorState App_NavSupervisor_HandleAdvance(const AppNavInput *input,
+                                                             const AppNavPerception *perception,
                                                              AppNavOutput *output)
 {
     return App_NavSupervisor_HandleAdvanceWithState(input,
+                                                    perception,
                                                     output,
                                                     APP_NAV_SUPERVISOR_RUN_ADVANCE,
                                                     APP_NAV_SUPERVISOR_ACTION_ADVANCE);
 }
 
 static AppNavSupervisorState App_NavSupervisor_HandleInitialAdvance(const AppNavInput *input,
+                                                                    const AppNavPerception *perception,
                                                                     AppNavOutput *output)
 {
     return App_NavSupervisor_HandleAdvanceWithState(input,
+                                                    perception,
                                                     output,
                                                     APP_NAV_SUPERVISOR_RUN_INITIAL_ADVANCE,
                                                     APP_NAV_SUPERVISOR_ACTION_INITIAL_ADVANCE);
 }
 
 static AppNavSupervisorState App_NavSupervisor_HandleApproachFrontWallForPivot(const AppNavInput *input,
+                                                                               const AppNavPerception *perception,
                                                                                AppNavOutput *output)
 {
     AppNavInput action_input = {0};
@@ -708,7 +715,7 @@ static AppNavSupervisorState App_NavSupervisor_HandleApproachFrontWallForPivot(c
         return App_NavSupervisor_SetError(APP_NAV_SUPERVISOR_RESULT_PRIMITIVE_ERROR);
     }
 
-    approach_state = App_Nav_TickApproachFrontWallAction(&action_input, output);
+    approach_state = App_Nav_TickApproachFrontWallAction(&action_input, perception, output);
 
     switch (approach_state)
     {
@@ -734,6 +741,7 @@ static AppNavSupervisorState App_NavSupervisor_HandleApproachFrontWallForPivot(c
 }
 
 static AppNavSupervisorState App_NavSupervisor_HandleCenterFrontTapeForPivot(const AppNavInput *input,
+                                                                             const AppNavPerception *perception,
                                                                              AppNavOutput *output)
 {
     AppNavInput action_input = {0};
@@ -745,7 +753,7 @@ static AppNavSupervisorState App_NavSupervisor_HandleCenterFrontTapeForPivot(con
         return App_NavSupervisor_SetError(APP_NAV_SUPERVISOR_RESULT_PRIMITIVE_ERROR);
     }
 
-    center_state = App_Nav_TickCenterByFrontTapeForPivotAction(&action_input, output);
+    center_state = App_Nav_TickCenterByFrontTapeForPivotAction(&action_input, perception, output);
 
     switch (center_state)
     {
@@ -771,6 +779,7 @@ static AppNavSupervisorState App_NavSupervisor_HandleCenterFrontTapeForPivot(con
 }
 
 static AppNavSupervisorState App_NavSupervisor_HandleSmooth(const AppNavInput *input,
+                                                            const AppNavPerception *perception,
                                                             AppNavOutput *output)
 {
     AppNavSupervisorState current_state = app_nav_supervisor_debug.state;
@@ -784,7 +793,7 @@ static AppNavSupervisorState App_NavSupervisor_HandleSmooth(const AppNavInput *i
         return App_NavSupervisor_SetError(APP_NAV_SUPERVISOR_RESULT_PRIMITIVE_ERROR);
     }
 
-    smooth_state = App_Nav_TickSmoothAction(&action_input, output);
+    smooth_state = App_Nav_TickSmoothAction(&action_input, perception, output);
 
     switch (smooth_state)
     {
@@ -801,7 +810,7 @@ static AppNavSupervisorState App_NavSupervisor_HandleSmooth(const AppNavInput *i
         App_Maze_UpdateRobotHeading(turn);
         App_Maze_AdvanceRobotPosition();
 
-        if (App_NavSupervisor_CheckSpecialAtConfirmedCellEntry(input))
+        if (App_NavSupervisor_CheckSpecialAtConfirmedCellEntry(perception))
         {
             return App_NavSupervisor_FinishFindCells(output);
         }
@@ -840,6 +849,7 @@ static AppNavSupervisorState App_NavSupervisor_HandleSmooth(const AppNavInput *i
 }
 
 static AppNavSupervisorState App_NavSupervisor_HandlePivot(const AppNavInput *input,
+                                                           const AppNavPerception *perception,
                                                            AppNavOutput *output)
 {
     AppNavInput action_input = {0};
@@ -851,7 +861,7 @@ static AppNavSupervisorState App_NavSupervisor_HandlePivot(const AppNavInput *in
         return App_NavSupervisor_SetError(APP_NAV_SUPERVISOR_RESULT_PRIMITIVE_ERROR);
     }
 
-    pivot_state = App_Nav_TickPivotAction(&action_input, output);
+    pivot_state = App_Nav_TickPivotAction(&action_input, perception, output);
 
     switch (pivot_state)
     {
@@ -1087,6 +1097,7 @@ void App_NavSupervisor_Stop(void)
 }
 
 AppNavSupervisorState App_NavSupervisor_Tick(const AppNavInput *input,
+                                             const AppNavPerception *perception,
                                              AppNavOutput *output)
 {
     if (output != NULL)
@@ -1094,7 +1105,7 @@ AppNavSupervisorState App_NavSupervisor_Tick(const AppNavInput *input,
         App_NavSupervisor_ClearOutput(output);
     }
 
-    if ((input == NULL) || (output == NULL))
+    if ((input == NULL) || (perception == NULL) || (output == NULL))
     {
         return App_NavSupervisor_SetError(APP_NAV_SUPERVISOR_RESULT_INVALID_ARGUMENT);
     }
@@ -1114,29 +1125,29 @@ AppNavSupervisorState App_NavSupervisor_Tick(const AppNavInput *input,
     switch (app_nav_supervisor_debug.state)
     {
     case APP_NAV_SUPERVISOR_START_INITIAL_ADVANCE:
-        return App_NavSupervisor_HandleStartInitialAdvance(input, output);
+        return App_NavSupervisor_HandleStartInitialAdvance(input, perception, output);
 
     case APP_NAV_SUPERVISOR_RUN_INITIAL_ADVANCE:
-        return App_NavSupervisor_HandleInitialAdvance(input, output);
+        return App_NavSupervisor_HandleInitialAdvance(input, perception, output);
 
     case APP_NAV_SUPERVISOR_DECIDE:
-    	return App_NavSupervisor_HandleDecide(input, output);
+        return App_NavSupervisor_HandleDecide(input, perception, output);
 
     case APP_NAV_SUPERVISOR_RUN_ADVANCE:
-        return App_NavSupervisor_HandleAdvance(input, output);
+        return App_NavSupervisor_HandleAdvance(input, perception, output);
 
     case APP_NAV_SUPERVISOR_RUN_APPROACH_FRONT_WALL_FOR_PIVOT:
-        return App_NavSupervisor_HandleApproachFrontWallForPivot(input, output);
+        return App_NavSupervisor_HandleApproachFrontWallForPivot(input, perception, output);
 
     case APP_NAV_SUPERVISOR_RUN_CENTER_FRONT_TAPE_FOR_PIVOT:
-        return App_NavSupervisor_HandleCenterFrontTapeForPivot(input, output);
+        return App_NavSupervisor_HandleCenterFrontTapeForPivot(input, perception, output);
 
     case APP_NAV_SUPERVISOR_RUN_SMOOTH_LEFT:
     case APP_NAV_SUPERVISOR_RUN_SMOOTH_RIGHT:
-        return App_NavSupervisor_HandleSmooth(input, output);
+        return App_NavSupervisor_HandleSmooth(input, perception, output);
 
     case APP_NAV_SUPERVISOR_RUN_PIVOT_180:
-        return App_NavSupervisor_HandlePivot(input, output);
+        return App_NavSupervisor_HandlePivot(input, perception, output);
 
     case APP_NAV_SUPERVISOR_ERROR:
         App_NavSupervisor_ClearOutput(output);

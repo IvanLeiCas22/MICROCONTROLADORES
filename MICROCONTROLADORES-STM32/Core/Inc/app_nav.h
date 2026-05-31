@@ -53,7 +53,8 @@ bool App_Nav_EvaluatePerception(const AppNavInput *input,
  * Basic wall-based action recommendation. The supervisor may use this as a
  * local policy, but app_nav itself does not update the logical maze.
  */
-bool App_Nav_RecommendAction(uint32_t random_value,
+bool App_Nav_RecommendAction(const AppNavPerception *perception,
+                              uint32_t random_value,
                               AppNavRecommendedAction *action_out);
 
 /* -------------------------------------------------------------------------- */
@@ -72,6 +73,7 @@ bool App_Nav_ComputeYawHoldAdvancePwm(const AppNavInput *input,
 
 bool App_Nav_StartWallFollowAdvance(void);
 bool App_Nav_ComputeWallFollowPwm(const AppNavInput *input,
+                                  const AppNavPerception *perception,
                                   uint16_t right_base_pwm,
                                   uint16_t left_base_pwm,
                                   AppNavOutput *output);
@@ -99,6 +101,7 @@ bool App_Nav_StartAdvanceAction(AppNavAdvanceActionMode mode);
 bool App_Nav_StartAdvanceActionWithRearTapeProfile(AppNavAdvanceActionMode mode,
                                                    AppNavRearTapeProfile rear_tape_profile);
 AppNavAdvanceActionState App_Nav_TickAdvanceAction(const AppNavInput *input,
+                                                   const AppNavPerception *perception,
                                                    AppNavOutput *output);
 void App_Nav_StopAdvanceAction(void);
 
@@ -113,6 +116,7 @@ bool App_Nav_StartSmoothAction(AppNavSmoothActionType action);
 bool App_Nav_StartSmoothActionWithRearTapeProfile(AppNavSmoothActionType action,
                                                   AppNavRearTapeProfile rear_tape_profile);
 AppNavSmoothActionState App_Nav_TickSmoothAction(const AppNavInput *input,
+                                                 const AppNavPerception *perception,
                                                  AppNavOutput *output);
 void App_Nav_StopSmoothAction(void);
 
@@ -122,6 +126,7 @@ void App_Nav_StopSmoothAction(void);
  */
 bool App_Nav_StartPivotAction(AppNavPivotActionType action);
 AppNavPivotActionState App_Nav_TickPivotAction(const AppNavInput *input,
+                                               const AppNavPerception *perception,
                                                AppNavOutput *output);
 void App_Nav_StopPivotAction(void);
 
@@ -134,6 +139,7 @@ void App_Nav_StopPivotAction(void);
  */
 bool App_Nav_StartApproachFrontWallAction(void);
 AppNavApproachFrontWallActionState App_Nav_TickApproachFrontWallAction(const AppNavInput *input,
+                                                                       const AppNavPerception *perception,
                                                                        AppNavOutput *output);
 void App_Nav_StopApproachFrontWallAction(void);
 
@@ -146,6 +152,7 @@ void App_Nav_StopApproachFrontWallAction(void);
 bool App_Nav_StartCenterByFrontTapeForPivotAction(AppNavFrontTapeProfile front_tape_profile);
 
 AppNavCenterFrontTapeActionState App_Nav_TickCenterByFrontTapeForPivotAction(const AppNavInput *input,
+                                                                             const AppNavPerception *perception,
                                                                              AppNavOutput *output);
 void App_Nav_StopCenterByFrontTapeForPivotAction(void);
 

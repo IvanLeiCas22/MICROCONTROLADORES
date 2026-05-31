@@ -301,11 +301,10 @@ static uint16_t Fixed_To_Gain_Hundredths(int32_t gain_fixed);
 static AppNavConfig Build_AppNavConfig_From_LegacyRuntime(void);
 static void Sync_AppNavConfig_From_LegacyRuntime(void);
 static void Build_AppNavInput_From_SensorSnapshot(uint32_t dt_ms, AppNavInput *input);
-static void Update_Portable_Nav_Perception(uint32_t dt_ms);
 static uint8_t Build_DetectionFlags_From_AppNavPerception(const AppNavPerception *perception);
 static void PrimitiveTest_StartSmooth(uint8_t variant);
 static void PrimitiveTest_Stop(void);
-static void PrimitiveTest_Tick(uint32_t dt_ms);
+static void PrimitiveTest_Tick(uint32_t dt_ms, const AppNavInput *input, const AppNavPerception *perception);
 static void PrimitiveTest_WriteStatus(uint8_t *buffer);
 static void PrimitiveTest_WriteSmoothConfig(uint8_t *buffer);
 static void PrimitiveTest_SetSmoothConfigFromPayload(struct UNERBUSHandle *aBus);
@@ -317,7 +316,7 @@ static void Stop_Portable_Nav_Actions(void);
 static void Supervisor_Run_SetInactiveMenuState(void);
 static bool Start_Supervisor_Run(MenuModeTypeDef requested_mode);
 static void Stop_Supervisor_Run(void);
-static void Tick_Supervisor_Run(uint32_t dt_ms);
+static void Tick_Supervisor_Run(const AppNavInput *input, const AppNavPerception *perception);
 
 /* -------------------------------------------------------------------------- */
 /* HAL callback wrappers                                                        */
@@ -1776,9 +1775,6 @@ static void Build_AppNavInput_From_SensorSnapshot(uint32_t dt_ms, AppNavInput *i
         input->adc_filtered[ch] = sensor_snapshot.adc_filtered[ch];
     }
 
-    input->floor_front_black = ((sensor_snapshot.detection_flags & SENSOR_DET_FLOOR_FRONT) != 0U) ? 1U : 0U;
-    input->floor_rear_black = ((sensor_snapshot.detection_flags & SENSOR_DET_FLOOR_REAR) != 0U) ? 1U : 0U;
-
     input->dist_right_lat_mm = sensor_snapshot.dist_right_lat_mm;
     input->dist_diagonal_right_mm = sensor_snapshot.dist_diagonal_right_mm;
     input->dist_front_right_mm = sensor_snapshot.dist_front_right_mm;
@@ -1826,19 +1822,6 @@ static uint8_t Build_DetectionFlags_From_AppNavPerception(const AppNavPerception
         flags |= SENSOR_DET_FLOOR_REAR;
 
     return flags;
-}
-
-static void Update_Portable_Nav_Perception(uint32_t dt_ms)
-{
-    AppNavInput input = {0};
-    AppNavPerception perception = {0};
-
-    Build_AppNavInput_From_SensorSnapshot(dt_ms, &input);
-
-    if (App_Nav_EvaluatePerception(&input, &perception))
-    {
-        sensor_snapshot.detection_flags = Build_DetectionFlags_From_AppNavPerception(&perception);
-    }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1928,15 +1911,29 @@ static void PrimitiveTest_Stop(void)
     Set_Motor_Speeds(0, 0);
 }
 
-static void PrimitiveTest_Tick(uint32_t dt_ms)
+static void PrimitiveTest_Tick(uint32_t dt_ms,
+                               const AppNavInput *input,
+                               const AppNavPerception *perception)
 {
-    AppNavInput input = {0};
     AppNavOutput output = {0};
 
     if (!primitive_test.active)
     {
         return;
     }
+
+    if ((input == NULL) || (perception == NULL))
+    {
+        primitive_test.active = false;
+        primitive_test.state = PRIM_TEST_STATE_ERROR;
+        primitive_test.result = PRIM_TEST_RESULT_COMPUTE_FAILED;
+        primitive_test.last_left_pwm = 0;
+        primitive_test.last_right_pwm = 0;
+        Set_Motor_Speeds(0, 0);
+        return;
+    }
+
+    (void)perception;
 
     if ((UINT32_MAX - primitive_test.elapsed_ms) >= dt_ms)
     {
@@ -1947,10 +1944,8 @@ static void PrimitiveTest_Tick(uint32_t dt_ms)
         primitive_test.elapsed_ms = UINT32_MAX;
     }
 
-    Build_AppNavInput_From_SensorSnapshot(dt_ms, &input);
-
     if ((primitive_test.test_type == PRIM_TEST_SMOOTH_TURN) &&
-        App_Nav_ComputeSmoothTurnPwm(&input, &output))
+        App_Nav_ComputeSmoothTurnPwm(input, &output))
     {
     	Apply_AppNavOutput_To_Motors(&output);
         primitive_test.last_left_pwm = output.left_motor_pwm;
@@ -2266,14 +2261,18 @@ static void Stop_Supervisor_Run(void)
     Request_Display_Update();
 }
 
-static void Tick_Supervisor_Run(uint32_t dt_ms)
+static void Tick_Supervisor_Run(const AppNavInput *input, const AppNavPerception *perception)
 {
-    AppNavInput input = {0};
     AppNavOutput output = {0};
     AppNavSupervisorState supervisor_state;
 
-    Build_AppNavInput_From_SensorSnapshot(dt_ms, &input);
-    supervisor_state = App_NavSupervisor_Tick(&input, &output);
+    if ((input == NULL) || (perception == NULL))
+    {
+        Set_Motor_Speeds(0, 0);
+        return;
+    }
+
+    supervisor_state = App_NavSupervisor_Tick(input, perception, &output);
     Apply_AppNavOutput_To_Motors(&output);
 
     if ((supervisor_state == APP_NAV_SUPERVISOR_ERROR) ||
@@ -2292,20 +2291,33 @@ static void Tick_Supervisor_Run(uint32_t dt_ms)
 
 static void Run_Control_Step(uint32_t dt_ms)
 {
+    AppNavInput input = {0};
+    AppNavPerception perception = {0};
+
     control_step_dt_ms = dt_ms;
     ADC_Filter_Task();
     Update_Navigation_Perception();
-    Update_Portable_Nav_Perception(dt_ms);
+
+    Build_AppNavInput_From_SensorSnapshot(dt_ms, &input);
+
+    if (!App_Nav_EvaluatePerception(&input, &perception))
+    {
+        sensor_snapshot.detection_flags = 0U;
+        Set_Motor_Speeds(0, 0);
+        return;
+    }
+
+    sensor_snapshot.detection_flags = Build_DetectionFlags_From_AppNavPerception(&perception);
 
     if (primitive_test.active)
     {
-        PrimitiveTest_Tick(dt_ms);
+        PrimitiveTest_Tick(dt_ms, &input, &perception);
         return;
     }
 
     if (supervisor_run_active)
     {
-        Tick_Supervisor_Run(dt_ms);
+        Tick_Supervisor_Run(&input, &perception);
         return;
     }
 
