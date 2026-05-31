@@ -1163,10 +1163,10 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
         NavRuntimeConfig_SetPivotTargetDpsFromPayload(aBus);
         break;
     case CMD_GET_PIVOT_TURN_DPS:
-        uint8_t min_speed_buffer[UNERBUS_TURN_MIN_SPEED_SIZE];
-        NavRuntimeConfig_WritePivotTargetDpsToBuffer(min_speed_buffer);
-        UNERBUS_Write(aBus, min_speed_buffer, UNERBUS_TURN_MIN_SPEED_SIZE);
-        length = UNERBUS_CMD_ID_SIZE + UNERBUS_TURN_MIN_SPEED_SIZE;
+        uint8_t pivot_turn_dps_buffer[UNERBUS_PIVOT_TURN_DPS_SIZE];
+        NavRuntimeConfig_WritePivotTargetDpsToBuffer(pivot_turn_dps_buffer);
+        UNERBUS_Write(aBus, pivot_turn_dps_buffer, UNERBUS_PIVOT_TURN_DPS_SIZE);
+        length = UNERBUS_CMD_ID_SIZE + UNERBUS_PIVOT_TURN_DPS_SIZE;
         break;
     case CMD_SET_WALL_THRESHOLDS:
         NavRuntimeConfig_SetWallThresholdsFromPayload(aBus);

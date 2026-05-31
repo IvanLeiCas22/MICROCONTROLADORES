@@ -517,8 +517,8 @@ void MainWindow::onPacketReceived(quint8 command, const QByteArray &payload) {
     updateTurnMaxSpeedUI(payload);
     break;
   }
-  case Unerbus::CommandId::CMD_GET_TURN_MIN_SPEED: {
-    updateTurnMinSpeedUI(payload);
+  case Unerbus::CommandId::CMD_GET_PIVOT_TURN_DPS: {
+    updatePivotTurnDpsUI(payload);
     break;
   }
   case Unerbus::CommandId::CMD_GET_MOTOR_BASE_SPEEDS: {
@@ -1460,7 +1460,7 @@ void MainWindow::on_btnGetPidTurnConfig_clicked() {
     sendUnerbusCommand(Unerbus::CommandId::CMD_GET_TURN_MAX_SPEED);
   });
   QTimer::singleShot(200, this, [this]() {
-    sendUnerbusCommand(Unerbus::CommandId::CMD_GET_TURN_MIN_SPEED);
+    sendUnerbusCommand(Unerbus::CommandId::CMD_GET_PIVOT_TURN_DPS);
   });
   QTimer::singleShot(300, this, [this]() {
     sendUnerbusCommand(Unerbus::CommandId::CMD_GET_SMOOTH_TURN_CONFIG);
@@ -1501,13 +1501,13 @@ void MainWindow::on_btnSetPidTurnConfig_clicked() {
   });
 
   QTimer::singleShot(200, this, [this]() {
-    QByteArray minSpeedPayload;
-    QDataStream minSpeedStream(&minSpeedPayload, QIODevice::WriteOnly);
-    minSpeedStream.setByteOrder(QDataStream::LittleEndian);
-    minSpeedStream << static_cast<quint16>(
-        ui->editMinTurnSpeed->text().toUShort());
-    sendUnerbusCommand(Unerbus::CommandId::CMD_SET_TURN_MIN_SPEED,
-                       minSpeedPayload);
+    QByteArray pivotTurnDpsPayload;
+    QDataStream pivotTurnDpsStream(&pivotTurnDpsPayload, QIODevice::WriteOnly);
+    pivotTurnDpsStream.setByteOrder(QDataStream::LittleEndian);
+    pivotTurnDpsStream << static_cast<quint16>(
+        ui->editPivotTurnDps->text().toUShort());
+    sendUnerbusCommand(Unerbus::CommandId::CMD_SET_PIVOT_TURN_DPS,
+                       pivotTurnDpsPayload);
   });
 
   QTimer::singleShot(300, this, [this]() {
@@ -1770,9 +1770,9 @@ void MainWindow::updateMpuConfigUI(const QByteArray &payload) {
 }
 
 /**
- * @brief Actualiza la UI con la velocidad mínima de giro.
+ * @brief Actualiza la UI con el target DPS de giro pivot.
  */
-void MainWindow::updateTurnMinSpeedUI(const QByteArray &payload) {
+void MainWindow::updatePivotTurnDpsUI(const QByteArray &payload) {
   if (payload.size() < 2)
     return;
   QDataStream stream(payload);
@@ -1781,7 +1781,7 @@ void MainWindow::updateTurnMinSpeedUI(const QByteArray &payload) {
   quint16 speed;
   stream >> speed;
 
-  ui->editMinTurnSpeed->setText(QString::number(speed));
+  ui->editPivotTurnDps->setText(QString::number(speed));
 }
 
 /**

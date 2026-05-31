@@ -234,7 +234,7 @@ extern uint16_t pwm_max_value;
 #define UNERBUS_TURN_DEGREES_SIZE 2                           // int16_t
 #define UNERBUS_TURN_PID_GAINS_SIZE (sizeof(uint16_t) * 3)    // Kp, Ki, Kd para el giro como uint16_t
 #define UNERBUS_TURN_MAX_SPEED_SIZE (sizeof(uint16_t))
-#define UNERBUS_TURN_MIN_SPEED_SIZE (sizeof(uint16_t))
+#define UNERBUS_PIVOT_TURN_DPS_SIZE (sizeof(uint16_t))
 #define UNERBUS_PWM_PERIOD_SIZE (sizeof(uint16_t))
 #define UNERBUS_MPU_CONFIG_SIZE (sizeof(uint8_t) * 3) // Accel, Gyro, DLPF
 #define UNERBUS_WALL_THRESHOLDS_SIZE (sizeof(uint16_t) * 4)

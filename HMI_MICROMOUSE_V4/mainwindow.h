@@ -221,7 +221,7 @@ private slots:
   void updatePidTurnUI(const QByteArray &payload);
   void updateMotorBaseSpeedsUI(const QByteArray &payload);
   void updateTurnMaxSpeedUI(const QByteArray &payload);
-  void updateTurnMinSpeedUI(const QByteArray &payload);
+  void updatePivotTurnDpsUI(const QByteArray &payload);
   void updateMpuConfigUI(const QByteArray &payload);
   void populateMpuConfigComboBoxes();
   void updateWallThresholdsUI(const QByteArray &payload);

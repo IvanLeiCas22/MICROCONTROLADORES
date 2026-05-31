@@ -2025,7 +2025,7 @@ QPushButton:checked {
               </widget>
              </item>
              <item row="1" column="3">
-              <widget class="QLineEdit" name="editMinTurnSpeed">
+              <widget class="QLineEdit" name="editPivotTurnDps">
                <property name="text">
                 <string>300</string>
                </property>
