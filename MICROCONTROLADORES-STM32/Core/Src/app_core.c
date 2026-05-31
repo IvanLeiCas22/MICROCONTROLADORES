@@ -290,7 +290,8 @@ static int32_t ADC_To_Distance_mm(uint16_t adc_value);
 static void Update_Navigation_Perception(void);
 static void Init_Pid_Configs(void);
 static void Set_Pid_Gains_From_U16(PID_Role_t role, uint16_t kp_x100, uint16_t ki_x100, uint16_t kd_x100);
-static void Write_Pid_Gains_To_Buffer(PID_Role_t role, uint8_t *buffer);
+static void NavRuntimeConfig_WriteUInt16LE(uint8_t *buffer, uint16_t value);
+static void NavRuntimeConfig_WritePidGainsQ16ToBuffer(uint8_t *buffer, int32_t kp_q16, int32_t ki_q16, int32_t kd_q16);
 static uint16_t NavRuntimeConfig_ClampPwmToTimerMax(uint16_t pwm);
 static uint16_t NavRuntimeConfig_ClampPwmBelowTimerMax(uint16_t pwm);
 static void NavRuntimeConfig_SetTurnOutputLimit(uint16_t output_limit_pwm);
@@ -561,7 +562,13 @@ static void NavRuntimeConfig_SetAdvancePidFromPayload(struct UNERBUSHandle *aBus
 
 static void NavRuntimeConfig_WriteAdvancePidToBuffer(uint8_t *buffer)
 {
-    Write_Pid_Gains_To_Buffer(PID_ROLE_CENTERING, buffer);
+    AppNavConfig cfg;
+
+    App_Nav_GetConfig(&cfg);
+    NavRuntimeConfig_WritePidGainsQ16ToBuffer(buffer,
+                                             cfg.advance_pid_kp_q16,
+                                             cfg.advance_pid_ki_q16,
+                                             cfg.advance_pid_kd_q16);
 }
 
 static void NavRuntimeConfig_SetAdvanceOutputLimitFromPayload(struct UNERBUSHandle *aBus)
@@ -576,8 +583,10 @@ static void NavRuntimeConfig_SetAdvanceOutputLimitFromPayload(struct UNERBUSHand
 
 static void NavRuntimeConfig_WriteAdvanceOutputLimitToBuffer(uint8_t *buffer)
 {
-    buffer[0] = (uint8_t)(max_pwm_correction & 0xFF);
-    buffer[1] = (uint8_t)((max_pwm_correction >> 8) & 0xFF);
+    AppNavConfig cfg;
+
+    App_Nav_GetConfig(&cfg);
+    NavRuntimeConfig_WriteUInt16LE(buffer, (uint16_t)cfg.advance_pid_output_limit_pwm);
 }
 
 static void NavRuntimeConfig_SetMotorBasesFromPayload(struct UNERBUSHandle *aBus)
@@ -590,10 +599,11 @@ static void NavRuntimeConfig_SetMotorBasesFromPayload(struct UNERBUSHandle *aBus
 
 static void NavRuntimeConfig_WriteMotorBasesToBuffer(uint8_t *buffer)
 {
-    buffer[0] = (uint8_t)(right_motor_base_speed & 0xFF);
-    buffer[1] = (uint8_t)((right_motor_base_speed >> 8) & 0xFF);
-    buffer[2] = (uint8_t)(left_motor_base_speed & 0xFF);
-    buffer[3] = (uint8_t)((left_motor_base_speed >> 8) & 0xFF);
+    AppNavConfig cfg;
+
+    App_Nav_GetConfig(&cfg);
+    NavRuntimeConfig_WriteUInt16LE(&buffer[0], cfg.right_motor_base_speed);
+    NavRuntimeConfig_WriteUInt16LE(&buffer[2], cfg.left_motor_base_speed);
 }
 
 static void NavRuntimeConfig_SetTurnPidFromPayload(struct UNERBUSHandle *aBus)
@@ -608,7 +618,13 @@ static void NavRuntimeConfig_SetTurnPidFromPayload(struct UNERBUSHandle *aBus)
 
 static void NavRuntimeConfig_WriteTurnPidToBuffer(uint8_t *buffer)
 {
-    Write_Pid_Gains_To_Buffer(PID_ROLE_TURN, buffer);
+    AppNavConfig cfg;
+
+    App_Nav_GetConfig(&cfg);
+    NavRuntimeConfig_WritePidGainsQ16ToBuffer(buffer,
+                                             cfg.pivot_turn_pid_kp_q16,
+                                             cfg.pivot_turn_pid_ki_q16,
+                                             cfg.pivot_turn_pid_kd_q16);
 }
 
 static void NavRuntimeConfig_SetTurnOutputLimitFromPayload(struct UNERBUSHandle *aBus)
@@ -619,8 +635,10 @@ static void NavRuntimeConfig_SetTurnOutputLimitFromPayload(struct UNERBUSHandle 
 
 static void NavRuntimeConfig_WriteTurnOutputLimitToBuffer(uint8_t *buffer)
 {
-    buffer[0] = (uint8_t)(turn_max_pwm & 0xFF);
-    buffer[1] = (uint8_t)((turn_max_pwm >> 8) & 0xFF);
+    AppNavConfig cfg;
+
+    App_Nav_GetConfig(&cfg);
+    NavRuntimeConfig_WriteUInt16LE(buffer, (uint16_t)cfg.smooth_turn_pid_output_limit_pwm);
 }
 
 static void NavRuntimeConfig_SetPivotTargetDpsFromPayload(struct UNERBUSHandle *aBus)
@@ -636,8 +654,10 @@ static void NavRuntimeConfig_SetPivotTargetDpsFromPayload(struct UNERBUSHandle *
 
 static void NavRuntimeConfig_WritePivotTargetDpsToBuffer(uint8_t *buffer)
 {
-    buffer[0] = (uint8_t)(pivot_turn_target_dps & 0xFF);
-    buffer[1] = (uint8_t)((pivot_turn_target_dps >> 8) & 0xFF);
+    AppNavConfig cfg;
+
+    App_Nav_GetConfig(&cfg);
+    NavRuntimeConfig_WriteUInt16LE(buffer, cfg.pivot_turn_target_dps);
 }
 
 static void NavRuntimeConfig_SetWallThresholdsFromPayload(struct UNERBUSHandle *aBus)
@@ -652,14 +672,13 @@ static void NavRuntimeConfig_SetWallThresholdsFromPayload(struct UNERBUSHandle *
 
 static void NavRuntimeConfig_WriteWallThresholdsToBuffer(uint8_t *buffer)
 {
-    buffer[0] = (uint8_t)(wall_threshold_mm_front & 0xFF);
-    buffer[1] = (uint8_t)((wall_threshold_mm_front >> 8) & 0xFF);
-    buffer[2] = (uint8_t)(wall_threshold_mm_side & 0xFF);
-    buffer[3] = (uint8_t)((wall_threshold_mm_side >> 8) & 0xFF);
-    buffer[4] = (uint8_t)(wall_threshold_mm_diagonal & 0xFF);
-    buffer[5] = (uint8_t)((wall_threshold_mm_diagonal >> 8) & 0xFF);
-    buffer[6] = (uint8_t)(after_turn_wall_threshold_mm & 0xFF);
-    buffer[7] = (uint8_t)((after_turn_wall_threshold_mm >> 8) & 0xFF);
+    AppNavConfig cfg;
+
+    App_Nav_GetConfig(&cfg);
+    NavRuntimeConfig_WriteUInt16LE(&buffer[0], cfg.wall_threshold_mm_front);
+    NavRuntimeConfig_WriteUInt16LE(&buffer[2], cfg.wall_threshold_mm_side);
+    NavRuntimeConfig_WriteUInt16LE(&buffer[4], cfg.wall_threshold_mm_diagonal);
+    NavRuntimeConfig_WriteUInt16LE(&buffer[6], cfg.after_turn_wall_threshold_mm);
 }
 
 static void NavRuntimeConfig_SetWallTargetAndTapeFromPayload(struct UNERBUSHandle *aBus)
@@ -672,10 +691,11 @@ static void NavRuntimeConfig_SetWallTargetAndTapeFromPayload(struct UNERBUSHandl
 
 static void NavRuntimeConfig_WriteWallTargetAndTapeToBuffer(uint8_t *buffer)
 {
-    buffer[0] = (uint8_t)(wall_target_mm & 0xFF);
-    buffer[1] = (uint8_t)((wall_target_mm >> 8) & 0xFF);
-    buffer[2] = (uint8_t)(tape_detection_threshold_adc & 0xFF);
-    buffer[3] = (uint8_t)((tape_detection_threshold_adc >> 8) & 0xFF);
+    AppNavConfig cfg;
+
+    App_Nav_GetConfig(&cfg);
+    NavRuntimeConfig_WriteUInt16LE(&buffer[0], cfg.wall_target_mm);
+    NavRuntimeConfig_WriteUInt16LE(&buffer[2], cfg.tape_detection_threshold_adc);
 }
 
 static void NavRuntimeConfig_SetApproachFrontWallTargetFromPayload(struct UNERBUSHandle *aBus)
@@ -695,8 +715,10 @@ static void NavRuntimeConfig_SetApproachFrontWallTargetFromPayload(struct UNERBU
 
 static void NavRuntimeConfig_WriteApproachFrontWallTargetToBuffer(uint8_t *buffer)
 {
-    buffer[0] = (uint8_t)(approach_front_wall_target_mm & 0xFF);
-    buffer[1] = (uint8_t)((approach_front_wall_target_mm >> 8) & 0xFF);
+    AppNavConfig cfg;
+
+    App_Nav_GetConfig(&cfg);
+    NavRuntimeConfig_WriteUInt16LE(buffer, cfg.approach_front_wall_target_mm);
 }
 
 static void NavRuntimeConfig_SetSmoothSpeedsFromPayload(struct UNERBUSHandle *aBus)
@@ -710,10 +732,11 @@ static void NavRuntimeConfig_SetSmoothSpeedsFromPayload(struct UNERBUSHandle *aB
 
 static void NavRuntimeConfig_WriteSmoothSpeedsToBuffer(uint8_t *buffer)
 {
-    buffer[0] = (uint8_t)(faster_motor_smooth_turn_speed & 0xFF);
-    buffer[1] = (uint8_t)((faster_motor_smooth_turn_speed >> 8) & 0xFF);
-    buffer[2] = (uint8_t)(slower_motor_smooth_turn_speed & 0xFF);
-    buffer[3] = (uint8_t)((slower_motor_smooth_turn_speed >> 8) & 0xFF);
+    AppNavConfig cfg;
+
+    App_Nav_GetConfig(&cfg);
+    NavRuntimeConfig_WriteUInt16LE(&buffer[0], cfg.faster_motor_smooth_turn_speed);
+    NavRuntimeConfig_WriteUInt16LE(&buffer[2], cfg.slower_motor_smooth_turn_speed);
 }
 
 static void NavRuntimeConfig_SetSmoothPidFromPayload(struct UNERBUSHandle *aBus)
@@ -728,7 +751,13 @@ static void NavRuntimeConfig_SetSmoothPidFromPayload(struct UNERBUSHandle *aBus)
 
 static void NavRuntimeConfig_WriteSmoothPidToBuffer(uint8_t *buffer)
 {
-    Write_Pid_Gains_To_Buffer(PID_ROLE_SMOOTH_TURN, buffer);
+    AppNavConfig cfg;
+
+    App_Nav_GetConfig(&cfg);
+    NavRuntimeConfig_WritePidGainsQ16ToBuffer(buffer,
+                                             cfg.smooth_turn_pid_kp_q16,
+                                             cfg.smooth_turn_pid_ki_q16,
+                                             cfg.smooth_turn_pid_kd_q16);
 }
 
 static void NavRuntimeConfig_SetSmoothTargetDpsFromPayload(struct UNERBUSHandle *aBus)
@@ -739,8 +768,10 @@ static void NavRuntimeConfig_SetSmoothTargetDpsFromPayload(struct UNERBUSHandle 
 
 static void NavRuntimeConfig_WriteSmoothTargetDpsToBuffer(uint8_t *buffer)
 {
-    buffer[0] = (uint8_t)(turn_target_dps & 0xFF);
-    buffer[1] = (uint8_t)((turn_target_dps >> 8) & 0xFF);
+    AppNavConfig cfg;
+
+    App_Nav_GetConfig(&cfg);
+    NavRuntimeConfig_WriteUInt16LE(buffer, cfg.turn_target_dps);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -824,18 +855,21 @@ static void Set_Pid_Gains_From_U16(PID_Role_t role, uint16_t kp_x100, uint16_t k
     pid_configs[role].kd = Gain_Hundredths_To_Fixed(kd_x100);
 }
 
-static void Write_Pid_Gains_To_Buffer(PID_Role_t role, uint8_t *buffer)
+static void NavRuntimeConfig_WriteUInt16LE(uint8_t *buffer, uint16_t value)
 {
-    uint16_t kp_x100 = Fixed_To_Gain_Hundredths(pid_configs[role].kp);
-    uint16_t ki_x100 = Fixed_To_Gain_Hundredths(pid_configs[role].ki);
-    uint16_t kd_x100 = Fixed_To_Gain_Hundredths(pid_configs[role].kd);
+    buffer[0] = (uint8_t)(value & 0xFF);
+    buffer[1] = (uint8_t)((value >> 8) & 0xFF);
+}
 
-    buffer[0] = (uint8_t)(kp_x100 & 0xFF);
-    buffer[1] = (uint8_t)((kp_x100 >> 8) & 0xFF);
-    buffer[2] = (uint8_t)(ki_x100 & 0xFF);
-    buffer[3] = (uint8_t)((ki_x100 >> 8) & 0xFF);
-    buffer[4] = (uint8_t)(kd_x100 & 0xFF);
-    buffer[5] = (uint8_t)((kd_x100 >> 8) & 0xFF);
+static void NavRuntimeConfig_WritePidGainsQ16ToBuffer(uint8_t *buffer, int32_t kp_q16, int32_t ki_q16, int32_t kd_q16)
+{
+    uint16_t kp_x100 = Fixed_To_Gain_Hundredths(kp_q16);
+    uint16_t ki_x100 = Fixed_To_Gain_Hundredths(ki_q16);
+    uint16_t kd_x100 = Fixed_To_Gain_Hundredths(kd_q16);
+
+    NavRuntimeConfig_WriteUInt16LE(&buffer[0], kp_x100);
+    NavRuntimeConfig_WriteUInt16LE(&buffer[2], ki_x100);
+    NavRuntimeConfig_WriteUInt16LE(&buffer[4], kd_x100);
 }
 
 static void Select_Supervisor_Status_Update_Bus(_sUNERBUSHandle *aBus)
@@ -2148,17 +2182,20 @@ static uint8_t PrimitiveTest_SendStatus(struct UNERBUSHandle *aBus)
 
 static void PrimitiveTest_WriteSmoothConfig(uint8_t *buffer)
 {
+    AppNavConfig cfg;
     uint16_t idx = 0U;
+
+    App_Nav_GetConfig(&cfg);
 
     UNERBUS_PutUInt8(buffer, &idx, PRIM_TEST_RESP_CONFIG);
     UNERBUS_PutUInt8(buffer, &idx, PRIM_TEST_SMOOTH_TURN);
-    UNERBUS_PutUInt16(buffer, &idx, Fixed_To_Gain_Hundredths(pid_configs[PID_ROLE_SMOOTH_TURN].kp));
-    UNERBUS_PutUInt16(buffer, &idx, Fixed_To_Gain_Hundredths(pid_configs[PID_ROLE_SMOOTH_TURN].ki));
-    UNERBUS_PutUInt16(buffer, &idx, Fixed_To_Gain_Hundredths(pid_configs[PID_ROLE_SMOOTH_TURN].kd));
-    UNERBUS_PutUInt16(buffer, &idx, turn_max_pwm);
-    UNERBUS_PutUInt16(buffer, &idx, faster_motor_smooth_turn_speed);
-    UNERBUS_PutUInt16(buffer, &idx, slower_motor_smooth_turn_speed);
-    UNERBUS_PutUInt16(buffer, &idx, turn_target_dps);
+    UNERBUS_PutUInt16(buffer, &idx, Fixed_To_Gain_Hundredths(cfg.smooth_turn_pid_kp_q16));
+    UNERBUS_PutUInt16(buffer, &idx, Fixed_To_Gain_Hundredths(cfg.smooth_turn_pid_ki_q16));
+    UNERBUS_PutUInt16(buffer, &idx, Fixed_To_Gain_Hundredths(cfg.smooth_turn_pid_kd_q16));
+    UNERBUS_PutUInt16(buffer, &idx, (uint16_t)cfg.smooth_turn_pid_output_limit_pwm);
+    UNERBUS_PutUInt16(buffer, &idx, cfg.faster_motor_smooth_turn_speed);
+    UNERBUS_PutUInt16(buffer, &idx, cfg.slower_motor_smooth_turn_speed);
+    UNERBUS_PutUInt16(buffer, &idx, cfg.turn_target_dps);
 }
 
 static uint8_t PrimitiveTest_SendSmoothConfig(struct UNERBUSHandle *aBus)
