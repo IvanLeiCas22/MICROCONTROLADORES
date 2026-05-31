@@ -323,19 +323,6 @@ extern uint16_t pwm_max_value;
 /* Initialization */
 #define DEVICE_INIT_DELAY_MS 1000
 
-/* --- Turn PID Controller --- */
-#define TURN_PID_KP_DEFAULT_X100 8000     // Ganancia Proporcional inicial
-#define TURN_PID_KI_DEFAULT_X100 0        // Ganancia Integral (iniciamos en 0)
-#define TURN_PID_KD_DEFAULT_X100 15000    // Ganancia Derivativa inicial (NOTA: estos valores probablemente necesiten reajuste)
-#define TURN_COMPLETION_DEAD_ZONE 1       // Zona muerta en grados para considerar el giro completo
-#define TURN_MAX_SPEED_DEFAULT 6500       // Velocidad máxima de giro en PWM
-#define PIVOT_TURN_TARGET_DPS_DEFAULT 360 // Velocidad mínima de giro para vencer la inercia
-
-#define TURN_VELOCITY_PID_KP_DEFAULT_X100 2000 // Kp para el control de velocidad angular
-#define TURN_VELOCITY_PID_KI_DEFAULT_X100 500  // Ki para el control de velocidad angular
-#define TURN_VELOCITY_PID_KD_DEFAULT_X100 200  // Kd para el control de velocidad angular
-#define TURN_TARGET_DPS_DEFAULT 360        // Velocidad angular objetivo en grados/segundo
-
 /* --- Sensores --- */
 #define SENSOR_RIGHT_LAT_CH 0
 #define SENSOR_DIAGONAL_RIGHT_CH 1
@@ -353,17 +340,5 @@ extern uint16_t pwm_max_value;
 #define SENSOR_DET_WALL_DIAG_RIGHT 0x10
 #define SENSOR_DET_FLOOR_FRONT 0x20
 #define SENSOR_DET_FLOOR_REAR 0x40
-
-#define WALL_HYSTERESIS_MM 15
-#define TAPE_HYSTERESIS_ADC 200
-
-#define WALL_PRESENCE_THRESHOLD_MM_SIDE 100         // Distancia (mm) para detectar una pared lateral.
-#define WALL_PRESENCE_THRESHOLD_MM_DIAGONAL 140     // Distancia (mm) para detectar una pared diagonal derecha.
-#define WALL_PRESENCE_THRESHOLD_MM_FRONT 70         // Distancia (mm) para detectar una pared frontal.
-#define WALL_FOLLOW_TARGET_MM 50                    // Distancia (mm) objetivo para el seguimiento de pared.
-
-
-/* --- Go straight --- */
-#define FRONT_OBSTACLE_STOP_DISTANCE_MM 50
 
 #endif /* INC_APP_CONFIG_H_ */
