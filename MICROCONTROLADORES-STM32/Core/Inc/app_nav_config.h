@@ -7,9 +7,9 @@
 /*
  * Default navigation configuration for the portable navigation core.
  *
- * The current firmware still owns the live navigation variables in app_core.c.
- * These defaults are introduced as the future extraction boundary so that the
- * same navigation core can later be copied to the Qt simulator.
+ * AppNavConfig is the runtime source of truth for navigation primitives.
+ * app_core.c may expose these fields through HMI/UNERBUS commands, but it does
+ * not keep a second live copy of the same navigation parameters.
  */
 
 #define APP_NAV_DEFAULT_RIGHT_MOTOR_BASE_SPEED 3575U
@@ -18,11 +18,11 @@
 #define APP_NAV_DEFAULT_SLOWER_SMOOTH_TURN_SPEED 2500U
 
 #define APP_NAV_DEFAULT_WALL_THRESHOLD_FRONT_MM 70U
-#define APP_NAV_DEFAULT_WALL_THRESHOLD_DIAGONAL_MM 130U
+#define APP_NAV_DEFAULT_WALL_THRESHOLD_DIAGONAL_MM 140U
 #define APP_NAV_DEFAULT_WALL_THRESHOLD_SIDE_MM 100U
 #define APP_NAV_DEFAULT_WALL_HYSTERESIS_MM 15U
 #define APP_NAV_DEFAULT_AFTER_TURN_WALL_THRESHOLD_MM 80U
-#define APP_NAV_DEFAULT_WALL_TARGET_MM 55U
+#define APP_NAV_DEFAULT_WALL_TARGET_MM 50U
 #define APP_NAV_DEFAULT_APPROACH_FRONT_WALL_TARGET_MM 30U
 #define APP_NAV_DEFAULT_TAPE_DETECTION_THRESHOLD_ADC 1500U
 #define APP_NAV_DEFAULT_TAPE_HYSTERESIS_ADC 200U
