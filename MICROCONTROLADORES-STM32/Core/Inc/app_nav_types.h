@@ -162,15 +162,6 @@ typedef struct
     uint8_t wall_diag_left;
     uint8_t wall_diag_right;
 
-    uint16_t floor_front_adc;
-    uint16_t floor_rear_adc;
-
-    uint16_t dist_front_left_mm;
-    uint16_t dist_front_right_mm;
-    uint16_t dist_left_lat_mm;
-    uint16_t dist_right_lat_mm;
-    uint16_t dist_diagonal_left_mm;
-    uint16_t dist_diagonal_right_mm;
 } AppNavPerception;
 
 typedef struct

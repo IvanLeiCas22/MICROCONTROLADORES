@@ -16,7 +16,7 @@ Este documento resume el estado actual de la navegación portable del autito mic
 
 La intención es que este archivo sea la referencia principal para continuar el desarrollo sin reconstruir contexto desde chats anteriores.
 
-> Fuente de verdad funcional al actualizar este README: repo STM32+Qt real versión `repomix-output-resumido-autitoReal-5.xml` de este chat, con actualización de percepción única por tick.
+> Fuente de verdad funcional al actualizar este README: repo STM32+Qt real versión `repomix-output-resumido-autitoReal-6.xml` de este chat.
 
 ---
 
@@ -150,9 +150,10 @@ AppNavPerception
     - wall_left;
     - wall_right;
     - wall_diag_left;
-    - wall_diag_right;
-    - ADCs de piso;
-    - distancias IR copiadas.
+    - wall_diag_right.
+
+    No contiene ADCs ni distancias copiadas. Si un módulo necesita
+    mediciones del tick, debe leerlas desde AppNavInput.
 ```
 
 Reglas importantes:

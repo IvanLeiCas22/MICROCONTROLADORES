@@ -477,15 +477,6 @@ static bool App_Nav_UpdatePerception(const AppNavInput *input)
     floor_front_adc = input->adc_filtered[APP_NAV_ADC_FLOOR_FRONT_CH];
     floor_rear_adc = input->adc_filtered[APP_NAV_ADC_FLOOR_REAR_CH];
 
-    app_nav_perception.floor_front_adc = floor_front_adc;
-    app_nav_perception.floor_rear_adc = floor_rear_adc;
-    app_nav_perception.dist_front_left_mm = input->dist_front_left_mm;
-    app_nav_perception.dist_front_right_mm = input->dist_front_right_mm;
-    app_nav_perception.dist_left_lat_mm = input->dist_left_lat_mm;
-    app_nav_perception.dist_right_lat_mm = input->dist_right_lat_mm;
-    app_nav_perception.dist_diagonal_left_mm = input->dist_diagonal_left_mm;
-    app_nav_perception.dist_diagonal_right_mm = input->dist_diagonal_right_mm;
-
     app_nav_perception.wall_front = App_Nav_BoolToU8(
         App_Nav_DetectFrontWallWithHysteresis(input->dist_front_left_mm,
                                               input->dist_front_right_mm,
