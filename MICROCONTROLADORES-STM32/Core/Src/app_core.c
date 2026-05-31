@@ -291,6 +291,34 @@ static void Update_Navigation_Perception(void);
 static void Init_Pid_Configs(void);
 static void Set_Pid_Gains_From_U16(PID_Role_t role, uint16_t kp_x100, uint16_t ki_x100, uint16_t kd_x100);
 static void Write_Pid_Gains_To_Buffer(PID_Role_t role, uint8_t *buffer);
+static uint16_t NavRuntimeConfig_ClampPwmToTimerMax(uint16_t pwm);
+static uint16_t NavRuntimeConfig_ClampPwmBelowTimerMax(uint16_t pwm);
+static void NavRuntimeConfig_SetTurnOutputLimit(uint16_t output_limit_pwm);
+static void NavRuntimeConfig_SetSmoothSpeeds(uint16_t faster_pwm, uint16_t slower_pwm);
+static void NavRuntimeConfig_SetAdvancePidFromPayload(struct UNERBUSHandle *aBus);
+static void NavRuntimeConfig_WriteAdvancePidToBuffer(uint8_t *buffer);
+static void NavRuntimeConfig_SetAdvanceOutputLimitFromPayload(struct UNERBUSHandle *aBus);
+static void NavRuntimeConfig_WriteAdvanceOutputLimitToBuffer(uint8_t *buffer);
+static void NavRuntimeConfig_SetMotorBasesFromPayload(struct UNERBUSHandle *aBus);
+static void NavRuntimeConfig_WriteMotorBasesToBuffer(uint8_t *buffer);
+static void NavRuntimeConfig_SetTurnPidFromPayload(struct UNERBUSHandle *aBus);
+static void NavRuntimeConfig_WriteTurnPidToBuffer(uint8_t *buffer);
+static void NavRuntimeConfig_SetTurnOutputLimitFromPayload(struct UNERBUSHandle *aBus);
+static void NavRuntimeConfig_WriteTurnOutputLimitToBuffer(uint8_t *buffer);
+static void NavRuntimeConfig_SetPivotTargetDpsFromPayload(struct UNERBUSHandle *aBus);
+static void NavRuntimeConfig_WritePivotTargetDpsToBuffer(uint8_t *buffer);
+static void NavRuntimeConfig_SetWallThresholdsFromPayload(struct UNERBUSHandle *aBus);
+static void NavRuntimeConfig_WriteWallThresholdsToBuffer(uint8_t *buffer);
+static void NavRuntimeConfig_SetWallTargetAndTapeFromPayload(struct UNERBUSHandle *aBus);
+static void NavRuntimeConfig_WriteWallTargetAndTapeToBuffer(uint8_t *buffer);
+static void NavRuntimeConfig_SetApproachFrontWallTargetFromPayload(struct UNERBUSHandle *aBus);
+static void NavRuntimeConfig_WriteApproachFrontWallTargetToBuffer(uint8_t *buffer);
+static void NavRuntimeConfig_SetSmoothSpeedsFromPayload(struct UNERBUSHandle *aBus);
+static void NavRuntimeConfig_WriteSmoothSpeedsToBuffer(uint8_t *buffer);
+static void NavRuntimeConfig_SetSmoothPidFromPayload(struct UNERBUSHandle *aBus);
+static void NavRuntimeConfig_WriteSmoothPidToBuffer(uint8_t *buffer);
+static void NavRuntimeConfig_SetSmoothTargetDpsFromPayload(struct UNERBUSHandle *aBus);
+static void NavRuntimeConfig_WriteSmoothTargetDpsToBuffer(uint8_t *buffer);
 static void Write_Supervisor_Debug_Status_To_Buffer(uint8_t *buffer);
 static void Select_Supervisor_Status_Update_Bus(_sUNERBUSHandle *aBus);
 static void Send_Supervisor_Status_Update(void);
@@ -480,6 +508,239 @@ static void Sync_AppNavConfig_From_LegacyRuntime(void)
     AppNavConfig cfg = Build_AppNavConfig_From_LegacyRuntime();
 
     App_Nav_SetConfig(&cfg);
+}
+
+static uint16_t NavRuntimeConfig_ClampPwmToTimerMax(uint16_t pwm)
+{
+    if (pwm > pwm_max_value)
+    {
+        return pwm_max_value;
+    }
+
+    return pwm;
+}
+
+static uint16_t NavRuntimeConfig_ClampPwmBelowTimerMax(uint16_t pwm)
+{
+    uint16_t max_allowed = (uint16_t)(pwm_max_value - 1U);
+
+    if (pwm > max_allowed)
+    {
+        return max_allowed;
+    }
+
+    return pwm;
+}
+
+static void NavRuntimeConfig_SetTurnOutputLimit(uint16_t output_limit_pwm)
+{
+    turn_max_pwm = NavRuntimeConfig_ClampPwmToTimerMax(output_limit_pwm);
+
+    pid_configs[PID_ROLE_TURN].out_min = INT_TO_FIXED(-turn_max_pwm);
+    pid_configs[PID_ROLE_TURN].out_max = INT_TO_FIXED(turn_max_pwm);
+
+    pid_configs[PID_ROLE_SMOOTH_TURN].out_min = INT_TO_FIXED(-turn_max_pwm);
+    pid_configs[PID_ROLE_SMOOTH_TURN].out_max = INT_TO_FIXED(turn_max_pwm);
+}
+
+static void NavRuntimeConfig_SetSmoothSpeeds(uint16_t faster_pwm, uint16_t slower_pwm)
+{
+    faster_motor_smooth_turn_speed = NavRuntimeConfig_ClampPwmBelowTimerMax(faster_pwm);
+    slower_motor_smooth_turn_speed = NavRuntimeConfig_ClampPwmBelowTimerMax(slower_pwm);
+}
+
+static void NavRuntimeConfig_SetAdvancePidFromPayload(struct UNERBUSHandle *aBus)
+{
+    uint16_t kp_x100 = UNERBUS_GetUInt16(aBus);
+    uint16_t ki_x100 = UNERBUS_GetUInt16(aBus);
+    uint16_t kd_x100 = UNERBUS_GetUInt16(aBus);
+
+    Set_Pid_Gains_From_U16(PID_ROLE_CENTERING, kp_x100, ki_x100, kd_x100);
+    Sync_AppNavConfig_From_LegacyRuntime();
+}
+
+static void NavRuntimeConfig_WriteAdvancePidToBuffer(uint8_t *buffer)
+{
+    Write_Pid_Gains_To_Buffer(PID_ROLE_CENTERING, buffer);
+}
+
+static void NavRuntimeConfig_SetAdvanceOutputLimitFromPayload(struct UNERBUSHandle *aBus)
+{
+    max_pwm_correction = UNERBUS_GetUInt16(aBus);
+
+    pid_configs[PID_ROLE_CENTERING].out_min = INT_TO_FIXED(-max_pwm_correction);
+    pid_configs[PID_ROLE_CENTERING].out_max = INT_TO_FIXED(max_pwm_correction);
+
+    Sync_AppNavConfig_From_LegacyRuntime();
+}
+
+static void NavRuntimeConfig_WriteAdvanceOutputLimitToBuffer(uint8_t *buffer)
+{
+    buffer[0] = (uint8_t)(max_pwm_correction & 0xFF);
+    buffer[1] = (uint8_t)((max_pwm_correction >> 8) & 0xFF);
+}
+
+static void NavRuntimeConfig_SetMotorBasesFromPayload(struct UNERBUSHandle *aBus)
+{
+    right_motor_base_speed = UNERBUS_GetUInt16(aBus);
+    left_motor_base_speed = UNERBUS_GetUInt16(aBus);
+
+    Sync_AppNavConfig_From_LegacyRuntime();
+}
+
+static void NavRuntimeConfig_WriteMotorBasesToBuffer(uint8_t *buffer)
+{
+    buffer[0] = (uint8_t)(right_motor_base_speed & 0xFF);
+    buffer[1] = (uint8_t)((right_motor_base_speed >> 8) & 0xFF);
+    buffer[2] = (uint8_t)(left_motor_base_speed & 0xFF);
+    buffer[3] = (uint8_t)((left_motor_base_speed >> 8) & 0xFF);
+}
+
+static void NavRuntimeConfig_SetTurnPidFromPayload(struct UNERBUSHandle *aBus)
+{
+    uint16_t kp_x100 = UNERBUS_GetUInt16(aBus);
+    uint16_t ki_x100 = UNERBUS_GetUInt16(aBus);
+    uint16_t kd_x100 = UNERBUS_GetUInt16(aBus);
+
+    Set_Pid_Gains_From_U16(PID_ROLE_TURN, kp_x100, ki_x100, kd_x100);
+    Sync_AppNavConfig_From_LegacyRuntime();
+}
+
+static void NavRuntimeConfig_WriteTurnPidToBuffer(uint8_t *buffer)
+{
+    Write_Pid_Gains_To_Buffer(PID_ROLE_TURN, buffer);
+}
+
+static void NavRuntimeConfig_SetTurnOutputLimitFromPayload(struct UNERBUSHandle *aBus)
+{
+    NavRuntimeConfig_SetTurnOutputLimit(UNERBUS_GetUInt16(aBus));
+    Sync_AppNavConfig_From_LegacyRuntime();
+}
+
+static void NavRuntimeConfig_WriteTurnOutputLimitToBuffer(uint8_t *buffer)
+{
+    buffer[0] = (uint8_t)(turn_max_pwm & 0xFF);
+    buffer[1] = (uint8_t)((turn_max_pwm >> 8) & 0xFF);
+}
+
+static void NavRuntimeConfig_SetPivotTargetDpsFromPayload(struct UNERBUSHandle *aBus)
+{
+    pivot_turn_target_dps = UNERBUS_GetUInt16(aBus);
+    if (pivot_turn_target_dps > turn_max_pwm)
+    {
+        pivot_turn_target_dps = turn_max_pwm;
+    }
+
+    Sync_AppNavConfig_From_LegacyRuntime();
+}
+
+static void NavRuntimeConfig_WritePivotTargetDpsToBuffer(uint8_t *buffer)
+{
+    buffer[0] = (uint8_t)(pivot_turn_target_dps & 0xFF);
+    buffer[1] = (uint8_t)((pivot_turn_target_dps >> 8) & 0xFF);
+}
+
+static void NavRuntimeConfig_SetWallThresholdsFromPayload(struct UNERBUSHandle *aBus)
+{
+    wall_threshold_mm_front = UNERBUS_GetUInt16(aBus);
+    wall_threshold_mm_side = UNERBUS_GetUInt16(aBus);
+    wall_threshold_mm_diagonal = UNERBUS_GetUInt16(aBus);
+    after_turn_wall_threshold_mm = UNERBUS_GetUInt16(aBus);
+
+    Sync_AppNavConfig_From_LegacyRuntime();
+}
+
+static void NavRuntimeConfig_WriteWallThresholdsToBuffer(uint8_t *buffer)
+{
+    buffer[0] = (uint8_t)(wall_threshold_mm_front & 0xFF);
+    buffer[1] = (uint8_t)((wall_threshold_mm_front >> 8) & 0xFF);
+    buffer[2] = (uint8_t)(wall_threshold_mm_side & 0xFF);
+    buffer[3] = (uint8_t)((wall_threshold_mm_side >> 8) & 0xFF);
+    buffer[4] = (uint8_t)(wall_threshold_mm_diagonal & 0xFF);
+    buffer[5] = (uint8_t)((wall_threshold_mm_diagonal >> 8) & 0xFF);
+    buffer[6] = (uint8_t)(after_turn_wall_threshold_mm & 0xFF);
+    buffer[7] = (uint8_t)((after_turn_wall_threshold_mm >> 8) & 0xFF);
+}
+
+static void NavRuntimeConfig_SetWallTargetAndTapeFromPayload(struct UNERBUSHandle *aBus)
+{
+    wall_target_mm = UNERBUS_GetUInt16(aBus);
+    tape_detection_threshold_adc = UNERBUS_GetUInt16(aBus);
+
+    Sync_AppNavConfig_From_LegacyRuntime();
+}
+
+static void NavRuntimeConfig_WriteWallTargetAndTapeToBuffer(uint8_t *buffer)
+{
+    buffer[0] = (uint8_t)(wall_target_mm & 0xFF);
+    buffer[1] = (uint8_t)((wall_target_mm >> 8) & 0xFF);
+    buffer[2] = (uint8_t)(tape_detection_threshold_adc & 0xFF);
+    buffer[3] = (uint8_t)((tape_detection_threshold_adc >> 8) & 0xFF);
+}
+
+static void NavRuntimeConfig_SetApproachFrontWallTargetFromPayload(struct UNERBUSHandle *aBus)
+{
+    approach_front_wall_target_mm = UNERBUS_GetUInt16(aBus);
+    if (approach_front_wall_target_mm < APPROACH_FRONT_WALL_TARGET_MIN_MM)
+    {
+        approach_front_wall_target_mm = APPROACH_FRONT_WALL_TARGET_MIN_MM;
+    }
+    else if (approach_front_wall_target_mm > APPROACH_FRONT_WALL_TARGET_MAX_MM)
+    {
+        approach_front_wall_target_mm = APPROACH_FRONT_WALL_TARGET_MAX_MM;
+    }
+
+    Sync_AppNavConfig_From_LegacyRuntime();
+}
+
+static void NavRuntimeConfig_WriteApproachFrontWallTargetToBuffer(uint8_t *buffer)
+{
+    buffer[0] = (uint8_t)(approach_front_wall_target_mm & 0xFF);
+    buffer[1] = (uint8_t)((approach_front_wall_target_mm >> 8) & 0xFF);
+}
+
+static void NavRuntimeConfig_SetSmoothSpeedsFromPayload(struct UNERBUSHandle *aBus)
+{
+    uint16_t faster_pwm = UNERBUS_GetUInt16(aBus);
+    uint16_t slower_pwm = UNERBUS_GetUInt16(aBus);
+
+    NavRuntimeConfig_SetSmoothSpeeds(faster_pwm, slower_pwm);
+    Sync_AppNavConfig_From_LegacyRuntime();
+}
+
+static void NavRuntimeConfig_WriteSmoothSpeedsToBuffer(uint8_t *buffer)
+{
+    buffer[0] = (uint8_t)(faster_motor_smooth_turn_speed & 0xFF);
+    buffer[1] = (uint8_t)((faster_motor_smooth_turn_speed >> 8) & 0xFF);
+    buffer[2] = (uint8_t)(slower_motor_smooth_turn_speed & 0xFF);
+    buffer[3] = (uint8_t)((slower_motor_smooth_turn_speed >> 8) & 0xFF);
+}
+
+static void NavRuntimeConfig_SetSmoothPidFromPayload(struct UNERBUSHandle *aBus)
+{
+    uint16_t kp_x100 = UNERBUS_GetUInt16(aBus);
+    uint16_t ki_x100 = UNERBUS_GetUInt16(aBus);
+    uint16_t kd_x100 = UNERBUS_GetUInt16(aBus);
+
+    Set_Pid_Gains_From_U16(PID_ROLE_SMOOTH_TURN, kp_x100, ki_x100, kd_x100);
+    Sync_AppNavConfig_From_LegacyRuntime();
+}
+
+static void NavRuntimeConfig_WriteSmoothPidToBuffer(uint8_t *buffer)
+{
+    Write_Pid_Gains_To_Buffer(PID_ROLE_SMOOTH_TURN, buffer);
+}
+
+static void NavRuntimeConfig_SetSmoothTargetDpsFromPayload(struct UNERBUSHandle *aBus)
+{
+    turn_target_dps = UNERBUS_GetUInt16(aBus);
+    Sync_AppNavConfig_From_LegacyRuntime();
+}
+
+static void NavRuntimeConfig_WriteSmoothTargetDpsToBuffer(uint8_t *buffer)
+{
+    buffer[0] = (uint8_t)(turn_target_dps & 0xFF);
+    buffer[1] = (uint8_t)((turn_target_dps >> 8) & 0xFF);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -710,18 +971,6 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
     uint8_t length = 0;
     uint8_t idx = 0;
 
-    uint16_t kp_int = 0;
-    uint16_t ki_int = 0;
-    uint16_t kd_int = 0;
-
-    uint16_t turn_kp_int = 0;
-    uint16_t turn_ki_int = 0;
-    uint16_t turn_kd_int = 0;
-
-    uint16_t vel_kp_int = 0;
-    uint16_t vel_ki_int = 0;
-    uint16_t vel_kd_int = 0;
-
     id = UNERBUS_GetUInt8(aBus);
     if ((id >= (uint8_t)CMD_SET_SUPERVISOR_INITIAL_POSE) &&
         (id <= (uint8_t)CMD_GET_SUPERVISOR_GOAL_CELL))
@@ -905,56 +1154,34 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
         length = UNERBUS_CMD_ID_SIZE + UNERBUS_MPU_CONFIG_SIZE;
         break;
     case CMD_SET_PID_GAINS: // Configurar Kp, Ki, Kd
-        // Se esperan 3 valores uint16_t: Kp*100, Ki*100, Kd*100
-        kp_int = UNERBUS_GetUInt16(aBus);
-        ki_int = UNERBUS_GetUInt16(aBus);
-        kd_int = UNERBUS_GetUInt16(aBus);
-
-        // Convertir de entero x100 a punto fijo.
-        // Se usa 100 para ampliar el rango de Kp hasta ~655
-        Set_Pid_Gains_From_U16(PID_ROLE_CENTERING, kp_int, ki_int, kd_int);
-        Sync_AppNavConfig_From_LegacyRuntime();
+        NavRuntimeConfig_SetAdvancePidFromPayload(aBus);
         break;
     case CMD_GET_PID_GAINS: // Leer Kp, Ki, Kd
         uint8_t response_buffer[UNERBUS_PID_GAINS_SIZE];
 
-        // Convertir de punto fijo a entero para enviar (multiplicando por 100)
-        Write_Pid_Gains_To_Buffer(PID_ROLE_CENTERING, response_buffer);
+        NavRuntimeConfig_WriteAdvancePidToBuffer(response_buffer);
 
         UNERBUS_Write(aBus, response_buffer, UNERBUS_PID_GAINS_SIZE);
         length = UNERBUS_CMD_ID_SIZE + UNERBUS_PID_GAINS_SIZE;
         break;
     case CMD_SET_MAX_PWM_CORRECTION: // Configurar la corrección máxima del PWM
-        // Se espera 1 valor uint16_t
-        max_pwm_correction = UNERBUS_GetUInt16(aBus);
-
-        // Actualizar la configuración del PID con los nuevos valores
-        pid_configs[PID_ROLE_CENTERING].out_min = INT_TO_FIXED(-max_pwm_correction);
-        pid_configs[PID_ROLE_CENTERING].out_max = INT_TO_FIXED(max_pwm_correction);
-        Sync_AppNavConfig_From_LegacyRuntime();
+        NavRuntimeConfig_SetAdvanceOutputLimitFromPayload(aBus);
         break;
     case CMD_GET_MAX_PWM_CORRECTION: // Leer la corrección máxima del PWM
         uint8_t response_buffer_2[UNERBUS_CONTROL_PARAMS_SIZE];
 
-        response_buffer_2[0] = (uint8_t)(max_pwm_correction & 0xFF);
-        response_buffer_2[1] = (uint8_t)((max_pwm_correction >> 8) & 0xFF);
+        NavRuntimeConfig_WriteAdvanceOutputLimitToBuffer(response_buffer_2);
 
         UNERBUS_Write(aBus, response_buffer_2, UNERBUS_CONTROL_PARAMS_SIZE);
         length = UNERBUS_CMD_ID_SIZE + UNERBUS_CONTROL_PARAMS_SIZE;
         break;
     case CMD_SET_MOTOR_BASE_SPEEDS: // Configurar velocidades base independientes
-        // Se esperan 2 valores uint16_t: Right Motor Base Speed, Left Motor Base Speed
-        right_motor_base_speed = UNERBUS_GetUInt16(aBus);
-        left_motor_base_speed = UNERBUS_GetUInt16(aBus);
-        Sync_AppNavConfig_From_LegacyRuntime();
+        NavRuntimeConfig_SetMotorBasesFromPayload(aBus);
         break;
     case CMD_GET_MOTOR_BASE_SPEEDS: // Leer velocidades base independientes
         uint8_t motor_speeds_buffer[UNERBUS_MOTOR_BASE_SPEEDS_SIZE];
 
-        motor_speeds_buffer[0] = (uint8_t)(right_motor_base_speed & 0xFF);
-        motor_speeds_buffer[1] = (uint8_t)((right_motor_base_speed >> 8) & 0xFF);
-        motor_speeds_buffer[2] = (uint8_t)(left_motor_base_speed & 0xFF);
-        motor_speeds_buffer[3] = (uint8_t)((left_motor_base_speed >> 8) & 0xFF);
+        NavRuntimeConfig_WriteMotorBasesToBuffer(motor_speeds_buffer);
 
         UNERBUS_Write(aBus, motor_speeds_buffer, UNERBUS_MOTOR_BASE_SPEEDS_SIZE);
         length = UNERBUS_CMD_ID_SIZE + UNERBUS_MOTOR_BASE_SPEEDS_SIZE;
@@ -976,106 +1203,58 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
         Set_Motor_Speeds(0, 0);
         break;
     case CMD_SET_TURN_PID_GAINS: // Configurar Kp, Ki, Kd del PID de giro
-        // Se esperan 3 valores uint16_t: Kp*100, Ki*100, Kd*100
-        turn_kp_int = UNERBUS_GetUInt16(aBus);
-        turn_ki_int = UNERBUS_GetUInt16(aBus);
-        turn_kd_int = UNERBUS_GetUInt16(aBus);
-
-        // Convertir de entero x100 a punto fijo.
-        Set_Pid_Gains_From_U16(PID_ROLE_TURN, turn_kp_int, turn_ki_int, turn_kd_int);
-        Sync_AppNavConfig_From_LegacyRuntime();
+        NavRuntimeConfig_SetTurnPidFromPayload(aBus);
         break;
     case CMD_GET_TURN_PID_GAINS: // Leer Kp, Ki, Kd del PID de giro
         uint8_t turn_pid_buffer[UNERBUS_TURN_PID_GAINS_SIZE];
 
-        // Convertir de punto fijo a entero para enviar (multiplicando por 100)
-        Write_Pid_Gains_To_Buffer(PID_ROLE_TURN, turn_pid_buffer);
+        NavRuntimeConfig_WriteTurnPidToBuffer(turn_pid_buffer);
 
         UNERBUS_Write(aBus, turn_pid_buffer, UNERBUS_TURN_PID_GAINS_SIZE);
         length = UNERBUS_CMD_ID_SIZE + UNERBUS_TURN_PID_GAINS_SIZE;
         break;
     case CMD_SET_TURN_MAX_SPEED:
-        turn_max_pwm = UNERBUS_GetUInt16(aBus);
-        if (turn_max_pwm > pwm_max_value)
-            turn_max_pwm = pwm_max_value;
-
-        pid_configs[PID_ROLE_TURN].out_min = INT_TO_FIXED(-turn_max_pwm);
-        pid_configs[PID_ROLE_TURN].out_max = INT_TO_FIXED(turn_max_pwm);
-
-        pid_configs[PID_ROLE_SMOOTH_TURN].out_min = INT_TO_FIXED(-turn_max_pwm);
-        pid_configs[PID_ROLE_SMOOTH_TURN].out_max = INT_TO_FIXED(turn_max_pwm);
-        Sync_AppNavConfig_From_LegacyRuntime();
+        NavRuntimeConfig_SetTurnOutputLimitFromPayload(aBus);
         break;
     case CMD_GET_TURN_MAX_SPEED:
         uint8_t speed_buffer[UNERBUS_TURN_MAX_SPEED_SIZE];
-        speed_buffer[0] = (uint8_t)(turn_max_pwm & 0xFF);
-        speed_buffer[1] = (uint8_t)((turn_max_pwm >> 8) & 0xFF);
+        NavRuntimeConfig_WriteTurnOutputLimitToBuffer(speed_buffer);
         UNERBUS_Write(aBus, speed_buffer, UNERBUS_TURN_MAX_SPEED_SIZE);
         length = UNERBUS_CMD_ID_SIZE + UNERBUS_TURN_MAX_SPEED_SIZE;
         break;
     case CMD_SET_PIVOT_TURN_DPS:
-        pivot_turn_target_dps = UNERBUS_GetUInt16(aBus);
-        if (pivot_turn_target_dps > turn_max_pwm)
-            pivot_turn_target_dps = turn_max_pwm; // No puede ser mayor que la máxima
-        Sync_AppNavConfig_From_LegacyRuntime();
+        NavRuntimeConfig_SetPivotTargetDpsFromPayload(aBus);
         break;
     case CMD_GET_PIVOT_TURN_DPS:
         uint8_t min_speed_buffer[UNERBUS_TURN_MIN_SPEED_SIZE];
-        min_speed_buffer[0] = (uint8_t)(pivot_turn_target_dps & 0xFF);
-        min_speed_buffer[1] = (uint8_t)((pivot_turn_target_dps >> 8) & 0xFF);
+        NavRuntimeConfig_WritePivotTargetDpsToBuffer(min_speed_buffer);
         UNERBUS_Write(aBus, min_speed_buffer, UNERBUS_TURN_MIN_SPEED_SIZE);
         length = UNERBUS_CMD_ID_SIZE + UNERBUS_TURN_MIN_SPEED_SIZE;
         break;
     case CMD_SET_WALL_THRESHOLDS:
-        wall_threshold_mm_front = UNERBUS_GetUInt16(aBus);
-        wall_threshold_mm_side = UNERBUS_GetUInt16(aBus);
-        wall_threshold_mm_diagonal = UNERBUS_GetUInt16(aBus);
-        after_turn_wall_threshold_mm = UNERBUS_GetUInt16(aBus);
-        Sync_AppNavConfig_From_LegacyRuntime();
+        NavRuntimeConfig_SetWallThresholdsFromPayload(aBus);
         break;
     case CMD_GET_WALL_THRESHOLDS:
         uint8_t thresholds_buffer[UNERBUS_WALL_THRESHOLDS_SIZE];
-        thresholds_buffer[0] = (uint8_t)(wall_threshold_mm_front & 0xFF);
-        thresholds_buffer[1] = (uint8_t)((wall_threshold_mm_front >> 8) & 0xFF);
-        thresholds_buffer[2] = (uint8_t)(wall_threshold_mm_side & 0xFF);
-        thresholds_buffer[3] = (uint8_t)((wall_threshold_mm_side >> 8) & 0xFF);
-        thresholds_buffer[4] = (uint8_t)(wall_threshold_mm_diagonal & 0xFF);
-        thresholds_buffer[5] = (uint8_t)((wall_threshold_mm_diagonal >> 8) & 0xFF);
-        thresholds_buffer[6] = (uint8_t)(after_turn_wall_threshold_mm & 0xFF);
-        thresholds_buffer[7] = (uint8_t)((after_turn_wall_threshold_mm >> 8) & 0xFF);
+        NavRuntimeConfig_WriteWallThresholdsToBuffer(thresholds_buffer);
         UNERBUS_Write(aBus, thresholds_buffer, UNERBUS_WALL_THRESHOLDS_SIZE);
         length = UNERBUS_CMD_ID_SIZE + UNERBUS_WALL_THRESHOLDS_SIZE;
         break;
     case CMD_SET_WALL_TARGET_ADC:
-        wall_target_mm = UNERBUS_GetUInt16(aBus);
-        tape_detection_threshold_adc = UNERBUS_GetUInt16(aBus);
-        Sync_AppNavConfig_From_LegacyRuntime();
+        NavRuntimeConfig_SetWallTargetAndTapeFromPayload(aBus);
         break;
     case CMD_GET_WALL_TARGET_ADC:
         uint8_t target_buffer[UNERBUS_WALL_TARGET_ADC_SIZE];
-        target_buffer[0] = (uint8_t)(wall_target_mm & 0xFF);
-        target_buffer[1] = (uint8_t)((wall_target_mm >> 8) & 0xFF);
-        target_buffer[2] = (uint8_t)(tape_detection_threshold_adc & 0xFF);
-        target_buffer[3] = (uint8_t)((tape_detection_threshold_adc >> 8) & 0xFF);
+        NavRuntimeConfig_WriteWallTargetAndTapeToBuffer(target_buffer);
         UNERBUS_Write(aBus, target_buffer, UNERBUS_WALL_TARGET_ADC_SIZE);
         length = UNERBUS_CMD_ID_SIZE + UNERBUS_WALL_TARGET_ADC_SIZE;
         break;
     case CMD_SET_APPROACH_FRONT_WALL_TARGET:
-        approach_front_wall_target_mm = UNERBUS_GetUInt16(aBus);
-        if (approach_front_wall_target_mm < APPROACH_FRONT_WALL_TARGET_MIN_MM)
-        {
-            approach_front_wall_target_mm = APPROACH_FRONT_WALL_TARGET_MIN_MM;
-        }
-        else if (approach_front_wall_target_mm > APPROACH_FRONT_WALL_TARGET_MAX_MM)
-        {
-            approach_front_wall_target_mm = APPROACH_FRONT_WALL_TARGET_MAX_MM;
-        }
-        Sync_AppNavConfig_From_LegacyRuntime();
+        NavRuntimeConfig_SetApproachFrontWallTargetFromPayload(aBus);
         break;
     case CMD_GET_APPROACH_FRONT_WALL_TARGET:
         uint8_t approach_target_buffer[UNERBUS_APPROACH_FRONT_WALL_TARGET_SIZE];
-        approach_target_buffer[0] = (uint8_t)(approach_front_wall_target_mm & 0xFF);
-        approach_target_buffer[1] = (uint8_t)((approach_front_wall_target_mm >> 8) & 0xFF);
+        NavRuntimeConfig_WriteApproachFrontWallTargetToBuffer(approach_target_buffer);
         UNERBUS_Write(aBus, approach_target_buffer, UNERBUS_APPROACH_FRONT_WALL_TARGET_SIZE);
         length = UNERBUS_CMD_ID_SIZE + UNERBUS_APPROACH_FRONT_WALL_TARGET_SIZE;
         break;
@@ -1210,46 +1389,29 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
     case CMD_GET_SMOOTH_TURN_CONFIG:
         uint8_t smooth_turn_config_buffer[UNERBUS_SMOOTH_TURN_CONFIG_SIZE];
 
-        smooth_turn_config_buffer[0] = (uint8_t)(faster_motor_smooth_turn_speed & 0xFF);
-        smooth_turn_config_buffer[1] = (uint8_t)((faster_motor_smooth_turn_speed >> 8) & 0xFF);
-        smooth_turn_config_buffer[2] = (uint8_t)(slower_motor_smooth_turn_speed & 0xFF);
-        smooth_turn_config_buffer[3] = (uint8_t)((slower_motor_smooth_turn_speed >> 8) & 0xFF);
+        NavRuntimeConfig_WriteSmoothSpeedsToBuffer(smooth_turn_config_buffer);
 
         UNERBUS_Write(aBus, smooth_turn_config_buffer, UNERBUS_SMOOTH_TURN_CONFIG_SIZE);
         length = UNERBUS_CMD_ID_SIZE + UNERBUS_SMOOTH_TURN_CONFIG_SIZE;
         break;
     case CMD_SET_SMOOTH_TURN_CONFIG:
-        faster_motor_smooth_turn_speed = UNERBUS_GetUInt16(aBus);
-        slower_motor_smooth_turn_speed = UNERBUS_GetUInt16(aBus);
-
-        if (faster_motor_smooth_turn_speed > (pwm_max_value - 1))
-            faster_motor_smooth_turn_speed = (pwm_max_value - 1); // Limitar al máximo global
-
-        if (slower_motor_smooth_turn_speed > (pwm_max_value - 1))
-            slower_motor_smooth_turn_speed = (pwm_max_value - 1); // Limitar al máximo global
-        Sync_AppNavConfig_From_LegacyRuntime();
+        NavRuntimeConfig_SetSmoothSpeedsFromPayload(aBus);
         break;
     case CMD_SET_TURN_VELOCITY_PID_GAINS:
-        vel_kp_int = UNERBUS_GetUInt16(aBus);
-        vel_ki_int = UNERBUS_GetUInt16(aBus);
-        vel_kd_int = UNERBUS_GetUInt16(aBus);
-        Set_Pid_Gains_From_U16(PID_ROLE_SMOOTH_TURN, vel_kp_int, vel_ki_int, vel_kd_int);
-        Sync_AppNavConfig_From_LegacyRuntime();
+        NavRuntimeConfig_SetSmoothPidFromPayload(aBus);
         break;
     case CMD_GET_TURN_VELOCITY_PID_GAINS:
         uint8_t vel_pid_buffer[UNERBUS_TURN_VELOCITY_PID_GAINS_SIZE];
-        Write_Pid_Gains_To_Buffer(PID_ROLE_SMOOTH_TURN, vel_pid_buffer);
+        NavRuntimeConfig_WriteSmoothPidToBuffer(vel_pid_buffer);
         UNERBUS_Write(aBus, vel_pid_buffer, UNERBUS_TURN_VELOCITY_PID_GAINS_SIZE);
         length = UNERBUS_CMD_ID_SIZE + UNERBUS_TURN_VELOCITY_PID_GAINS_SIZE;
         break;
     case CMD_SET_TURN_TARGET_DPS:
-        turn_target_dps = UNERBUS_GetUInt16(aBus);
-        Sync_AppNavConfig_From_LegacyRuntime();
+        NavRuntimeConfig_SetSmoothTargetDpsFromPayload(aBus);
         break;
     case CMD_GET_TURN_TARGET_DPS:
         uint8_t dps_buffer[UNERBUS_TURN_TARGET_DPS_SIZE];
-        dps_buffer[0] = (uint8_t)(turn_target_dps & 0xFF);
-        dps_buffer[1] = (uint8_t)((turn_target_dps >> 8) & 0xFF);
+        NavRuntimeConfig_WriteSmoothTargetDpsToBuffer(dps_buffer);
         UNERBUS_Write(aBus, dps_buffer, UNERBUS_TURN_TARGET_DPS_SIZE);
         length = UNERBUS_CMD_ID_SIZE + UNERBUS_TURN_TARGET_DPS_SIZE;
         break;
@@ -2015,33 +2177,17 @@ static void PrimitiveTest_SetSmoothConfigFromPayload(struct UNERBUSHandle *aBus)
     uint16_t ki_x100 = UNERBUS_GetUInt16(aBus);
     uint16_t kd_x100 = UNERBUS_GetUInt16(aBus);
     uint16_t output_limit_pwm = UNERBUS_GetUInt16(aBus);
+    uint16_t faster_pwm;
+    uint16_t slower_pwm;
 
     Set_Pid_Gains_From_U16(PID_ROLE_SMOOTH_TURN, kp_x100, ki_x100, kd_x100);
+    NavRuntimeConfig_SetTurnOutputLimit(output_limit_pwm);
 
-    turn_max_pwm = output_limit_pwm;
-    if (turn_max_pwm > pwm_max_value)
-    {
-        turn_max_pwm = pwm_max_value;
-    }
+    faster_pwm = UNERBUS_GetUInt16(aBus);
+    slower_pwm = UNERBUS_GetUInt16(aBus);
+    NavRuntimeConfig_SetSmoothSpeeds(faster_pwm, slower_pwm);
 
-    pid_configs[PID_ROLE_TURN].out_min = INT_TO_FIXED(-turn_max_pwm);
-    pid_configs[PID_ROLE_TURN].out_max = INT_TO_FIXED(turn_max_pwm);
-    pid_configs[PID_ROLE_SMOOTH_TURN].out_min = INT_TO_FIXED(-turn_max_pwm);
-    pid_configs[PID_ROLE_SMOOTH_TURN].out_max = INT_TO_FIXED(turn_max_pwm);
-
-    faster_motor_smooth_turn_speed = UNERBUS_GetUInt16(aBus);
-    slower_motor_smooth_turn_speed = UNERBUS_GetUInt16(aBus);
     turn_target_dps = UNERBUS_GetUInt16(aBus);
-
-    if (faster_motor_smooth_turn_speed > (pwm_max_value - 1U))
-    {
-        faster_motor_smooth_turn_speed = (pwm_max_value - 1U);
-    }
-
-    if (slower_motor_smooth_turn_speed > (pwm_max_value - 1U))
-    {
-        slower_motor_smooth_turn_speed = (pwm_max_value - 1U);
-    }
 
     Sync_AppNavConfig_From_LegacyRuntime();
 }
