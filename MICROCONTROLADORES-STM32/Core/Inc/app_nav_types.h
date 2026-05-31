@@ -161,7 +161,6 @@ typedef struct
     uint8_t wall_right;
     uint8_t wall_diag_left;
     uint8_t wall_diag_right;
-
 } AppNavPerception;
 
 typedef struct
@@ -213,7 +212,6 @@ typedef struct
     int32_t pivot_turn_pid_ki_q16;
     int32_t pivot_turn_pid_kd_q16;
     int32_t pivot_turn_pid_output_limit_pwm;
-
 } AppNavConfig;
 
 

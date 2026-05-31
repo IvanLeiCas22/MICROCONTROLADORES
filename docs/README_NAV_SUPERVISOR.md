@@ -16,8 +16,6 @@ Este documento resume el estado actual de la navegación portable del autito mic
 
 La intención es que este archivo sea la referencia principal para continuar el desarrollo sin reconstruir contexto desde chats anteriores.
 
-> Fuente de verdad funcional al actualizar este README: repo STM32+Qt real versión `repomix-output-resumido-autitoReal-6.xml` de este chat.
-
 ---
 
 ## Regla general de arquitectura
