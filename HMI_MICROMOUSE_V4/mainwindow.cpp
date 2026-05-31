@@ -548,14 +548,6 @@ void MainWindow::onPacketReceived(quint8 command, const QByteArray &payload) {
     updateCruiseParamsUI(payload);
     break;
   }
-  case Unerbus::CommandId::CMD_GET_BRAKING_PID_GAINS: {
-    updatePidBrakingUI(payload);
-    break;
-  }
-  case Unerbus::CommandId::CMD_GET_BRAKING_PARAMS: {
-    updateBrakingParamsUI(payload);
-    break;
-  }
   case Unerbus::CommandId::CMD_GET_APPROACH_FRONT_WALL_TARGET: {
     updateApproachFrontWallTargetUI(payload);
     break;
@@ -572,18 +564,6 @@ void MainWindow::onPacketReceived(quint8 command, const QByteArray &payload) {
   case Unerbus::CommandId::CMD_SUPERVISOR_STATUS_UPDATE: {
       updateSupervisorDebugStatusUI(payload);
       break;
-  }
-  case Unerbus::CommandId::CMD_GET_BRAKING_MAX_SPEED: {
-    updateBrakingMaxSpeedUI(payload);
-    break;
-  }
-  case Unerbus::CommandId::CMD_GET_BRAKING_MIN_SPEED: {
-    updateBrakingMinSpeedUI(payload);
-    break;
-  }
-  case Unerbus::CommandId::CMD_GET_BRAKING_DEAD_ZONE: {
-    updateBrakingDeadZoneUI(payload);
-    break;
   }
   case Unerbus::CommandId::CMD_GET_YAW_ANGLE: {
     updateYawAngleUI(payload);
@@ -1393,6 +1373,11 @@ void MainWindow::setupConfigPage() {
   connect(ui->btnSetBaseMotorsSpeeds, &QPushButton::clicked, this,
           &MainWindow::on_btnSetBaseMotorsSpeeds_clicked);
 
+  connect(ui->btnGetApproachFrontWallTarget, &QPushButton::clicked, this,
+          &MainWindow::on_btnGetApproachFrontWallTarget_clicked);
+  connect(ui->btnSetApproachFrontWallTarget, &QPushButton::clicked, this,
+          &MainWindow::on_btnSetApproachFrontWallTarget_clicked);
+
   ui->editApproachFrontWallTargetMm->setValidator(
       new QIntValidator(10, 150, this));
 
@@ -1989,128 +1974,19 @@ void MainWindow::updateCruiseParamsUI(const QByteArray &payload) {
 }
 
 /**
- * @brief Solicita todos los parámetros de configuración del PID de frenado.
+ * @brief Solicita la distancia objetivo de aproximación frontal para pivot.
  */
-void MainWindow::on_btnGetPidBrakingConfig_clicked() {
-  sendUnerbusCommand(Unerbus::CommandId::CMD_GET_BRAKING_PID_GAINS);
-  QTimer::singleShot(100, this, [this]() {
-    sendUnerbusCommand(Unerbus::CommandId::CMD_GET_BRAKING_PARAMS);
-  });
-  QTimer::singleShot(200, this, [this]() {
-    sendUnerbusCommand(Unerbus::CommandId::CMD_GET_BRAKING_MAX_SPEED);
-  });
-  QTimer::singleShot(300, this, [this]() {
-    sendUnerbusCommand(Unerbus::CommandId::CMD_GET_BRAKING_MIN_SPEED);
-  });
-  QTimer::singleShot(400, this, [this]() {
-    sendUnerbusCommand(Unerbus::CommandId::CMD_GET_BRAKING_DEAD_ZONE);
-  });
-  QTimer::singleShot(500, this, [this]() {
-    sendUnerbusCommand(
-        Unerbus::CommandId::CMD_GET_APPROACH_FRONT_WALL_TARGET);
-  });
+void MainWindow::on_btnGetApproachFrontWallTarget_clicked() {
+  sendUnerbusCommand(Unerbus::CommandId::CMD_GET_APPROACH_FRONT_WALL_TARGET);
 }
 
 /**
- * @brief Envía todos los parámetros de configuración del PID de frenado.
+ * @brief Envía la distancia objetivo de aproximación frontal para pivot.
  */
-void MainWindow::on_btnSetPidBrakingConfig_clicked() {
-  // 1. Enviar Ganancias (Kp, Ki, Kd)
-  QByteArray gainsPayload;
-  QDataStream gainsStream(&gainsPayload, QIODevice::WriteOnly);
-  gainsStream.setByteOrder(QDataStream::LittleEndian);
-  gainsStream << static_cast<quint16>(ui->editKpBraking->text().toFloat() *
-                                      100.0f);
-  gainsStream << static_cast<quint16>(ui->editKiBraking->text().toFloat() *
-                                      100.0f);
-  gainsStream << static_cast<quint16>(ui->editKdBraking->text().toFloat() *
-                                      100.0f);
-  sendUnerbusCommand(Unerbus::CommandId::CMD_SET_BRAKING_PID_GAINS,
-                     gainsPayload);
-
-  // 2. Enviar Parámetros de Frenado (Target ADC y Umbral Accel)
-  QTimer::singleShot(100, this, [this]() {
-    QByteArray paramsPayload;
-    QDataStream paramsStream(&paramsPayload, QIODevice::WriteOnly);
-    paramsStream.setByteOrder(QDataStream::LittleEndian);
-    paramsStream << static_cast<quint16>(
-        ui->editStopTargetAdc->text().toUShort());
-    paramsStream << static_cast<quint16>(
-        ui->editAccelStopThreshold->text().toUShort());
-    sendUnerbusCommand(Unerbus::CommandId::CMD_SET_BRAKING_PARAMS,
-                       paramsPayload);
-  });
-
-  // 3. Enviar Velocidad Máxima de Frenado
-  QTimer::singleShot(200, this, [this]() {
-    QByteArray speedPayload;
-    QDataStream speedStream(&speedPayload, QIODevice::WriteOnly);
-    speedStream.setByteOrder(QDataStream::LittleEndian);
-    speedStream << static_cast<quint16>(
-        ui->editBrakingMaxSpeed->text().toUShort());
-    sendUnerbusCommand(Unerbus::CommandId::CMD_SET_BRAKING_MAX_SPEED,
-                       speedPayload);
-  });
-
-  // 4. Enviar Velocidad Mínima de Frenado
-  QTimer::singleShot(300, this, [this]() {
-    QByteArray payload;
-    QDataStream stream(&payload, QIODevice::WriteOnly);
-    stream.setByteOrder(QDataStream::LittleEndian);
-    stream << static_cast<quint16>(ui->editBrakingMinSpeed->text().toUShort());
-    sendUnerbusCommand(Unerbus::CommandId::CMD_SET_BRAKING_MIN_SPEED, payload);
-  });
-
-  // 5. Enviar Zona Muerta de Frenado
-  QTimer::singleShot(400, this, [this]() {
-    QByteArray payload;
-    QDataStream stream(&payload, QIODevice::WriteOnly);
-    stream.setByteOrder(QDataStream::LittleEndian);
-    stream << static_cast<quint16>(ui->editBrakingDeadZone->text().toUShort());
-    sendUnerbusCommand(Unerbus::CommandId::CMD_SET_BRAKING_DEAD_ZONE, payload);
-  });
-
-  // 6. Enviar distancia frontal de aproximaciÃ³n para pivot de callejÃ³n.
-  QTimer::singleShot(500, this,
-                     &MainWindow::sendApproachFrontWallTarget);
+void MainWindow::on_btnSetApproachFrontWallTarget_clicked() {
+  sendApproachFrontWallTarget();
 }
 
-/**
- * @brief Actualiza la UI con las ganancias del PID de frenado.
- */
-void MainWindow::updatePidBrakingUI(const QByteArray &payload) {
-  if (payload.size() < 6)
-    return;
-  QDataStream stream(payload);
-  stream.setByteOrder(QDataStream::LittleEndian);
-
-  quint16 kp_int, ki_int, kd_int;
-  stream >> kp_int >> ki_int >> kd_int;
-
-  ui->editKpBraking->setText(QString::number(kp_int / 100.0, 'f', 2));
-  ui->editKiBraking->setText(QString::number(ki_int / 100.0, 'f', 2));
-  ui->editKdBraking->setText(QString::number(kd_int / 100.0, 'f', 2));
-}
-
-/**
- * @brief Actualiza la UI con los parámetros de frenado.
- */
-void MainWindow::updateBrakingParamsUI(const QByteArray &payload) {
-  if (payload.size() < 4)
-    return;
-  QDataStream stream(payload);
-  stream.setByteOrder(QDataStream::LittleEndian);
-
-  quint16 stop_target, accel_threshold;
-  stream >> stop_target >> accel_threshold;
-
-  ui->editStopTargetAdc->setText(QString::number(stop_target));
-  ui->editAccelStopThreshold->setText(QString::number(accel_threshold));
-}
-
-/**
- * @brief Actualiza la UI con la velocidad máxima de frenado.
- */
 void MainWindow::sendApproachFrontWallTarget() {
   quint16 target = ui->editApproachFrontWallTargetMm->text().toUShort();
   if (target < 10U)
@@ -2139,48 +2015,6 @@ void MainWindow::updateApproachFrontWallTargetUI(const QByteArray &payload) {
   stream >> target_mm;
 
   ui->editApproachFrontWallTargetMm->setText(QString::number(target_mm));
-}
-
-void MainWindow::updateBrakingMaxSpeedUI(const QByteArray &payload) {
-  if (payload.size() < 2)
-    return;
-  QDataStream stream(payload);
-  stream.setByteOrder(QDataStream::LittleEndian);
-
-  quint16 max_speed;
-  stream >> max_speed;
-
-  ui->editBrakingMaxSpeed->setText(QString::number(max_speed));
-}
-
-/**
- * @brief Actualiza la UI con la velocidad mínima de frenado.
- */
-void MainWindow::updateBrakingMinSpeedUI(const QByteArray &payload) {
-  if (payload.size() < 2)
-    return;
-  QDataStream stream(payload);
-  stream.setByteOrder(QDataStream::LittleEndian);
-
-  quint16 min_speed;
-  stream >> min_speed;
-
-  ui->editBrakingMinSpeed->setText(QString::number(min_speed));
-}
-
-/**
- * @brief Actualiza la UI con la zona muerta de frenado.
- */
-void MainWindow::updateBrakingDeadZoneUI(const QByteArray &payload) {
-  if (payload.size() < 2)
-    return;
-  QDataStream stream(payload);
-  stream.setByteOrder(QDataStream::LittleEndian);
-
-  quint16 dead_zone;
-  stream >> dead_zone;
-
-  ui->editBrakingDeadZone->setText(QString::number(dead_zone));
 }
 
 void MainWindow::updateYawAngleUI(const QByteArray &payload) {

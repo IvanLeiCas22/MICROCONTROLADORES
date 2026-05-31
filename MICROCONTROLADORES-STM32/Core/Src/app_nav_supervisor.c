@@ -830,7 +830,6 @@ static AppNavSupervisorState App_NavSupervisor_HandleSmooth(const AppNavInput *i
         App_NavSupervisor_ClearOutput(output);
         return App_NavSupervisor_SetError(APP_NAV_SUPERVISOR_RESULT_PRIMITIVE_ERROR);
 
-    case APP_NAV_SMOOTH_ACTION_FRONT_WALL_SAFETY:
     case APP_NAV_SMOOTH_ACTION_POST_YAW_TIMEOUT:
     case APP_NAV_SMOOTH_ACTION_ERROR:
     case APP_NAV_SMOOTH_ACTION_IDLE:

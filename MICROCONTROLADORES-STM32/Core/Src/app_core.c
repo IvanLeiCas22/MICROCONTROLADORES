@@ -117,7 +117,6 @@ typedef enum
     PID_ROLE_CENTERING = 0,
     PID_ROLE_TURN,
     PID_ROLE_SMOOTH_TURN,
-    PID_ROLE_BRAKING,
     PID_ROLE_COUNT
 } PID_Role_t;
 
@@ -201,24 +200,18 @@ uint16_t faster_motor_smooth_turn_speed = 6000; // Velocidad del motor más ráp
 uint16_t slower_motor_smooth_turn_speed = 2500; // Velocidad del motor más lento en giro suave
 uint16_t wall_threshold_mm_front = 70;          // Umbral en mm para detectar pared frontal
 uint16_t tape_detection_threshold_adc = 1500;   // Umbral en ADC para detectar cinta
-uint16_t wall_threshold_mm_braking_start = 40;  // Umbral en mm para iniciar el frenado
 uint16_t wall_threshold_mm_diagonal = 130;      // Umbral en mm para detectar pared diagonal
 uint16_t wall_threshold_mm_side = 100;          // Umbral en mm para detectar pared lateral
 uint16_t after_turn_wall_threshold_mm = 80;     // Umbral en mm para pared después de un giro
 uint16_t wall_target_mm = 55;                   // Distancia objetivo en mm para seguimiento de pared
-uint16_t wall_braking_target_mm = 30;           // Distancia de parada objetivo
 uint16_t approach_front_wall_target_mm = APP_NAV_DEFAULT_APPROACH_FRONT_WALL_TARGET_MM;
 static uint8_t supervisor_initial_x = APP_MAZE_DEFAULT_START_X;
 static uint8_t supervisor_initial_y = APP_MAZE_DEFAULT_START_Y;
 static HeadingTypeDef supervisor_initial_heading = APP_MAZE_DEFAULT_START_HEADING;
-uint16_t braking_accel_stop_threshold = 2000;   // Umbral de aceleración para confirmar detención
 uint16_t max_pwm_correction = 4000;             // Corrección máxima del PID
 uint16_t turn_max_pwm = TURN_MAX_SPEED_DEFAULT;
 uint16_t pivot_turn_target_dps = PIVOT_TURN_TARGET_DPS_DEFAULT;
 uint16_t turn_target_dps = TURN_TARGET_DPS_DEFAULT;
-uint16_t braking_max_pwm_offset = BRAKING_MAX_SPEED_DEFAULT; // PWM máximo de frenado
-uint16_t braking_min_speed = BRAKING_MIN_SPEED_DEFAULT;
-uint16_t braking_dead_zone = BRAKING_DEAD_ZONE_DEFAULT;
 
 uint8_t wall_fade_ticks = WALL_FADE_TICKS_DEFAULT;
 
@@ -452,12 +445,10 @@ static AppNavConfig Build_AppNavConfig_From_LegacyRuntime(void)
     cfg.slower_motor_smooth_turn_speed = slower_motor_smooth_turn_speed;
 
     cfg.wall_threshold_mm_front = wall_threshold_mm_front;
-    cfg.wall_threshold_mm_braking_start = wall_threshold_mm_braking_start;
     cfg.wall_threshold_mm_diagonal = wall_threshold_mm_diagonal;
     cfg.wall_threshold_mm_side = wall_threshold_mm_side;
     cfg.after_turn_wall_threshold_mm = after_turn_wall_threshold_mm;
     cfg.wall_target_mm = wall_target_mm;
-    cfg.wall_braking_target_mm = wall_braking_target_mm;
     cfg.approach_front_wall_target_mm = approach_front_wall_target_mm;
     cfg.tape_detection_threshold_adc = tape_detection_threshold_adc;
 
@@ -482,11 +473,6 @@ static AppNavConfig Build_AppNavConfig_From_LegacyRuntime(void)
     cfg.pivot_turn_pid_kd_q16 = pid_configs[PID_ROLE_TURN].kd;
     cfg.pivot_turn_pid_output_limit_pwm = turn_max_pwm;
 
-    cfg.braking_pid_kp_q16 = pid_configs[PID_ROLE_BRAKING].kp;
-    cfg.braking_pid_ki_q16 = pid_configs[PID_ROLE_BRAKING].ki;
-    cfg.braking_pid_kd_q16 = pid_configs[PID_ROLE_BRAKING].kd;
-    cfg.braking_pid_output_limit_pwm = braking_max_pwm_offset;
-    cfg.braking_min_speed_pwm = (int16_t)braking_min_speed;
 
     return cfg;
 }
@@ -665,12 +651,6 @@ static void Init_Pid_Configs(void)
         .out_min = INT_TO_FIXED(-max_pwm_correction),
         .out_max = INT_TO_FIXED(max_pwm_correction)};
 
-    pid_configs[PID_ROLE_BRAKING] = (PID_Config_t){
-        .kp = Gain_Hundredths_To_Fixed(BRAKING_PID_KP_DEFAULT_X100),
-        .ki = Gain_Hundredths_To_Fixed(BRAKING_PID_KI_DEFAULT_X100),
-        .kd = Gain_Hundredths_To_Fixed(BRAKING_PID_KD_DEFAULT_X100),
-        .out_min = INT_TO_FIXED(-braking_max_pwm_offset),
-        .out_max = INT_TO_FIXED(braking_max_pwm_offset)};
 
     pid_configs[PID_ROLE_TURN] = (PID_Config_t){
         .kp = Gain_Hundredths_To_Fixed(TURN_PID_KP_DEFAULT_X100),
@@ -1219,68 +1199,6 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
         UNERBUS_Write(aBus, cruise_buffer, UNERBUS_CRUISE_PARAMS_SIZE);
         length = UNERBUS_CMD_ID_SIZE + UNERBUS_CRUISE_PARAMS_SIZE;
         break;
-    case CMD_SET_BRAKING_PID_GAINS:
-        kp_int = UNERBUS_GetUInt16(aBus);
-        ki_int = UNERBUS_GetUInt16(aBus);
-        kd_int = UNERBUS_GetUInt16(aBus);
-        // Se usa 100 para ampliar el rango de Kp hasta ~655
-        Set_Pid_Gains_From_U16(PID_ROLE_BRAKING, kp_int, ki_int, kd_int);
-        Sync_AppNavConfig_From_LegacyRuntime();
-        break;
-    case CMD_GET_BRAKING_PID_GAINS:
-        uint8_t braking_pid_buffer[UNERBUS_BRAKING_PID_GAINS_SIZE];
-        Write_Pid_Gains_To_Buffer(PID_ROLE_BRAKING, braking_pid_buffer);
-        UNERBUS_Write(aBus, braking_pid_buffer, UNERBUS_BRAKING_PID_GAINS_SIZE);
-        length = UNERBUS_CMD_ID_SIZE + UNERBUS_BRAKING_PID_GAINS_SIZE;
-        break;
-    case CMD_SET_BRAKING_PARAMS:
-        wall_braking_target_mm = UNERBUS_GetUInt16(aBus);
-        braking_accel_stop_threshold = UNERBUS_GetUInt16(aBus);
-        Sync_AppNavConfig_From_LegacyRuntime();
-        break;
-    case CMD_GET_BRAKING_PARAMS:
-        uint8_t braking_params_buffer[UNERBUS_BRAKING_PARAMS_SIZE];
-        braking_params_buffer[0] = (uint8_t)(wall_braking_target_mm & 0xFF);
-        braking_params_buffer[1] = (uint8_t)((wall_braking_target_mm >> 8) & 0xFF);
-        braking_params_buffer[2] = (uint8_t)(braking_accel_stop_threshold & 0xFF);
-        braking_params_buffer[3] = (uint8_t)((braking_accel_stop_threshold >> 8) & 0xFF);
-        UNERBUS_Write(aBus, braking_params_buffer, UNERBUS_BRAKING_PARAMS_SIZE);
-        length = UNERBUS_CMD_ID_SIZE + UNERBUS_BRAKING_PARAMS_SIZE;
-        break;
-    case CMD_SET_BRAKING_MAX_SPEED:
-        braking_max_pwm_offset = UNERBUS_GetUInt16(aBus);
-        pid_configs[PID_ROLE_BRAKING].out_min = INT_TO_FIXED(-braking_max_pwm_offset);
-        pid_configs[PID_ROLE_BRAKING].out_max = INT_TO_FIXED(braking_max_pwm_offset);
-        Sync_AppNavConfig_From_LegacyRuntime();
-        break;
-    case CMD_GET_BRAKING_MAX_SPEED:
-        uint8_t braking_speed_buffer[UNERBUS_BRAKING_MAX_SPEED_SIZE];
-        braking_speed_buffer[0] = (uint8_t)(braking_max_pwm_offset & 0xFF);
-        braking_speed_buffer[1] = (uint8_t)((braking_max_pwm_offset >> 8) & 0xFF);
-        UNERBUS_Write(aBus, braking_speed_buffer, UNERBUS_BRAKING_MAX_SPEED_SIZE);
-        length = UNERBUS_CMD_ID_SIZE + UNERBUS_BRAKING_MAX_SPEED_SIZE;
-        break;
-    case CMD_SET_BRAKING_MIN_SPEED:
-        braking_min_speed = UNERBUS_GetUInt16(aBus);
-        Sync_AppNavConfig_From_LegacyRuntime();
-        break;
-    case CMD_GET_BRAKING_MIN_SPEED:
-        uint8_t braking_min_speed_buffer[UNERBUS_BRAKING_MIN_SPEED_SIZE];
-        braking_min_speed_buffer[0] = (uint8_t)(braking_min_speed & 0xFF);
-        braking_min_speed_buffer[1] = (uint8_t)((braking_min_speed >> 8) & 0xFF);
-        UNERBUS_Write(aBus, braking_min_speed_buffer, UNERBUS_BRAKING_MIN_SPEED_SIZE);
-        length = UNERBUS_CMD_ID_SIZE + UNERBUS_BRAKING_MIN_SPEED_SIZE;
-        break;
-    case CMD_SET_BRAKING_DEAD_ZONE:
-        braking_dead_zone = UNERBUS_GetUInt16(aBus);
-        break;
-    case CMD_GET_BRAKING_DEAD_ZONE:
-        uint8_t braking_dead_zone_buffer[UNERBUS_BRAKING_DEAD_ZONE_SIZE];
-        braking_dead_zone_buffer[0] = (uint8_t)(braking_dead_zone & 0xFF);
-        braking_dead_zone_buffer[1] = (uint8_t)((braking_dead_zone >> 8) & 0xFF);
-        UNERBUS_Write(aBus, braking_dead_zone_buffer, UNERBUS_BRAKING_DEAD_ZONE_SIZE);
-        length = UNERBUS_CMD_ID_SIZE + UNERBUS_BRAKING_DEAD_ZONE_SIZE;
-        break;
     case CMD_GET_YAW_ANGLE:
         uint8_t yaw_buffer[UNERBUS_YAW_ANGLE_SIZE];
         int32_t yaw_angle = FIXED_TO_INT(current_yaw_fixed);
@@ -1799,9 +1717,7 @@ void App_Core_Init(void)
     wall_threshold_mm_front = WALL_PRESENCE_THRESHOLD_MM_FRONT;
     wall_threshold_mm_diagonal = WALL_PRESENCE_THRESHOLD_MM_DIAGONAL;
     wall_threshold_mm_side = WALL_PRESENCE_THRESHOLD_MM_SIDE;
-    wall_threshold_mm_braking_start = WALL_PRESENCE_THRESHOLD_MM_BRAKING_START;
     wall_target_mm = WALL_FOLLOW_TARGET_MM;
-    wall_braking_target_mm = WALL_BRAKING_TARGET_MM;
     approach_front_wall_target_mm = APP_NAV_DEFAULT_APPROACH_FRONT_WALL_TARGET_MM;
     supervisor_initial_x = APP_MAZE_DEFAULT_START_X;
     supervisor_initial_y = APP_MAZE_DEFAULT_START_Y;
@@ -1812,8 +1728,6 @@ void App_Core_Init(void)
 
     /* --- INICIALIZACIÓN DE CONFIGURACIONES PID RUNTIME --- */
     Init_Pid_Configs();
-
-    braking_max_pwm_offset = BRAKING_MAX_SPEED_DEFAULT;
 
     Sync_AppNavConfig_From_LegacyRuntime();
 

@@ -2188,133 +2188,21 @@ QPushButton:checked {
          </widget>
         </item>
         <item>
-         <widget class="QGroupBox" name="groupBox_Braking">
+         <widget class="QGroupBox" name="groupBox_ApproachFrontWall">
           <property name="title">
-           <string>PID Frenado</string>
+           <string>Aproximación a pared frontal</string>
           </property>
-          <layout class="QVBoxLayout" name="verticalLayout_Braking">
+          <layout class="QVBoxLayout" name="verticalLayout_ApproachFrontWall">
            <item>
-            <layout class="QGridLayout" name="gridLayout_Braking">
+            <layout class="QGridLayout" name="gridLayout_ApproachFrontWall">
              <item row="0" column="0">
-              <widget class="QLabel" name="label_kp_braking">
-               <property name="text">
-                <string>kp:</string>
-               </property>
-              </widget>
-             </item>
-             <item row="0" column="1">
-              <widget class="QLineEdit" name="editKpBraking">
-               <property name="text">
-                <string>4</string>
-               </property>
-              </widget>
-             </item>
-             <item row="1" column="0">
-              <widget class="QLabel" name="label_ki_braking">
-               <property name="text">
-                <string>ki:</string>
-               </property>
-              </widget>
-             </item>
-             <item row="1" column="1">
-              <widget class="QLineEdit" name="editKiBraking">
-               <property name="text">
-                <string>0</string>
-               </property>
-              </widget>
-             </item>
-             <item row="2" column="0">
-              <widget class="QLabel" name="label_kd_braking">
-               <property name="text">
-                <string>kd:</string>
-               </property>
-              </widget>
-             </item>
-             <item row="2" column="1">
-              <widget class="QLineEdit" name="editKdBraking">
-               <property name="text">
-                <string>20</string>
-               </property>
-              </widget>
-             </item>
-             <item row="0" column="2">
-              <widget class="QLabel" name="label_stop_target">
-               <property name="text">
-                <string>Setpoint Distancia Parada:</string>
-               </property>
-              </widget>
-             </item>
-             <item row="0" column="3">
-              <widget class="QLineEdit" name="editStopTargetAdc">
-               <property name="text">
-                <string>20</string>
-               </property>
-              </widget>
-             </item>
-             <item row="1" column="2">
-              <widget class="QLabel" name="label_accel_stop">
-               <property name="text">
-                <string>Umbral Accel. Parada:</string>
-               </property>
-              </widget>
-             </item>
-             <item row="1" column="3">
-              <widget class="QLineEdit" name="editAccelStopThreshold">
-               <property name="text">
-                <string>2000</string>
-               </property>
-              </widget>
-             </item>
-             <item row="2" column="2">
-              <widget class="QLabel" name="label_braking_max_speed">
-               <property name="text">
-                <string>Max. PWM offset:</string>
-               </property>
-              </widget>
-             </item>
-             <item row="2" column="3">
-              <widget class="QLineEdit" name="editBrakingMaxSpeed">
-               <property name="text">
-                <string>2800</string>
-               </property>
-              </widget>
-             </item>
-             <item row="3" column="0">
-              <widget class="QLabel" name="label_braking_min_speed">
-               <property name="text">
-                <string>Velocidad Mín. Frenado:</string>
-               </property>
-              </widget>
-             </item>
-             <item row="3" column="1">
-              <widget class="QLineEdit" name="editBrakingMinSpeed">
-               <property name="text">
-                <string>2000</string>
-               </property>
-              </widget>
-             </item>
-             <item row="3" column="2">
-              <widget class="QLabel" name="label_braking_dead_zone">
-               <property name="text">
-                <string>Zona Muerta Frenado:</string>
-               </property>
-              </widget>
-             </item>
-             <item row="3" column="3">
-              <widget class="QLineEdit" name="editBrakingDeadZone">
-               <property name="text">
-                <string>5</string>
-               </property>
-              </widget>
-             </item>
-             <item row="4" column="0">
               <widget class="QLabel" name="label_approach_front_wall_target">
                <property name="text">
                 <string>Distancia pared para pivot:</string>
                </property>
               </widget>
              </item>
-             <item row="4" column="1">
+             <item row="0" column="1">
               <widget class="QLineEdit" name="editApproachFrontWallTargetMm">
                <property name="text">
                 <string>30</string>
@@ -2324,16 +2212,16 @@ QPushButton:checked {
             </layout>
            </item>
            <item>
-            <layout class="QHBoxLayout" name="horizontalLayout_Braking">
+            <layout class="QHBoxLayout" name="horizontalLayout_ApproachFrontWall">
              <item>
-              <widget class="QPushButton" name="btnGetPidBrakingConfig">
+              <widget class="QPushButton" name="btnGetApproachFrontWallTarget">
                <property name="text">
                 <string>Obtener</string>
                </property>
               </widget>
              </item>
              <item>
-              <widget class="QPushButton" name="btnSetPidBrakingConfig">
+              <widget class="QPushButton" name="btnSetApproachFrontWallTarget">
                <property name="text">
                 <string>Configurar</string>
                </property>
@@ -3041,7 +2929,6 @@ QPushButton:checked {
           <widget class="QWidget" name="pagePrimitiveConfigStraight"/>
           <widget class="QWidget" name="pagePrimitiveConfigWallFollow"/>
           <widget class="QWidget" name="pagePrimitiveConfigPivot"/>
-          <widget class="QWidget" name="pagePrimitiveConfigBraking"/>
          </widget>
         </item>
         <item>
@@ -3053,7 +2940,6 @@ QPushButton:checked {
           <widget class="QWidget" name="pagePrimitiveTelemetryStraight"/>
           <widget class="QWidget" name="pagePrimitiveTelemetryWallFollow"/>
           <widget class="QWidget" name="pagePrimitiveTelemetryPivot"/>
-          <widget class="QWidget" name="pagePrimitiveTelemetryBraking"/>
          </widget>
         </item>
        </layout>

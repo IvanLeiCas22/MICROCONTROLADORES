@@ -41,7 +41,6 @@ typedef enum
     APP_NAV_SMOOTH_ACTION_DONE_REAR_TAPE,
     APP_NAV_SMOOTH_ACTION_DONE_WALL,
     APP_NAV_SMOOTH_ACTION_DONE_POST_YAW_REAR_TAPE,
-    APP_NAV_SMOOTH_ACTION_FRONT_WALL_SAFETY,
     APP_NAV_SMOOTH_ACTION_POST_YAW_TIMEOUT,
     APP_NAV_SMOOTH_ACTION_ERROR
 } AppNavSmoothActionState;
@@ -197,13 +196,11 @@ typedef struct
     uint16_t slower_motor_smooth_turn_speed;
 
     uint16_t wall_threshold_mm_front;
-    uint16_t wall_threshold_mm_braking_start;
     uint16_t wall_threshold_mm_diagonal;
     uint16_t wall_threshold_mm_side;
     uint16_t wall_hysteresis_mm;
     uint16_t after_turn_wall_threshold_mm;
     uint16_t wall_target_mm;
-    uint16_t wall_braking_target_mm;
     uint16_t approach_front_wall_target_mm;
     uint16_t tape_detection_threshold_adc;
     uint16_t tape_hysteresis_adc;
@@ -229,11 +226,6 @@ typedef struct
     int32_t pivot_turn_pid_kd_q16;
     int32_t pivot_turn_pid_output_limit_pwm;
 
-    int32_t braking_pid_kp_q16;
-    int32_t braking_pid_ki_q16;
-    int32_t braking_pid_kd_q16;
-    int32_t braking_pid_output_limit_pwm;
-    int16_t braking_min_speed_pwm;
 } AppNavConfig;
 
 

@@ -871,7 +871,7 @@ DONE_REAR_TAPE
 DONE_POST_YAW_REAR_TAPE
 ```
 
-El smooth no debe considerarse completo solo por detectar pared/diagonal. La fase post-yaw continúa hasta confirmar cinta trasera.
+El smooth no debe considerarse completo solo por detectar pared/diagonal. La fase post-yaw continúa hasta confirmar cinta trasera. Durante `POST_YAW_SEEK_REAR_TAPE` no se corta por seguridad de pared frontal; la condición válida sigue siendo cinta trasera o timeout.
 
 Flujo conceptual:
 

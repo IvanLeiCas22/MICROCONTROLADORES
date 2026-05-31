@@ -112,16 +112,6 @@ typedef enum
     CMD_GET_ROBOT_STATUS = 0x74,    // Para leer el estado completo (AppState y MenuMode)
     CMD_SET_CRUISE_PARAMS = 0x4E,   // Configurar velocidad crucero y umbral de aceleración
     CMD_GET_CRUISE_PARAMS = 0x4F,   // Leer velocidad crucero y umbral de aceleración
-    CMD_SET_BRAKING_PID_GAINS = 0x64,
-    CMD_GET_BRAKING_PID_GAINS = 0x65,
-    CMD_SET_BRAKING_PARAMS = 0x66,
-    CMD_GET_BRAKING_PARAMS = 0x67,
-    CMD_SET_BRAKING_MAX_SPEED = 0x68,
-    CMD_GET_BRAKING_MAX_SPEED = 0x69,
-    CMD_SET_BRAKING_MIN_SPEED = 0x6A,       // Para configurar la velocidad mínima de frenado
-    CMD_GET_BRAKING_MIN_SPEED = 0x6B,       // Para leer la velocidad mínima de frenado
-    CMD_SET_BRAKING_DEAD_ZONE = 0x6C,       // Para configurar la zona muerta de frenado
-    CMD_GET_BRAKING_DEAD_ZONE = 0x6D,       // Para leer la zona muerta de frenado
     CMD_GET_YAW_ANGLE = 0x75,               // Para leer el ángulo de guiñada actual
     CMD_GET_SMOOTH_TURN_CONFIG = 0x80,      // Para leer la configuración de giro suave
     CMD_SET_SMOOTH_TURN_CONFIG = 0x81,      // Para configurar el giro suave
@@ -162,7 +152,6 @@ typedef enum
 {
     STATE_IDLE,
     STATE_NAVIGATING,
-    STATE_BRAKING,
     STATE_DECIDING,
     STATE_TURNING_LEFT,
     STATE_TURNING_RIGHT,
@@ -265,11 +254,6 @@ extern uint16_t pwm_max_value;
 #define UNERBUS_MENU_MODE_SIZE (sizeof(uint8_t))
 #define UNERBUS_ROBOT_STATUS_SIZE (sizeof(uint8_t) * 2)
 #define UNERBUS_CRUISE_PARAMS_SIZE (sizeof(uint16_t) * 3) // cruise_speed, accel_threshold, confirm_ticks
-#define UNERBUS_BRAKING_PID_GAINS_SIZE (sizeof(uint16_t) * 3)
-#define UNERBUS_BRAKING_PARAMS_SIZE (sizeof(uint16_t) * 2)
-#define UNERBUS_BRAKING_MAX_SPEED_SIZE (sizeof(uint16_t))
-#define UNERBUS_BRAKING_MIN_SPEED_SIZE (sizeof(uint16_t))
-#define UNERBUS_BRAKING_DEAD_ZONE_SIZE (sizeof(uint16_t))
 #define UNERBUS_YAW_ANGLE_SIZE (sizeof(int32_t)) // Yaw angle como int32_t
 #define UNERBUS_SMOOTH_TURN_CONFIG_SIZE (sizeof(uint16_t) * 2)
 #define UNERBUS_TURN_VELOCITY_PID_GAINS_SIZE (sizeof(uint16_t) * 3)
@@ -388,19 +372,9 @@ extern uint16_t pwm_max_value;
 #define WALL_PRESENCE_THRESHOLD_MM_SIDE 100         // Distancia (mm) para detectar una pared lateral.
 #define WALL_PRESENCE_THRESHOLD_MM_DIAGONAL 140     // Distancia (mm) para detectar una pared diagonal derecha.
 #define WALL_PRESENCE_THRESHOLD_MM_FRONT 70         // Distancia (mm) para detectar una pared frontal.
-#define WALL_PRESENCE_THRESHOLD_MM_BRAKING_START 40 // Distancia (mm) para detectar una pared y comenzar el frenado.
 #define WALL_FOLLOW_TARGET_MM 50                    // Distancia (mm) objetivo para el seguimiento de pared.
-#define WALL_BRAKING_TARGET_MM 20                   // Distancia (mm) objetivo para terminar el frenado.
 #define WALL_FADE_TICKS_DEFAULT 2                   // Ticks para desvanecer la detección de pared
 
-/* --- Braking PID Controller --- */
-#define BRAKING_PID_KP_DEFAULT_X100 1000
-#define BRAKING_PID_KI_DEFAULT_X100 10
-#define BRAKING_PID_KD_DEFAULT_X100 500
-#define BRAKING_DEAD_ZONE_DEFAULT 5              // Tolerancia en ADC para considerar la parada
-#define BRAKING_ACCEL_STOP_THRESHOLD_DEFAULT 400 // Umbral de acelerómetro para confirmar detención
-#define BRAKING_MAX_SPEED_DEFAULT 4000           // Velocidad máxima de frenado en PWM
-#define BRAKING_MIN_SPEED_DEFAULT 2200           // Velocidad mínima de frenado para vencer inercia
 
 /* --- Go straight --- */
 #define FRONT_OBSTACLE_STOP_DISTANCE_MM 50

@@ -93,8 +93,8 @@ private slots:
   void on_btnSetRobotStatus_clicked();
   void on_btnGetCruiseParams_clicked();
   void on_btnSetCruiseParams_clicked();
-  void on_btnGetPidBrakingConfig_clicked();
-  void on_btnSetPidBrakingConfig_clicked();
+  void on_btnGetApproachFrontWallTarget_clicked();
+  void on_btnSetApproachFrontWallTarget_clicked();
 
   // --- Slots para la página del laberinto ---
   void on_btnSimReset_clicked();
@@ -231,12 +231,7 @@ private slots:
   void populateRobotStatusComboBoxes();
   void updateRobotStatusUI(const QByteArray &payload);
   void updateCruiseParamsUI(const QByteArray &payload);
-  void updatePidBrakingUI(const QByteArray &payload);
-  void updateBrakingParamsUI(const QByteArray &payload);
   void updateApproachFrontWallTargetUI(const QByteArray &payload);
-  void updateBrakingMaxSpeedUI(const QByteArray &payload);
-  void updateBrakingMinSpeedUI(const QByteArray &payload);
-  void updateBrakingDeadZoneUI(const QByteArray &payload);
   void updateYawAngleUI(const QByteArray &payload);
   void updateSmoothTurnSpeedsUI(const QByteArray &payload);
   void updateTurnSpeedPID(const QByteArray &payload);
