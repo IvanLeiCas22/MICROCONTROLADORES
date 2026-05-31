@@ -573,10 +573,6 @@ void MainWindow::onPacketReceived(quint8 command, const QByteArray &payload) {
     updateSmoothTurnSpeedsUI(payload);
     break;
   }
-  case Unerbus::CommandId::CMD_GET_DELAY_TICKS: {
-    updateDelayTicksUI(payload);
-    break;
-  }
   case Unerbus::CommandId::CMD_SYNC_MAZE_COLUMN: {
       // Necesitamos 1(col) + 15(datos) + 1(x) + 1(y) + 1(heading) = 19 bytes
       if (payload.size() >= (MAZE_HEIGHT + 4)) {
@@ -1402,9 +1398,6 @@ void MainWindow::on_btnGetPidNavConfig_clicked() {
   QTimer::singleShot(300, this, [this]() {
     sendUnerbusCommand(Unerbus::CommandId::CMD_GET_WALL_TARGET_ADC);
   });
-  QTimer::singleShot(400, this, [this]() {
-    sendUnerbusCommand(Unerbus::CommandId::CMD_GET_DELAY_TICKS);
-  });
 }
 
 /**
@@ -1454,13 +1447,6 @@ void MainWindow::on_btnSetPidNavConfig_clicked() {
     stream << static_cast<quint16>(
         ui->editSetpointTapeDetection->text().toUShort());
     sendUnerbusCommand(Unerbus::CommandId::CMD_SET_WALL_TARGET_ADC, payload);
-  });
-  QTimer::singleShot(400, this, [this]() {
-    QByteArray payload;
-    QDataStream stream(&payload, QIODevice::WriteOnly);
-    stream.setByteOrder(QDataStream::LittleEndian);
-    stream << static_cast<quint8>(ui->editWallFadeTicks->text().toUShort());
-    sendUnerbusCommand(Unerbus::CommandId::CMD_SET_DELAY_TICKS, payload);
   });
 }
 
@@ -2072,19 +2058,6 @@ void MainWindow::updateTurnTargetDps(const QByteArray &payload) {
   stream >> angular_speed;
 
   ui->editTurnAngularSpeed->setText(QString::number(angular_speed));
-}
-
-void MainWindow::updateDelayTicksUI(const QByteArray &payload) {
-  if (payload.size() < 1)
-    return;
-
-  QDataStream stream(payload);
-  stream.setByteOrder(QDataStream::LittleEndian);
-
-  quint8 delayTicks;
-  stream >> delayTicks;
-
-  ui->editWallFadeTicks->setText(QString::number(delayTicks));
 }
 
 void MainWindow::on_btnSimReset_clicked() {

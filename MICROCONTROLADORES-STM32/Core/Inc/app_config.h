@@ -119,8 +119,6 @@ typedef enum
     CMD_GET_TURN_VELOCITY_PID_GAINS = 0x83, // Leer Kp, Ki, Kd del PID de velocidad de giro
     CMD_SET_TURN_TARGET_DPS = 0x84,         // Configurar la velocidad angular objetivo para giros
     CMD_GET_TURN_TARGET_DPS = 0x85,         // Leer la velocidad angular objetivo
-    CMD_GET_DELAY_TICKS = 0X90,             // Leer el número de ticks de retardo
-    CMD_SET_DELAY_TICKS = 0X91,             // Configurar el número de ticks de retardo
     CMD_UPDATE_MAZE_CELL = 0x92,            // (STM32 -> Qt) Enviar actualización de info de celda
     CMD_SYNC_MAZE_COLUMN = 0x93,            // Sincronizar 1 columna entera del laberinto
     CMD_PRIMITIVE_TEST = 0x95,              // Banco de pruebas de primitivas
@@ -159,18 +157,9 @@ typedef enum
     STATE_SMOOTH_TURN_RIGHT,
     STATE_STRAIGHT_DRIVE,
     STATE_STRAIGHT_DRIVE_DESIDING,
-    STATE_LEFT_WALL_FADE,
-    STATE_RIGHT_WALL_FADE,
     STATE_TURN_AROUND_RIGHT,
     STATE_TURN_AROUND_LEFT
 } RobotStateTypeDef;
-
-typedef enum
-{
-    LEFT_WALL_FADED = 1,
-    RIGHT_WALL_FADED = 2,
-    NO_WALL_FADED = 0
-} WallFadeTypesTypeDef;
 
 //==============================================================================
 // DEFINICIONES Y MACROS
@@ -258,7 +247,6 @@ extern uint16_t pwm_max_value;
 #define UNERBUS_SMOOTH_TURN_CONFIG_SIZE (sizeof(uint16_t) * 2)
 #define UNERBUS_TURN_VELOCITY_PID_GAINS_SIZE (sizeof(uint16_t) * 3)
 #define UNERBUS_TURN_TARGET_DPS_SIZE (sizeof(uint16_t))
-#define UNERBUS_DELAY_TICKS_SIZE (sizeof(uint8_t))          // Número de ticks de retardo como uint8_t
 #define UNERBUS_MAZE_CELL_UPDATE_SIZE APP_MAZE_CELL_UPDATE_PAYLOAD_SIZE // x, y, walls, heading
 #define UNERBUS_APPROACH_FRONT_WALL_TARGET_SIZE (sizeof(uint16_t))
 #define UNERBUS_SUPERVISOR_INITIAL_POSE_SIZE (sizeof(uint8_t) * 3)
@@ -373,7 +361,6 @@ extern uint16_t pwm_max_value;
 #define WALL_PRESENCE_THRESHOLD_MM_DIAGONAL 140     // Distancia (mm) para detectar una pared diagonal derecha.
 #define WALL_PRESENCE_THRESHOLD_MM_FRONT 70         // Distancia (mm) para detectar una pared frontal.
 #define WALL_FOLLOW_TARGET_MM 50                    // Distancia (mm) objetivo para el seguimiento de pared.
-#define WALL_FADE_TICKS_DEFAULT 2                   // Ticks para desvanecer la detección de pared
 
 
 /* --- Go straight --- */

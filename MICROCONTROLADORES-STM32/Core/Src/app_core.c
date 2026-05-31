@@ -213,7 +213,6 @@ uint16_t turn_max_pwm = TURN_MAX_SPEED_DEFAULT;
 uint16_t pivot_turn_target_dps = PIVOT_TURN_TARGET_DPS_DEFAULT;
 uint16_t turn_target_dps = TURN_TARGET_DPS_DEFAULT;
 
-uint8_t wall_fade_ticks = WALL_FADE_TICKS_DEFAULT;
 
 /* Current sensor snapshot, manual primitive-test context and supervisor runner state. */
 
@@ -1253,16 +1252,6 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
         dps_buffer[1] = (uint8_t)((turn_target_dps >> 8) & 0xFF);
         UNERBUS_Write(aBus, dps_buffer, UNERBUS_TURN_TARGET_DPS_SIZE);
         length = UNERBUS_CMD_ID_SIZE + UNERBUS_TURN_TARGET_DPS_SIZE;
-        break;
-    case CMD_GET_DELAY_TICKS:
-        uint8_t delays_buffer[UNERBUS_DELAY_TICKS_SIZE];
-
-        delays_buffer[0] = wall_fade_ticks;
-        UNERBUS_Write(aBus, delays_buffer, UNERBUS_DELAY_TICKS_SIZE);
-        length = UNERBUS_CMD_ID_SIZE + UNERBUS_DELAY_TICKS_SIZE;
-        break;
-    case CMD_SET_DELAY_TICKS:
-        wall_fade_ticks = UNERBUS_GetUInt8(aBus);
         break;
     case CMD_SYNC_MAZE_COLUMN:
     {

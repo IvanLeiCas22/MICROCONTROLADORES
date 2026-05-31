@@ -65,8 +65,6 @@ namespace Unerbus
         CMD_GET_TURN_VELOCITY_PID_GAINS = 0x83, // Leer Kp, Ki, Kd del PID de velocidad de giro
         CMD_SET_TURN_TARGET_DPS = 0x84,         // Configurar la velocidad angular objetivo para giros
         CMD_GET_TURN_TARGET_DPS = 0x85,         // Leer la velocidad angular objetivo
-        CMD_GET_DELAY_TICKS = 0X90,             // Leer el número de ticks de retardo
-        CMD_SET_DELAY_TICKS = 0X91,             // Configurar el número de ticks de retardo
         CMD_UPDATE_MAZE_CELL = 0x92,            // (STM32 -> Qt) Enviar actualización de info de celda
         CMD_SYNC_MAZE_COLUMN = 0x93,            // Sincronizar 1 columna entera del laberinto
         CMD_PRIMITIVE_TEST = 0x95,              // Banco de pruebas de primitivas

@@ -236,7 +236,6 @@ private slots:
   void updateSmoothTurnSpeedsUI(const QByteArray &payload);
   void updateTurnSpeedPID(const QByteArray &payload);
   void updateTurnTargetDps(const QByteArray &payload);
-  void updateDelayTicksUI(const QByteArray &payload);
   void sendApproachFrontWallTarget();
   void sendSupervisorInitialPose();
   void requestSupervisorInitialPose();
