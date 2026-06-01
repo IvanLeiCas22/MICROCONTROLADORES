@@ -59,32 +59,6 @@ bool App_Nav_RecommendAction(const AppNavPerception *perception,
                               AppNavRecommendedAction *action_out);
 
 /* -------------------------------------------------------------------------- */
-/* Reusable low-level drive controllers                                         */
-/* -------------------------------------------------------------------------- */
-
-bool App_Nav_ComputeYawHoldAdvancePwm(const AppNavInput *input,
-                                      uint16_t right_base_pwm,
-                                      uint16_t left_base_pwm,
-                                      AppNavOutput *output);
-
-bool App_Nav_StartWallFollowAdvance(void);
-bool App_Nav_ComputeWallFollowPwm(const AppNavInput *input,
-                                  const AppNavPerception *perception,
-                                  uint16_t right_base_pwm,
-                                  uint16_t left_base_pwm,
-                                  AppNavOutput *output);
-
-bool App_Nav_StartSmoothTurn(AppNavSmoothTurnDirection direction);
-bool App_Nav_ComputeSmoothTurnPwm(const AppNavInput *input,
-                                  AppNavOutput *output);
-
-bool App_Nav_StartPivotTurn(void);
-bool App_Nav_ComputePivotTurnPwm(const AppNavInput *input,
-                                 int16_t target_dps,
-                                 AppNavOutput *output);
-
-
-/* -------------------------------------------------------------------------- */
 /* Portable primitive-test runner                                              */
 /* -------------------------------------------------------------------------- */
 

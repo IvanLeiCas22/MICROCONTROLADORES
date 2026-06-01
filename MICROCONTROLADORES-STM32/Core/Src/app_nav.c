@@ -86,6 +86,23 @@ static uint8_t app_nav_primitive_test_action_started;
 
 static bool App_Nav_StartYawHoldAdvanceInternal(int32_t yaw_target_q16_deg,
                                                 uint8_t clear_smooth_action);
+static bool App_Nav_ComputeYawHoldAdvancePwm(const AppNavInput *input,
+                                             uint16_t right_base_pwm,
+                                             uint16_t left_base_pwm,
+                                             AppNavOutput *output);
+static bool App_Nav_StartWallFollowAdvance(void);
+static bool App_Nav_ComputeWallFollowPwm(const AppNavInput *input,
+                                         const AppNavPerception *perception,
+                                         uint16_t right_base_pwm,
+                                         uint16_t left_base_pwm,
+                                         AppNavOutput *output);
+static bool App_Nav_StartSmoothTurn(AppNavSmoothTurnDirection direction);
+static bool App_Nav_ComputeSmoothTurnPwm(const AppNavInput *input,
+                                         AppNavOutput *output);
+static bool App_Nav_StartPivotTurn(void);
+static bool App_Nav_ComputePivotTurnPwm(const AppNavInput *input,
+                                        int16_t target_dps,
+                                        AppNavOutput *output);
 
 /* Mirrors the legacy ADC channel order without depending on app_config.h. */
 typedef enum
@@ -681,7 +698,7 @@ static bool App_Nav_StartYawHoldAdvanceInternal(int32_t yaw_target_q16_deg,
 /* Reusable low-level drive controllers                                         */
 /* -------------------------------------------------------------------------- */
 
-bool App_Nav_ComputeYawHoldAdvancePwm(const AppNavInput *input,
+static bool App_Nav_ComputeYawHoldAdvancePwm(const AppNavInput *input,
                                       uint16_t right_base_pwm,
                                       uint16_t left_base_pwm,
                                       AppNavOutput *output)
@@ -731,7 +748,7 @@ bool App_Nav_ComputeYawHoldAdvancePwm(const AppNavInput *input,
 }
 
 
-bool App_Nav_StartWallFollowAdvance(void)
+static bool App_Nav_StartWallFollowAdvance(void)
 {
     app_nav_straight_active = 0U;
     app_nav_wall_follow_active = 1U;
@@ -753,7 +770,7 @@ bool App_Nav_StartWallFollowAdvance(void)
 /* Smooth turn controller and SmoothAction                                      */
 /* -------------------------------------------------------------------------- */
 
-bool App_Nav_StartSmoothTurn(AppNavSmoothTurnDirection direction)
+static bool App_Nav_StartSmoothTurn(AppNavSmoothTurnDirection direction)
 {
     if ((direction != APP_NAV_SMOOTH_TURN_LEFT) &&
         (direction != APP_NAV_SMOOTH_TURN_RIGHT))
@@ -779,7 +796,7 @@ bool App_Nav_StartSmoothTurn(AppNavSmoothTurnDirection direction)
     return true;
 }
 
-bool App_Nav_ComputeSmoothTurnPwm(const AppNavInput *input,
+static bool App_Nav_ComputeSmoothTurnPwm(const AppNavInput *input,
                                   AppNavOutput *output)
 {
     int16_t base_right;
@@ -1011,7 +1028,7 @@ AppNavSmoothActionState App_Nav_TickSmoothAction(const AppNavInput *input,
 /* Pivot turn controller and PivotAction                                        */
 /* -------------------------------------------------------------------------- */
 
-bool App_Nav_StartPivotTurn(void)
+static bool App_Nav_StartPivotTurn(void)
 {
     app_nav_pivot_turn_active = 1U;
     app_nav_straight_active = 0U;
@@ -1028,7 +1045,7 @@ bool App_Nav_StartPivotTurn(void)
     return true;
 }
 
-bool App_Nav_ComputePivotTurnPwm(const AppNavInput *input,
+static bool App_Nav_ComputePivotTurnPwm(const AppNavInput *input,
                                  int16_t target_dps,
                                  AppNavOutput *output)
 {
@@ -1181,7 +1198,7 @@ AppNavPivotActionState App_Nav_TickPivotAction(const AppNavInput *input,
     return app_nav_pivot_action_state;
 }
 
-bool App_Nav_ComputeWallFollowPwm(const AppNavInput *input,
+static bool App_Nav_ComputeWallFollowPwm(const AppNavInput *input,
                                   const AppNavPerception *perception,
                                   uint16_t right_base_pwm,
                                   uint16_t left_base_pwm,
