@@ -135,10 +135,12 @@ typedef struct
 } SensorSnapshotTypeDef;
 
 /*
- * Manual primitive-test runner.
+ * Manual primitive-test adapter.
  *
  * This is intentionally separate from the supervisor. Starting a primitive test
  * stops an active supervisor run so the two flows cannot drive motors at once.
+ * app_core owns HMI/UNERBUS/status/PWM application; app_nav owns the portable
+ * primitive-test runner and executes complete primitive actions.
  */
 
 typedef enum
@@ -1913,7 +1915,7 @@ static int32_t PrimitiveTest_GetSmoothTargetDpsX10(uint8_t variant)
 
 static void PrimitiveTest_StartSmooth(uint8_t variant)
 {
-    AppNavSmoothTurnDirection direction;
+    AppNavPrimitiveTestType portable_type;
 
     if (primitive_test.active)
     {
@@ -1922,8 +1924,15 @@ static void PrimitiveTest_StartSmooth(uint8_t variant)
         return;
     }
 
-    if ((variant != PRIM_TEST_SMOOTH_LEFT) &&
-        (variant != PRIM_TEST_SMOOTH_RIGHT))
+    if (variant == PRIM_TEST_SMOOTH_LEFT)
+    {
+        portable_type = APP_NAV_PRIMITIVE_TEST_SMOOTH_LEFT;
+    }
+    else if (variant == PRIM_TEST_SMOOTH_RIGHT)
+    {
+        portable_type = APP_NAV_PRIMITIVE_TEST_SMOOTH_RIGHT;
+    }
+    else
     {
         primitive_test.active = false;
         primitive_test.test_type = PRIM_TEST_NONE;
@@ -1938,9 +1947,7 @@ static void PrimitiveTest_StartSmooth(uint8_t variant)
         Stop_Supervisor_Run();
     }
 
-    direction = (variant == PRIM_TEST_SMOOTH_LEFT) ? APP_NAV_SMOOTH_TURN_LEFT : APP_NAV_SMOOTH_TURN_RIGHT;
-
-    if (!App_Nav_StartSmoothTurn(direction))
+    if (!App_NavPrimitiveTest_Start(portable_type))
     {
         primitive_test.active = false;
         primitive_test.test_type = PRIM_TEST_NONE;
@@ -1965,6 +1972,8 @@ static void PrimitiveTest_StartSmooth(uint8_t variant)
 
 static void PrimitiveTest_Stop(void)
 {
+    App_NavPrimitiveTest_Stop();
+
     primitive_test.active = false;
     primitive_test.test_type = PRIM_TEST_NONE;
     primitive_test.variant = PRIM_TEST_SMOOTH_LEFT;
@@ -1982,6 +1991,7 @@ static void PrimitiveTest_Tick(uint32_t dt_ms,
                                const AppNavPerception *perception)
 {
     AppNavOutput output = {0};
+    AppNavPrimitiveTestState portable_state;
 
     if (!primitive_test.active)
     {
@@ -1990,6 +2000,7 @@ static void PrimitiveTest_Tick(uint32_t dt_ms,
 
     if ((input == NULL) || (perception == NULL))
     {
+        App_NavPrimitiveTest_Stop();
         primitive_test.active = false;
         primitive_test.state = PRIM_TEST_STATE_ERROR;
         primitive_test.result = PRIM_TEST_RESULT_COMPUTE_FAILED;
@@ -1998,8 +2009,6 @@ static void PrimitiveTest_Tick(uint32_t dt_ms,
         Set_Motor_Speeds(0, 0);
         return;
     }
-
-    (void)perception;
 
     if ((UINT32_MAX - primitive_test.elapsed_ms) >= dt_ms)
     {
@@ -2010,26 +2019,63 @@ static void PrimitiveTest_Tick(uint32_t dt_ms,
         primitive_test.elapsed_ms = UINT32_MAX;
     }
 
-    if ((primitive_test.test_type == PRIM_TEST_SMOOTH_TURN) &&
-        App_Nav_ComputeSmoothTurnPwm(input, &output))
+    portable_state = App_NavPrimitiveTest_Tick(input, perception, &output);
+
+    primitive_test.last_yaw_deg_x10 = PrimitiveTest_GetYawDegX10();
+    primitive_test.last_yaw_rate_dps_x10 = GyroRaw_To_DpsX10(sensor_snapshot.gz);
+    primitive_test.target_dps_x10 = PrimitiveTest_GetSmoothTargetDpsX10(primitive_test.variant);
+
+    switch (portable_state)
     {
-    	Apply_AppNavOutput_To_Motors(&output);
+    case APP_NAV_PRIMITIVE_TEST_RUNNING:
+        Apply_AppNavOutput_To_Motors(&output);
         primitive_test.last_left_pwm = output.left_motor_pwm;
         primitive_test.last_right_pwm = output.right_motor_pwm;
-        primitive_test.last_yaw_deg_x10 = PrimitiveTest_GetYawDegX10();
-        primitive_test.last_yaw_rate_dps_x10 = GyroRaw_To_DpsX10(sensor_snapshot.gz);
-        primitive_test.target_dps_x10 = PrimitiveTest_GetSmoothTargetDpsX10(primitive_test.variant);
         primitive_test.state = PRIM_TEST_STATE_RUNNING;
         primitive_test.result = PRIM_TEST_RESULT_OK;
-    }
-    else
-    {
+        break;
+
+    case APP_NAV_PRIMITIVE_TEST_DONE:
+        App_NavPrimitiveTest_Stop();
+        primitive_test.active = false;
+        primitive_test.state = PRIM_TEST_STATE_IDLE;
+        primitive_test.result = PRIM_TEST_RESULT_OK;
+        primitive_test.last_left_pwm = 0;
+        primitive_test.last_right_pwm = 0;
+        Set_Motor_Speeds(0, 0);
+        break;
+
+    case APP_NAV_PRIMITIVE_TEST_TIMEOUT:
+    case APP_NAV_PRIMITIVE_TEST_ERROR:
+        App_NavPrimitiveTest_Stop();
         primitive_test.active = false;
         primitive_test.state = PRIM_TEST_STATE_ERROR;
         primitive_test.result = PRIM_TEST_RESULT_COMPUTE_FAILED;
         primitive_test.last_left_pwm = 0;
         primitive_test.last_right_pwm = 0;
         Set_Motor_Speeds(0, 0);
+        break;
+
+    case APP_NAV_PRIMITIVE_TEST_REJECTED:
+        App_NavPrimitiveTest_Stop();
+        primitive_test.active = false;
+        primitive_test.state = PRIM_TEST_STATE_REJECTED;
+        primitive_test.result = PRIM_TEST_RESULT_INVALID;
+        primitive_test.last_left_pwm = 0;
+        primitive_test.last_right_pwm = 0;
+        Set_Motor_Speeds(0, 0);
+        break;
+
+    case APP_NAV_PRIMITIVE_TEST_IDLE:
+    default:
+        App_NavPrimitiveTest_Stop();
+        primitive_test.active = false;
+        primitive_test.state = PRIM_TEST_STATE_IDLE;
+        primitive_test.result = PRIM_TEST_RESULT_OK;
+        primitive_test.last_left_pwm = 0;
+        primitive_test.last_right_pwm = 0;
+        Set_Motor_Speeds(0, 0);
+        break;
     }
 }
 
