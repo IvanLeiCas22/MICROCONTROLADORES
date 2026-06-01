@@ -196,11 +196,6 @@ static AppTimingClock mpu_yaw_timing_clock;
 static volatile bool mpu_yaw_timing_initialized = false;
 static volatile uint32_t mpu_last_sample_cycle = 0;
 
-/* Legacy/diagnostic robot state used by display/debug paths. */
-
-static volatile RobotStateTypeDef robot_state = STATE_IDLE;
-
-
 /* -------------------------------------------------------------------------- */
 /* Private function prototypes                                                  */
 /* -------------------------------------------------------------------------- */
@@ -239,7 +234,6 @@ static void Apply_AppNavOutput_To_Motors(const AppNavOutput *output);
 static void ADC_Filter_Task(void);
 static void ADC_LUT_Precompute(void);
 static int32_t Get_Filtered_ADC_Value(uint8_t channel);
-static void Set_Robot_State(RobotStateTypeDef new_state);
 static void Update_Display_Content(void);
 static void Request_Display_Update(void);
 static bool Is_Valid_Menu_Mode(MenuModeTypeDef mode);
@@ -2226,7 +2220,6 @@ static void Supervisor_Run_SetInactiveMenuState(void)
     supervisor_run_active = false;
     supervisor_status_update_100ms_counter = 0U;
     app_state = APP_STATE_MENU;
-    Set_Robot_State(STATE_IDLE);
 }
 
 static bool Start_Supervisor_Run(MenuModeTypeDef requested_mode)
@@ -2236,7 +2229,6 @@ static bool Start_Supervisor_Run(MenuModeTypeDef requested_mode)
     Stop_Portable_Nav_Actions();
 
     supervisor_run_active = false;
-    Set_Robot_State(STATE_IDLE);
 
     if (requested_mode == MENU_MODE_FIND_CELLS)
     {
@@ -2263,7 +2255,6 @@ static bool Start_Supervisor_Run(MenuModeTypeDef requested_mode)
         supervisor_status_update_100ms_counter = 0U;
         app_state = APP_STATE_RUNNING;
         menu_mode = MENU_MODE_FIND_CELLS;
-        Set_Robot_State(STATE_IDLE);
         Request_Display_Update();
         return true;
     }
@@ -2312,7 +2303,6 @@ static bool Start_Supervisor_Run(MenuModeTypeDef requested_mode)
         supervisor_run_active = App_NavSupervisor_IsActive();
         supervisor_status_update_100ms_counter = 0U;
         app_state = supervisor_run_active ? APP_STATE_RUNNING : APP_STATE_MENU;
-        Set_Robot_State(STATE_IDLE);
         Request_Display_Update();
         return true;
     }
@@ -2552,16 +2542,6 @@ static void ADC_Filter_Task(void)
 static int32_t Get_Filtered_ADC_Value(uint8_t channel)
 {
     return (int32_t)App_Sensors_GetFilteredAdcValue(channel);
-}
-
-/**
- * @brief  Establece un nuevo estado para el robot y solicita una actualización del display.
- * @param  new_state El nuevo estado del robot.
- * @retval None
- */
-static void Set_Robot_State(RobotStateTypeDef new_state)
-{
-    robot_state = new_state;
 }
 
 /**

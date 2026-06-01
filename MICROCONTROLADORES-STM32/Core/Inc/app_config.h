@@ -146,21 +146,6 @@ typedef union
     int32_t i32;
 } DataUnionTypeDef;
 
-typedef enum
-{
-    STATE_IDLE,
-    STATE_NAVIGATING,
-    STATE_DECIDING,
-    STATE_TURNING_LEFT,
-    STATE_TURNING_RIGHT,
-    STATE_SMOOTH_TURN_LEFT,
-    STATE_SMOOTH_TURN_RIGHT,
-    STATE_STRAIGHT_DRIVE,
-    STATE_STRAIGHT_DRIVE_DESIDING,
-    STATE_TURN_AROUND_RIGHT,
-    STATE_TURN_AROUND_LEFT
-} RobotStateTypeDef;
-
 //==============================================================================
 // DEFINICIONES Y MACROS
 //==============================================================================
