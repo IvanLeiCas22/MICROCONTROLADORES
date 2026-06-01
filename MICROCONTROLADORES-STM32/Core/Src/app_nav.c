@@ -828,12 +828,6 @@ void App_Nav_StopSmoothAction(void)
     PID_Reset(&app_nav_advance_pid);
 }
 
-bool App_Nav_StartSmoothAction(AppNavSmoothActionType action)
-{
-    return App_Nav_StartSmoothActionWithRearTapeProfile(action,
-                                                        APP_NAV_REAR_TAPE_PROFILE_NORMAL_CELL);
-}
-
 bool App_Nav_StartSmoothActionWithRearTapeProfile(AppNavSmoothActionType action,
                                                   AppNavRearTapeProfile rear_tape_profile)
 {
@@ -1345,12 +1339,6 @@ void App_Nav_StopAdvanceAction(void)
 /* -------------------------------------------------------------------------- */
 /* AdvanceAction: drive until rear tape confirms next cell boundary             */
 /* -------------------------------------------------------------------------- */
-
-bool App_Nav_StartAdvanceAction(AppNavAdvanceActionMode mode)
-{
-    return App_Nav_StartAdvanceActionWithRearTapeProfile(mode,
-                                                         APP_NAV_REAR_TAPE_PROFILE_NORMAL_CELL);
-}
 
 bool App_Nav_StartAdvanceActionWithRearTapeProfile(AppNavAdvanceActionMode mode,
                                                    AppNavRearTapeProfile rear_tape_profile)

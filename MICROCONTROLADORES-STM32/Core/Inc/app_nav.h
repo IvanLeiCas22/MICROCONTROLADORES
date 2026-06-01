@@ -93,7 +93,6 @@ bool App_Nav_ComputePivotTurnPwm(const AppNavInput *input,
  * Rear tape profiles distinguish normal cells from special cells, where the
  * rear sensor can see an internal black patch before the exit boundary tape.
  */
-bool App_Nav_StartAdvanceAction(AppNavAdvanceActionMode mode);
 bool App_Nav_StartAdvanceActionWithRearTapeProfile(AppNavAdvanceActionMode mode,
                                                    AppNavRearTapeProfile rear_tape_profile);
 AppNavAdvanceActionState App_Nav_TickAdvanceAction(const AppNavInput *input,
@@ -108,7 +107,6 @@ void App_Nav_StopAdvanceAction(void);
  * action remains active in POST_YAW_SEEK_REAR_TAPE until rear tape confirms
  * cell entry.
  */
-bool App_Nav_StartSmoothAction(AppNavSmoothActionType action);
 bool App_Nav_StartSmoothActionWithRearTapeProfile(AppNavSmoothActionType action,
                                                   AppNavRearTapeProfile rear_tape_profile);
 AppNavSmoothActionState App_Nav_TickSmoothAction(const AppNavInput *input,
