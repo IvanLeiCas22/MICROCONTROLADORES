@@ -63,6 +63,8 @@ app_nav.c
         - Pivot
         - Approach front wall
         - Center by front tape
+    También contiene el fallback local determinístico App_Nav_RecommendAction(),
+    con prioridad frente -> derecha -> izquierda -> atrás.
     No decide la misión.
 
 app_nav_supervisor.c
@@ -188,6 +190,7 @@ Sync_AppNavConfig_From_LegacyRuntime()
 pid_configs[]
 variables runtime legacy de navegación en app_core.c
 defaults runtime de navegación en app_config.h
+parámetro random_value en App_Nav_RecommendAction()
 ```
 
 Si aparece una necesidad parecida, diseñarla explícitamente y justificarla. No restaurar legacy.

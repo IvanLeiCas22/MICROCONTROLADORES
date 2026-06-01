@@ -50,11 +50,12 @@ bool App_Nav_EvaluatePerception(const AppNavInput *input,
 /* -------------------------------------------------------------------------- */
 
 /*
- * Basic wall-based action recommendation. The supervisor may use this as a
- * local policy, but app_nav itself does not update the logical maze.
+ * Deterministic wall-based fallback recommendation. The supervisor may use
+ * this as a local policy, but app_nav itself does not update the logical maze.
+ *
+ * Priority: front -> right -> left -> back.
  */
 bool App_Nav_RecommendAction(const AppNavPerception *perception,
-                              uint32_t random_value,
                               AppNavRecommendedAction *action_out);
 
 /* -------------------------------------------------------------------------- */

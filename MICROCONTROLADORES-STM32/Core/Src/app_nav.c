@@ -626,15 +626,8 @@ bool App_Nav_EvaluatePerception(const AppNavInput *input,
 /* -------------------------------------------------------------------------- */
 
 bool App_Nav_RecommendAction(const AppNavPerception *perception,
-                              uint32_t random_value,
                               AppNavRecommendedAction *action_out)
 {
-    uint8_t available_options = APP_NAV_OPTION_BACK_MASK;
-    uint8_t valid_options[3] = {0U, 0U, 0U};
-    uint8_t valid_count = 0U;
-    uint8_t choice;
-    AppNavRecommendedAction action = APP_NAV_ACTION_NONE;
-
     if ((perception == NULL) || (action_out == NULL))
     {
         return false;
@@ -642,60 +635,31 @@ bool App_Nav_RecommendAction(const AppNavPerception *perception,
 
     if (perception->wall_front == 0U)
     {
-        available_options |= APP_NAV_OPTION_FRONT_MASK;
-        valid_options[valid_count] = APP_NAV_DECISION_FRONT;
-        valid_count++;
+        if ((perception->wall_left != 0U) || (perception->wall_right != 0U))
+        {
+            *action_out = APP_NAV_ACTION_GO_FRONT_NAVIGATING;
+        }
+        else
+        {
+            *action_out = APP_NAV_ACTION_GO_FRONT_STRAIGHT;
+        }
+
+        return true;
     }
 
     if (perception->wall_right == 0U)
     {
-        available_options |= APP_NAV_OPTION_RIGHT_MASK;
-        valid_options[valid_count] = APP_NAV_DECISION_RIGHT;
-        valid_count++;
+        *action_out = APP_NAV_ACTION_SMOOTH_RIGHT;
+        return true;
     }
 
     if (perception->wall_left == 0U)
     {
-        available_options |= APP_NAV_OPTION_LEFT_MASK;
-        valid_options[valid_count] = APP_NAV_DECISION_LEFT;
-        valid_count++;
+        *action_out = APP_NAV_ACTION_SMOOTH_LEFT;
+        return true;
     }
 
-    if (available_options == APP_NAV_OPTION_BACK_MASK)
-    {
-        action = APP_NAV_ACTION_GO_BACK;
-    }
-    else if (valid_count == 0U)
-    {
-        *action_out = APP_NAV_ACTION_NONE;
-        return false;
-    }
-    else
-    {
-        choice = valid_options[random_value % valid_count];
-
-        if (choice == APP_NAV_DECISION_LEFT)
-        {
-            action = APP_NAV_ACTION_SMOOTH_LEFT;
-        }
-        else if (choice == APP_NAV_DECISION_RIGHT)
-        {
-            action = APP_NAV_ACTION_SMOOTH_RIGHT;
-        }
-        else
-        {
-            if ((perception->wall_left != 0U) || (perception->wall_right != 0U))
-            {
-                action = APP_NAV_ACTION_GO_FRONT_NAVIGATING;
-            }
-            else
-            {
-                action = APP_NAV_ACTION_GO_FRONT_STRAIGHT;
-            }
-        }
-    }
-
-    *action_out = action;
+    *action_out = APP_NAV_ACTION_GO_BACK;
     return true;
 }
 

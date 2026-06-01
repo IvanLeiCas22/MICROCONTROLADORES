@@ -798,9 +798,15 @@ derecha
 izquierda
 ```
 
-En ese caso `app_find_cells_policy` no reporta `BACKTRACK_REQUIRED`, sino que deja caer al fallback local.
+En ese caso `app_find_cells_policy` no reporta `BACKTRACK_REQUIRED`, sino que deja caer al fallback local determinístico.
 
-El fallback local (`App_Nav_RecommendAction`) devuelve:
+El fallback local (`App_Nav_RecommendAction`) aplica la prioridad:
+
+```text
+frente -> derecha -> izquierda -> atrás
+```
+
+Si no hay salida abierta en frente/derecha/izquierda, devuelve:
 
 ```text
 APP_NAV_ACTION_GO_BACK
@@ -1453,7 +1459,15 @@ front open       -> CenterByFrontTapeForPivot
 
 ### 6. Dead-end vs backtracking
 
-Un dead-end puro no se reporta como `BACKTRACK_REQUIRED`. Se deja al fallback local para que use:
+Un dead-end puro no se reporta como `BACKTRACK_REQUIRED`. Se deja al fallback local determinístico.
+
+Prioridad del fallback:
+
+```text
+frente -> derecha -> izquierda -> atrás
+```
+
+En dead-end, esa prioridad termina en:
 
 ```text
 APP_NAV_ACTION_GO_BACK

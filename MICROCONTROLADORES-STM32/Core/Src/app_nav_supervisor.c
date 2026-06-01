@@ -511,7 +511,7 @@ static AppNavSupervisorState App_NavSupervisor_HandleFindCellsDecide(const AppNa
      * Production FIND_CELLS policy:
      * - execute concrete actions returned by app_find_cells_policy;
      * - if exploration has no remaining frontier, finish the mission as
-     *   incomplete instead of falling back to the old local policy;
+     *   incomplete instead of falling back to the local fallback policy;
      * - if the route to a frontier requires an initial backward step, start a
      *   180° route-backtracking preparation. The preparation method is selected
      *   from the current front edge: front-wall approach if a front wall is known,
@@ -534,7 +534,7 @@ static AppNavSupervisorState App_NavSupervisor_HandleFindCellsDecide(const AppNa
     }
     else
     {
-        if (!App_Nav_RecommendAction(perception, 0U, &recommended_action))
+        if (!App_Nav_RecommendAction(perception, &recommended_action))
         {
             return App_NavSupervisor_SetError(APP_NAV_SUPERVISOR_RESULT_UNSUPPORTED_ACTION);
         }
