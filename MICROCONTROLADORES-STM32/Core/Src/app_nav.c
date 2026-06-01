@@ -427,41 +427,36 @@ static bool App_Nav_GetPivotActionTargets(AppNavPivotActionType action,
     }
 }
 
-static uint8_t App_Nav_BoolToU8(bool value)
-{
-    return value ? 1U : 0U;
-}
-
-static bool App_Nav_DetectLowWithHysteresis(uint16_t value,
-                                            uint16_t threshold,
-                                            uint16_t hysteresis,
-                                            uint8_t was_detected)
+static uint8_t App_Nav_DetectLowWithHysteresis(uint16_t value,
+                                               uint16_t threshold,
+                                               uint16_t hysteresis,
+                                               uint8_t was_detected)
 {
     uint32_t release_threshold = (uint32_t)threshold + (uint32_t)hysteresis;
 
     if (was_detected != 0U)
     {
-        return ((uint32_t)value < release_threshold);
+        return ((uint32_t)value < release_threshold) ? 1U : 0U;
     }
 
-    return (value < threshold);
+    return (value < threshold) ? 1U : 0U;
 }
 
-static bool App_Nav_DetectFrontWallWithHysteresis(uint16_t left_value,
-                                                  uint16_t right_value,
-                                                  uint16_t threshold,
-                                                  uint16_t hysteresis,
-                                                  uint8_t was_detected)
+static uint8_t App_Nav_DetectFrontWallWithHysteresis(uint16_t left_value,
+                                                     uint16_t right_value,
+                                                     uint16_t threshold,
+                                                     uint16_t hysteresis,
+                                                     uint8_t was_detected)
 {
     uint32_t release_threshold = (uint32_t)threshold + (uint32_t)hysteresis;
 
     if (was_detected != 0U)
     {
         return (((uint32_t)left_value < release_threshold) &&
-                ((uint32_t)right_value < release_threshold));
+                ((uint32_t)right_value < release_threshold)) ? 1U : 0U;
     }
 
-    return ((left_value < threshold) && (right_value < threshold));
+    return ((left_value < threshold) && (right_value < threshold)) ? 1U : 0U;
 }
 
 static bool App_Nav_UpdatePerception(const AppNavInput *input)
@@ -477,48 +472,41 @@ static bool App_Nav_UpdatePerception(const AppNavInput *input)
     floor_front_adc = input->adc_filtered[APP_NAV_ADC_FLOOR_FRONT_CH];
     floor_rear_adc = input->adc_filtered[APP_NAV_ADC_FLOOR_REAR_CH];
 
-    app_nav_perception.wall_front = App_Nav_BoolToU8(
-        App_Nav_DetectFrontWallWithHysteresis(input->dist_front_left_mm,
-                                              input->dist_front_right_mm,
-                                              app_nav_config.wall_threshold_mm_front,
-                                              app_nav_config.wall_hysteresis_mm,
-                                              app_nav_perception.wall_front));
+    app_nav_perception.wall_front = App_Nav_DetectFrontWallWithHysteresis(input->dist_front_left_mm,
+                                              	  	  	  	  	  	  	  input->dist_front_right_mm,
+																		  app_nav_config.wall_threshold_mm_front,
+																		  app_nav_config.wall_hysteresis_mm,
+																		  app_nav_perception.wall_front);
 
-    app_nav_perception.wall_left = App_Nav_BoolToU8(
-        App_Nav_DetectLowWithHysteresis(input->dist_left_lat_mm,
-                                        app_nav_config.wall_threshold_mm_side,
-                                        app_nav_config.wall_hysteresis_mm,
-                                        app_nav_perception.wall_left));
+    app_nav_perception.wall_left = App_Nav_DetectLowWithHysteresis(input->dist_left_lat_mm,
+                                        							app_nav_config.wall_threshold_mm_side,
+																	app_nav_config.wall_hysteresis_mm,
+																	app_nav_perception.wall_left);
 
-    app_nav_perception.wall_right = App_Nav_BoolToU8(
-        App_Nav_DetectLowWithHysteresis(input->dist_right_lat_mm,
-                                        app_nav_config.wall_threshold_mm_side,
-                                        app_nav_config.wall_hysteresis_mm,
-                                        app_nav_perception.wall_right));
+    app_nav_perception.wall_right = App_Nav_DetectLowWithHysteresis(input->dist_right_lat_mm,
+                                        							app_nav_config.wall_threshold_mm_side,
+																	app_nav_config.wall_hysteresis_mm,
+																	app_nav_perception.wall_right);
 
-    app_nav_perception.wall_diag_left = App_Nav_BoolToU8(
-        App_Nav_DetectLowWithHysteresis(input->dist_diagonal_left_mm,
-                                        app_nav_config.wall_threshold_mm_diagonal,
-                                        app_nav_config.wall_hysteresis_mm,
-                                        app_nav_perception.wall_diag_left));
+    app_nav_perception.wall_diag_left = App_Nav_DetectLowWithHysteresis(input->dist_diagonal_left_mm,
+                                        								app_nav_config.wall_threshold_mm_diagonal,
+																		app_nav_config.wall_hysteresis_mm,
+																		app_nav_perception.wall_diag_left);
 
-    app_nav_perception.wall_diag_right = App_Nav_BoolToU8(
-        App_Nav_DetectLowWithHysteresis(input->dist_diagonal_right_mm,
-                                        app_nav_config.wall_threshold_mm_diagonal,
-                                        app_nav_config.wall_hysteresis_mm,
-                                        app_nav_perception.wall_diag_right));
+    app_nav_perception.wall_diag_right = App_Nav_DetectLowWithHysteresis(input->dist_diagonal_right_mm,
+                                        								app_nav_config.wall_threshold_mm_diagonal,
+																		app_nav_config.wall_hysteresis_mm,
+																		app_nav_perception.wall_diag_right);
 
-    app_nav_perception.floor_front_black = App_Nav_BoolToU8(
-        App_Nav_DetectLowWithHysteresis(floor_front_adc,
-                                        app_nav_config.tape_detection_threshold_adc,
-                                        app_nav_config.tape_hysteresis_adc,
-                                        app_nav_perception.floor_front_black));
+    app_nav_perception.floor_front_black = App_Nav_DetectLowWithHysteresis(floor_front_adc,
+                                        									app_nav_config.tape_detection_threshold_adc,
+																			app_nav_config.tape_hysteresis_adc,
+																			app_nav_perception.floor_front_black);
 
-    app_nav_perception.floor_rear_black = App_Nav_BoolToU8(
-        App_Nav_DetectLowWithHysteresis(floor_rear_adc,
-                                        app_nav_config.tape_detection_threshold_adc,
-                                        app_nav_config.tape_hysteresis_adc,
-                                        app_nav_perception.floor_rear_black));
+    app_nav_perception.floor_rear_black = App_Nav_DetectLowWithHysteresis(floor_rear_adc,
+                                        									app_nav_config.tape_detection_threshold_adc,
+																			app_nav_config.tape_hysteresis_adc,
+																			app_nav_perception.floor_rear_black);
 
     return true;
 }
