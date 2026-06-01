@@ -6,12 +6,6 @@
 
 #define APP_NAV_ADC_CHANNEL_COUNT 8U
 
-typedef enum
-{
-    APP_NAV_SMOOTH_TURN_LEFT = 0,
-    APP_NAV_SMOOTH_TURN_RIGHT = 1
-} AppNavSmoothTurnDirection;
-
 /*
  * Smooth action lifecycle:
  *

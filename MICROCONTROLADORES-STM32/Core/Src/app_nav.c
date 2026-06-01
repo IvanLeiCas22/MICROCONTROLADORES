@@ -41,6 +41,12 @@ typedef enum
     APP_NAV_FORWARD_GUIDANCE_YAW_HOLD
 } AppNavForwardGuidanceMode;
 
+typedef enum
+{
+    APP_NAV_SMOOTH_TURN_LEFT = 0,
+    APP_NAV_SMOOTH_TURN_RIGHT = 1
+} AppNavSmoothTurnDirection;
+
 static AppNavConfig app_nav_config;
 static AppNavPerception app_nav_perception;
 static PID_Controller_t app_nav_advance_pid;
