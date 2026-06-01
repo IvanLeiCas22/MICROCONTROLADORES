@@ -29,11 +29,11 @@ app_core.c
     - arma AppNavInput;
     - evalúa percepción portable con App_Nav_EvaluatePerception(...);
     - actualiza sensor_snapshot.detection_flags desde AppNavPerception;
-    - ejecuta supervisor o primitive tests;
+    - ejecuta supervisor o adapta comandos de primitive test hacia app_nav;
     - aplica AppNavOutput a motores;
     - atiende comandos UNERBUS/HMI;
     - gestiona botón físico y OLED;
-    - no debe contener lógica de misión si puede vivir en el supervisor.
+    - no debe contener lógica de misión ni detalles internos de control si pueden vivir en módulos portables.
 
 app_nav.c
     Capa portable de percepción, controladores y primitivas:
@@ -46,9 +46,12 @@ app_nav.c
     - PivotAction;
     - ApproachFrontWallAction;
     - CenterByFrontTapeForPivotAction;
+    - runner portable de primitive tests App_NavPrimitiveTest_*;
     - helper interno común de avance guiado: wall-follow -> fallback yaw-hold.
 
 La acción conceptual frontal única es `APP_NAV_ACTION_GO_FRONT`. La decisión física entre wall-follow y yaw-hold pertenece a `AdvanceAction`, no a la policy ni al supervisor.
+
+Los controladores de bajo nivel (`StartSmoothTurn`, `ComputeSmoothTurnPwm`, `StartPivotTurn`, `ComputePivotTurnPwm`, `ComputeWallFollowPwm`, `ComputeYawHoldAdvancePwm`, etc.) son implementación privada de `app_nav.c`. No deben llamarse desde `app_core.c`, HMI, protocolo ni supervisor; las capas externas deben usar acciones completas o `App_NavPrimitiveTest_*`.
 
 app_find_cells_policy.c
     Política portable de alto nivel para FIND_CELLS:
@@ -1266,6 +1269,62 @@ No se debe usar este comando para enviar telemetría pesada como sensores IR, ya
 
 ---
 
+## Primitive tests portables
+
+El flujo vigente para pruebas manuales de primitivas es:
+
+```text
+HMI / UNERBUS CMD_PRIMITIVE_TEST
+-> app_core.c interpreta comando, seguridad y estado legacy de HMI
+-> App_NavPrimitiveTest_Start(...)
+-> cada tick: App_NavPrimitiveTest_Tick(input, perception, output)
+-> app_core.c aplica AppNavOutput a motores y publica status
+```
+
+Regla de arquitectura:
+
+```text
+app_core.c adapta HMI/protocolo/PWM.
+app_nav.c sabe cómo ejecutar una primitiva.
+```
+
+Por lo tanto `app_core.c` no debe llamar controladores internos de bajo nivel como:
+
+```text
+App_Nav_StartSmoothTurn(...)
+App_Nav_ComputeSmoothTurnPwm(...)
+App_Nav_StartPivotTurn(...)
+App_Nav_ComputePivotTurnPwm(...)
+App_Nav_StartWallFollowAdvance(...)
+App_Nav_ComputeWallFollowPwm(...)
+App_Nav_ComputeYawHoldAdvancePwm(...)
+```
+
+El runner portable actual soporta solo:
+
+```c
+APP_NAV_PRIMITIVE_TEST_SMOOTH_LEFT
+APP_NAV_PRIMITIVE_TEST_SMOOTH_RIGHT
+```
+
+y ejecuta `SmoothAction` completa con perfil:
+
+```c
+APP_NAV_REAR_TAPE_PROFILE_NORMAL_CELL
+```
+
+Esto significa que el primitive test de smooth ya no es un test aislado de yaw-rate. Ahora valida la primitiva real:
+
+```text
+TURNING
+-> POST_YAW_SEEK_REAR_TAPE
+-> DONE_REAR_TAPE / DONE_POST_YAW_REAR_TAPE / TIMEOUT / ERROR
+```
+
+Para probarlo correctamente, el robot debe estar físicamente en una condición compatible con `SmoothAction` y con el perfil normal de cinta trasera. Si en el futuro se agregan tests de `AdvanceAction`, `PivotAction`, `ApproachFrontWallAction` o `CenterByFrontTapeForPivotAction`, deben incorporarse al runner `App_NavPrimitiveTest_*`, no reexponer controladores privados en `app_nav.h`.
+
+---
+
 ## Flujo STM32 app_core
 
 `app_core.c` hace de adaptador hardware:
@@ -1275,8 +1334,8 @@ No se debe usar este comando para enviar telemetría pesada como sensores IR, ya
 2. Construye un AppNavInput desde SensorSnapshotTypeDef con mediciones: ADC, IR, yaw/yaw-rate y dt.
 3. Evalúa percepción portable una sola vez con App_Nav_EvaluatePerception(...).
 4. Actualiza sensor_snapshot.detection_flags desde AppNavPerception.
-5. Entrega el mismo par AppNavInput + AppNavPerception al supervisor o a primitive tests.
-6. Ejecuta App_NavSupervisor_Tick(&input, &perception, &output) o primitive tests.
+5. Entrega el mismo par AppNavInput + AppNavPerception al supervisor o al runner portable de primitive tests.
+6. Ejecuta App_NavSupervisor_Tick(&input, &perception, &output) o App_NavPrimitiveTest_Tick(&input, &perception, &output).
 7. Aplica AppNavOutput a motores.
 8. Expone telemetría/comandos UNERBUS.
 ```

@@ -50,10 +50,10 @@ app_core.c
     Lee sensores reales.
     Construye AppNavInput.
     Evalúa AppNavPerception una vez por tick.
-    Ejecuta supervisor o primitive tests.
+    Ejecuta supervisor o adapta primitive tests hacia App_NavPrimitiveTest_*.
     Aplica PWM a motores.
     Atiende comandos UNERBUS/HMI.
-    No debe absorber lógica de misión.
+    No debe absorber lógica de misión ni detalles internos de control.
 
 app_nav.c
     Percepción portable y primitivas físicas.
@@ -63,10 +63,12 @@ app_nav.c
         - Pivot
         - Approach front wall
         - Center by front tape
+    Contiene el runner portable App_NavPrimitiveTest_* para pruebas manuales de primitivas.
     También contiene el fallback local determinístico App_Nav_RecommendAction(),
     con prioridad frente -> derecha -> izquierda -> atrás.
     La salida frontal conceptual es única: APP_NAV_ACTION_GO_FRONT.
     AdvanceAction decide internamente entre wall-follow y yaw-hold.
+    Los controladores low-level son privados de app_nav.c.
     No decide la misión.
 
 app_nav_supervisor.c
@@ -143,7 +145,7 @@ Regla obligatoria:
 
 ```text
 App_Nav_EvaluatePerception() debe llamarse una sola vez por tick de control, desde app_core.c.
-El mismo AppNavInput + AppNavPerception debe pasarse al supervisor o primitive tests.
+El mismo AppNavInput + AppNavPerception debe pasarse al supervisor o al runner portable de primitive tests.
 Las primitivas y el supervisor no deben recalcular percepción.
 ```
 
@@ -172,7 +174,36 @@ App_Nav_SetConfig()
 
 No reintroducir `Build_AppNavConfig_From_LegacyRuntime()`, `Sync_AppNavConfig_From_LegacyRuntime()`, `pid_configs[]` ni variables duplicadas en `app_core.c` para parámetros que pertenecen a `AppNavConfig`.
 
-### 4.3 Legacy eliminado
+### 4.3 Primitive tests portables
+
+Estado vigente:
+
+```text
+HMI / CMD_PRIMITIVE_TEST
+-> app_core.c adapta protocolo, seguridad y estado HMI
+-> App_NavPrimitiveTest_Start(...)
+-> cada tick: App_NavPrimitiveTest_Tick(input, perception, output)
+-> app_core.c aplica AppNavOutput a motores y publica status
+```
+
+El runner portable actual vive en `app_nav.h/c` y soporta solo:
+
+```text
+APP_NAV_PRIMITIVE_TEST_SMOOTH_LEFT
+APP_NAV_PRIMITIVE_TEST_SMOOTH_RIGHT
+```
+
+Internamente debe ejecutar acciones completas, no controladores low-level. Para smooth usa `SmoothAction` completa con `APP_NAV_REAR_TAPE_PROFILE_NORMAL_CELL`, por lo que el test valida giro, búsqueda de cinta trasera y terminación de acción.
+
+Reglas obligatorias:
+
+```text
+app_core.c no debe llamar controladores internos como StartSmoothTurn, ComputeSmoothTurnPwm, StartPivotTurn, ComputePivotTurnPwm, WallFollow o YawHold directo.
+No reexponer controladores low-level en app_nav.h para resolver primitive tests.
+Si se agregan tests de Advance/Pivot/Approach/Center, agregarlos a App_NavPrimitiveTest_*.
+```
+
+### 4.4 Legacy eliminado
 
 No reintroducir:
 
@@ -194,11 +225,13 @@ variables runtime legacy de navegación en app_core.c
 defaults runtime de navegación en app_config.h
 parámetro random_value en App_Nav_RecommendAction()
 acciones frontales duplicadas GO_FRONT_NAVIGATING / GO_FRONT_STRAIGHT
+primitive tests que llamen controladores low-level desde app_core.c
+controladores low-level públicos en app_nav.h si solo los usa app_nav.c
 ```
 
 Si aparece una necesidad parecida, diseñarla explícitamente y justificarla. No restaurar legacy.
 
-### 4.4 Approach front wall
+### 4.5 Approach front wall
 
 Conservar:
 
