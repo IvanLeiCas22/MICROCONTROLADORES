@@ -1005,7 +1005,6 @@ AppNavSmoothActionState App_Nav_TickSmoothAction(const AppNavInput *input,
     }
 
     if ((app_nav_smooth_action_state == APP_NAV_SMOOTH_ACTION_DONE_REAR_TAPE) ||
-        (app_nav_smooth_action_state == APP_NAV_SMOOTH_ACTION_DONE_WALL) ||
         (app_nav_smooth_action_state == APP_NAV_SMOOTH_ACTION_DONE_POST_YAW_REAR_TAPE) ||
         (app_nav_smooth_action_state == APP_NAV_SMOOTH_ACTION_POST_YAW_TIMEOUT) ||
         (app_nav_smooth_action_state == APP_NAV_SMOOTH_ACTION_ERROR))

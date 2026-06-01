@@ -26,23 +26,16 @@ typedef enum
  * - DONE_REAR_TAPE / DONE_POST_YAW_REAR_TAPE:
  *   Terminal states that confirm cell entry. The supervisor may update both
  *   logical heading and logical cell position.
- *
- * - DONE_WALL:
- *   Legacy terminal state. Normal smooth diagonal/wall detection should no
- *   longer generate this state; it should enter POST_YAW_SEEK_REAR_TAPE
- *   instead. If this state reaches the supervisor, it is treated defensively
- *   as a primitive error to avoid map desynchronization.
  */
 typedef enum
 {
     APP_NAV_SMOOTH_ACTION_IDLE = 0,
-    APP_NAV_SMOOTH_ACTION_TURNING,
-    APP_NAV_SMOOTH_ACTION_POST_YAW_SEEK_REAR_TAPE,
-    APP_NAV_SMOOTH_ACTION_DONE_REAR_TAPE,
-    APP_NAV_SMOOTH_ACTION_DONE_WALL,
-    APP_NAV_SMOOTH_ACTION_DONE_POST_YAW_REAR_TAPE,
-    APP_NAV_SMOOTH_ACTION_POST_YAW_TIMEOUT,
-    APP_NAV_SMOOTH_ACTION_ERROR
+    APP_NAV_SMOOTH_ACTION_TURNING = 1,
+    APP_NAV_SMOOTH_ACTION_POST_YAW_SEEK_REAR_TAPE = 2,
+    APP_NAV_SMOOTH_ACTION_DONE_REAR_TAPE = 3,
+    APP_NAV_SMOOTH_ACTION_DONE_POST_YAW_REAR_TAPE = 5,
+    APP_NAV_SMOOTH_ACTION_POST_YAW_TIMEOUT = 6,
+    APP_NAV_SMOOTH_ACTION_ERROR = 7
 } AppNavSmoothActionState;
 
 typedef enum
