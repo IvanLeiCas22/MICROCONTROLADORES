@@ -732,7 +732,7 @@ bool App_Nav_StartWallFollowAdvance(void)
     App_Nav_ClearPivotActionState();
 
     PID_Reset(&app_nav_advance_pid);
-    PID_Set_Setpoint(&app_nav_advance_pid, 0);
+    PID_Set_Setpoint_Fixed(&app_nav_advance_pid, 0);
 
     return true;
 }
@@ -1226,7 +1226,7 @@ bool App_Nav_ComputeWallFollowPwm(const AppNavInput *input,
         return false;
     }
 
-    PID_Set_Setpoint(&app_nav_advance_pid, 0);
+    PID_Set_Setpoint_Fixed(&app_nav_advance_pid, 0);
     pid_output_fixed = PID_Update(&app_nav_advance_pid, measured_diff, input->dt_ms);
     correction = App_Nav_LimitCorrectionToMotorBases(FIXED_TO_INT(pid_output_fixed),
                                                      right_base_pwm,

@@ -9,6 +9,16 @@
 #define FIXED_POINT_SHIFT 16
 
 // Macros para conversiones y operaciones en punto fijo.
+/*
+ * Portability note:
+ * INT_TO_FIXED() is intentionally left unchanged because the current STM32/GCC
+ * build and simulator behavior have been validated with this representation.
+ * However, shifting negative signed integers is not guaranteed by the C standard.
+ * Some current call sites pass signed control values such as yaw-rate or wall
+ * error through PID_Set_Setpoint()/PID_Update(), which internally use this macro.
+ * If the toolchain, optimization model or fixed-point layer changes, revisit this
+ * macro and consider replacing it with a signed-safe conversion.
+ */
 #define INT_TO_FIXED(x) ((int32_t)((x) << FIXED_POINT_SHIFT))
 #define FIXED_TO_INT(x) ((int32_t)((x) >> FIXED_POINT_SHIFT))
 #define HUNDREDTHS_TO_FIXED(x100) ((int32_t)(((int64_t)(x100) << FIXED_POINT_SHIFT) / 100))
