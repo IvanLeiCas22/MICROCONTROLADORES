@@ -1297,16 +1297,6 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
         UNERBUS_Write(aBus, status_buffer, UNERBUS_ROBOT_STATUS_SIZE);
         length = UNERBUS_CMD_ID_SIZE + UNERBUS_ROBOT_STATUS_SIZE;
         break;
-    case CMD_SET_CRUISE_PARAMS:
-        (void)UNERBUS_GetUInt16(aBus);
-        (void)UNERBUS_GetUInt16(aBus);
-        (void)UNERBUS_GetUInt16(aBus);
-        break;
-    case CMD_GET_CRUISE_PARAMS:
-        uint8_t cruise_buffer[UNERBUS_CRUISE_PARAMS_SIZE] = {0};
-        UNERBUS_Write(aBus, cruise_buffer, UNERBUS_CRUISE_PARAMS_SIZE);
-        length = UNERBUS_CMD_ID_SIZE + UNERBUS_CRUISE_PARAMS_SIZE;
-        break;
     case CMD_GET_YAW_ANGLE:
         uint8_t yaw_buffer[UNERBUS_YAW_ANGLE_SIZE];
         int32_t yaw_angle = FIXED_TO_INT(current_yaw_fixed);

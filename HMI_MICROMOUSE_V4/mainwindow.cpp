@@ -544,10 +544,6 @@ void MainWindow::onPacketReceived(quint8 command, const QByteArray &payload) {
     updateRobotStatusUI(payload);
     break;
   }
-  case Unerbus::CommandId::CMD_GET_CRUISE_PARAMS: {
-    updateCruiseParamsUI(payload);
-    break;
-  }
   case Unerbus::CommandId::CMD_GET_APPROACH_FRONT_WALL_TARGET: {
     updateApproachFrontWallTargetUI(payload);
     break;
@@ -1914,49 +1910,6 @@ void MainWindow::updateRobotStatusUI(const QByteArray &payload) {
 
   ui->comboRobotAppState->blockSignals(false);
   ui->comboRobotMode->blockSignals(false);
-}
-
-/**
- * @brief Solicita los parámetros de control de crucero al robot.
- */
-void MainWindow::on_btnGetCruiseParams_clicked() {
-  sendUnerbusCommand(Unerbus::CommandId::CMD_GET_CRUISE_PARAMS);
-}
-
-/**
- * @brief Envía los parámetros de control de crucero configurados en la UI.
- */
-void MainWindow::on_btnSetCruiseParams_clicked() {
-  QByteArray payload;
-  QDataStream stream(&payload, QIODevice::WriteOnly);
-  stream.setByteOrder(QDataStream::LittleEndian);
-
-  stream << static_cast<quint16>(ui->editCruiseSpeed->text().toUShort());
-  stream << static_cast<quint16>(ui->editAccelThreshold->text().toUShort());
-  stream << static_cast<quint16>(
-      ui->editConfirmTicks->text()
-          .toUShort()); // Se envía como quint16 por alineación
-
-  sendUnerbusCommand(Unerbus::CommandId::CMD_SET_CRUISE_PARAMS, payload);
-}
-
-/**
- * @brief Actualiza la UI con los parámetros de control de crucero recibidos.
- * @param payload El payload del paquete CMD_GET_CRUISE_PARAMS.
- */
-void MainWindow::updateCruiseParamsUI(const QByteArray &payload) {
-  if (payload.size() < 6) // 3 valores * 2 bytes/valor
-    return;
-
-  QDataStream stream(payload);
-  stream.setByteOrder(QDataStream::LittleEndian);
-
-  quint16 cruise_speed, accel_threshold, confirm_ticks;
-  stream >> cruise_speed >> accel_threshold >> confirm_ticks;
-
-  ui->editCruiseSpeed->setText(QString::number(cruise_speed));
-  ui->editAccelThreshold->setText(QString::number(accel_threshold));
-  ui->editConfirmTicks->setText(QString::number(confirm_ticks));
 }
 
 /**

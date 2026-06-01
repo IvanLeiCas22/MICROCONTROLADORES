@@ -56,8 +56,6 @@ namespace Unerbus
         CMD_SET_MENU_MODE = 0x72,     // Para seleccionar un modo de operación
         CMD_GET_MENU_MODE = 0x73,     // Para leer el modo de operación actual
         CMD_GET_ROBOT_STATUS = 0x74,  // Para leer el estado completo (AppState y MenuMode)
-        CMD_SET_CRUISE_PARAMS = 0x4E, // Configurar velocidad crucero y umbral de aceleración
-        CMD_GET_CRUISE_PARAMS = 0x4F, // Leer velocidad crucero y umbral de aceleración
         CMD_GET_YAW_ANGLE = 0x75,         // Para leer el ángulo de guiñada actual
         CMD_GET_SMOOTH_TURN_CONFIG = 0x80, // Para leer la configuración de giro suave
         CMD_SET_SMOOTH_TURN_CONFIG = 0x81, // Para configurar el giro suave

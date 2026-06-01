@@ -91,8 +91,6 @@ private slots:
   void on_btnSetMpuConfig_clicked();
   void on_btnGetRobotStatus_clicked();
   void on_btnSetRobotStatus_clicked();
-  void on_btnGetCruiseParams_clicked();
-  void on_btnSetCruiseParams_clicked();
   void on_btnGetApproachFrontWallTarget_clicked();
   void on_btnSetApproachFrontWallTarget_clicked();
 
@@ -230,7 +228,6 @@ private slots:
   void setupActivitiesTab();
   void populateRobotStatusComboBoxes();
   void updateRobotStatusUI(const QByteArray &payload);
-  void updateCruiseParamsUI(const QByteArray &payload);
   void updateApproachFrontWallTargetUI(const QByteArray &payload);
   void updateYawAngleUI(const QByteArray &payload);
   void updateSmoothTurnSpeedsUI(const QByteArray &payload);

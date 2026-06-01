@@ -110,8 +110,6 @@ typedef enum
     CMD_SET_MENU_MODE = 0x72,       // Para seleccionar un modo de operación
     CMD_GET_MENU_MODE = 0x73,       // Para leer el modo de operación actual
     CMD_GET_ROBOT_STATUS = 0x74,    // Para leer el estado completo (AppState y MenuMode)
-    CMD_SET_CRUISE_PARAMS = 0x4E,   // Configurar velocidad crucero y umbral de aceleración
-    CMD_GET_CRUISE_PARAMS = 0x4F,   // Leer velocidad crucero y umbral de aceleración
     CMD_GET_YAW_ANGLE = 0x75,               // Para leer el ángulo de guiñada actual
     CMD_GET_SMOOTH_TURN_CONFIG = 0x80,      // Para leer la configuración de giro suave
     CMD_SET_SMOOTH_TURN_CONFIG = 0x81,      // Para configurar el giro suave
@@ -227,7 +225,6 @@ extern uint16_t pwm_max_value;
 #define UNERBUS_APP_STATE_SIZE (sizeof(uint8_t))
 #define UNERBUS_MENU_MODE_SIZE (sizeof(uint8_t))
 #define UNERBUS_ROBOT_STATUS_SIZE (sizeof(uint8_t) * 2)
-#define UNERBUS_CRUISE_PARAMS_SIZE (sizeof(uint16_t) * 3) // cruise_speed, accel_threshold, confirm_ticks
 #define UNERBUS_YAW_ANGLE_SIZE (sizeof(int32_t)) // Yaw angle como int32_t
 #define UNERBUS_SMOOTH_TURN_CONFIG_SIZE (sizeof(uint16_t) * 2)
 #define UNERBUS_TURN_VELOCITY_PID_GAINS_SIZE (sizeof(uint16_t) * 3)
