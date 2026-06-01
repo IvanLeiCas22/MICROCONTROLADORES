@@ -62,11 +62,6 @@ bool App_Nav_RecommendAction(const AppNavPerception *perception,
 /* Reusable low-level drive controllers                                         */
 /* -------------------------------------------------------------------------- */
 
-bool App_Nav_StartStraightDriveYawHold(int32_t yaw_target_q16_deg);
-bool App_Nav_ComputeStraightDrivePwm(const AppNavInput *input,
-                                     AppNavOutput *output);
-
-bool App_Nav_StartYawHoldAdvance(int32_t yaw_target_q16_deg);
 bool App_Nav_ComputeYawHoldAdvancePwm(const AppNavInput *input,
                                       uint16_t right_base_pwm,
                                       uint16_t left_base_pwm,

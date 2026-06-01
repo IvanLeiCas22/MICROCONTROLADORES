@@ -669,16 +669,6 @@ static bool App_Nav_StartYawHoldAdvanceInternal(int32_t yaw_target_q16_deg,
 /* Reusable low-level drive controllers                                         */
 /* -------------------------------------------------------------------------- */
 
-bool App_Nav_StartStraightDriveYawHold(int32_t yaw_target_q16_deg)
-{
-    return App_Nav_StartYawHoldAdvanceInternal(yaw_target_q16_deg, 1U);
-}
-
-bool App_Nav_StartYawHoldAdvance(int32_t yaw_target_q16_deg)
-{
-    return App_Nav_StartYawHoldAdvanceInternal(yaw_target_q16_deg, 1U);
-}
-
 bool App_Nav_ComputeYawHoldAdvancePwm(const AppNavInput *input,
                                       uint16_t right_base_pwm,
                                       uint16_t left_base_pwm,
@@ -728,43 +718,6 @@ bool App_Nav_ComputeYawHoldAdvancePwm(const AppNavInput *input,
     return true;
 }
 
-bool App_Nav_ComputeStraightDrivePwm(const AppNavInput *input,
-                                     AppNavOutput *output)
-{
-    int32_t pid_output_fixed;
-    int32_t correction;
-    int32_t right_pwm;
-    int32_t left_pwm;
-
-    App_Nav_ClearOutput(output);
-
-    if ((input == NULL) || (output == NULL))
-    {
-        return false;
-    }
-
-    if (app_nav_straight_active == 0U)
-    {
-        return false;
-    }
-
-    PID_Set_Setpoint(&app_nav_advance_pid,
-                     FIXED_TO_INT(app_nav_straight_yaw_target_q16_deg));
-    pid_output_fixed = PID_Update(&app_nav_advance_pid,
-                                  FIXED_TO_INT(input->yaw_q16_deg),
-                                  input->dt_ms);
-    correction = App_Nav_LimitCorrectionToMotorBases(FIXED_TO_INT(pid_output_fixed),
-                                                     app_nav_config.right_motor_base_speed,
-                                                     app_nav_config.left_motor_base_speed);
-
-    right_pwm = (int32_t)app_nav_config.right_motor_base_speed - correction;
-    left_pwm = (int32_t)app_nav_config.left_motor_base_speed + correction;
-
-    output->right_motor_pwm = (int16_t)right_pwm;
-    output->left_motor_pwm = (int16_t)left_pwm;
-
-    return true;
-}
 
 bool App_Nav_StartWallFollowAdvance(void)
 {
