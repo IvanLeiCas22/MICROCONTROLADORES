@@ -635,15 +635,7 @@ bool App_Nav_RecommendAction(const AppNavPerception *perception,
 
     if (perception->wall_front == 0U)
     {
-        if ((perception->wall_left != 0U) || (perception->wall_right != 0U))
-        {
-            *action_out = APP_NAV_ACTION_GO_FRONT_NAVIGATING;
-        }
-        else
-        {
-            *action_out = APP_NAV_ACTION_GO_FRONT_STRAIGHT;
-        }
-
+        *action_out = APP_NAV_ACTION_GO_FRONT;
         return true;
     }
 

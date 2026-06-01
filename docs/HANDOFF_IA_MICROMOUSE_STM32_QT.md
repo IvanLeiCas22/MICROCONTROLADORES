@@ -65,6 +65,8 @@ app_nav.c
         - Center by front tape
     También contiene el fallback local determinístico App_Nav_RecommendAction(),
     con prioridad frente -> derecha -> izquierda -> atrás.
+    La salida frontal conceptual es única: APP_NAV_ACTION_GO_FRONT.
+    AdvanceAction decide internamente entre wall-follow y yaw-hold.
     No decide la misión.
 
 app_nav_supervisor.c
@@ -191,6 +193,7 @@ pid_configs[]
 variables runtime legacy de navegación en app_core.c
 defaults runtime de navegación en app_config.h
 parámetro random_value en App_Nav_RecommendAction()
+acciones frontales duplicadas GO_FRONT_NAVIGATING / GO_FRONT_STRAIGHT
 ```
 
 Si aparece una necesidad parecida, diseñarla explícitamente y justificarla. No restaurar legacy.

@@ -8,7 +8,7 @@
 
 static const AppNavRecommendedAction app_go_to_b_relative_actions[APP_MAZE_REL_COUNT] =
 {
-    APP_NAV_ACTION_GO_FRONT_NAVIGATING,
+    APP_NAV_ACTION_GO_FRONT,
     APP_NAV_ACTION_SMOOTH_RIGHT,
     APP_NAV_ACTION_SMOOTH_LEFT,
     APP_NAV_ACTION_NONE

@@ -471,8 +471,7 @@ static bool App_NavSupervisor_StartRecommendedAction(AppNavRecommendedAction act
 {
     switch (action)
     {
-    case APP_NAV_ACTION_GO_FRONT_NAVIGATING:
-    case APP_NAV_ACTION_GO_FRONT_STRAIGHT:
+    case APP_NAV_ACTION_GO_FRONT:
         return App_NavSupervisor_StartAdvance(input);
 
     case APP_NAV_ACTION_SMOOTH_LEFT:

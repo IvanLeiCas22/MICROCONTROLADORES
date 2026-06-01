@@ -48,6 +48,8 @@ app_nav.c
     - CenterByFrontTapeForPivotAction;
     - helper interno común de avance guiado: wall-follow -> fallback yaw-hold.
 
+La acción conceptual frontal única es `APP_NAV_ACTION_GO_FRONT`. La decisión física entre wall-follow y yaw-hold pertenece a `AdvanceAction`, no a la policy ni al supervisor.
+
 app_find_cells_policy.c
     Política portable de alto nivel para FIND_CELLS:
     - decide próxima acción conceptual de exploración;
@@ -806,6 +808,14 @@ El fallback local (`App_Nav_RecommendAction`) aplica la prioridad:
 frente -> derecha -> izquierda -> atrás
 ```
 
+La salida frontal se expresa siempre como:
+
+```text
+APP_NAV_ACTION_GO_FRONT
+```
+
+`APP_NAV_ACTION_GO_FRONT` solo significa salir por el frente. La primitiva `AdvanceAction` decide internamente si puede usar wall-follow o si debe caer a yaw-hold.
+
 Si no hay salida abierta en frente/derecha/izquierda, devuelve:
 
 ```text
@@ -1466,6 +1476,14 @@ Prioridad del fallback:
 ```text
 frente -> derecha -> izquierda -> atrás
 ```
+
+La acción frontal conceptual es única:
+
+```text
+APP_NAV_ACTION_GO_FRONT
+```
+
+El modo físico del avance lo resuelve `AdvanceAction` internamente.
 
 En dead-end, esa prioridad termina en:
 
