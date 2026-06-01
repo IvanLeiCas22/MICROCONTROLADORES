@@ -660,7 +660,7 @@ static bool App_Nav_StartYawHoldAdvanceInternal(int32_t yaw_target_q16_deg,
     App_Nav_ClearPivotActionState();
 
     PID_Reset(&app_nav_advance_pid);
-    PID_Set_Setpoint(&app_nav_advance_pid, FIXED_TO_INT(yaw_target_q16_deg));
+    PID_Set_Setpoint_Fixed(&app_nav_advance_pid, yaw_target_q16_deg);
 
     return true;
 }
@@ -692,11 +692,11 @@ bool App_Nav_ComputeYawHoldAdvancePwm(const AppNavInput *input,
         return false;
     }
 
-    PID_Set_Setpoint(&app_nav_advance_pid,
-                     FIXED_TO_INT(app_nav_straight_yaw_target_q16_deg));
-    pid_output_fixed = PID_Update(&app_nav_advance_pid,
-                                  FIXED_TO_INT(input->yaw_q16_deg),
-                                  input->dt_ms);
+    PID_Set_Setpoint_Fixed(&app_nav_advance_pid,
+                           app_nav_straight_yaw_target_q16_deg);
+    pid_output_fixed = PID_Update_Fixed(&app_nav_advance_pid,
+                                        input->yaw_q16_deg,
+                                        input->dt_ms);
     correction = FIXED_TO_INT(pid_output_fixed);
     correction_limit = (right_base_pwm < left_base_pwm) ? (int32_t)right_base_pwm : (int32_t)left_base_pwm;
 
