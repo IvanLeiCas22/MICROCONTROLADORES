@@ -83,6 +83,45 @@ bool App_Nav_ComputePivotTurnPwm(const AppNavInput *input,
                                  int16_t target_dps,
                                  AppNavOutput *output);
 
+
+/* -------------------------------------------------------------------------- */
+/* Portable primitive-test runner                                              */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * Lightweight portable runner for manual primitive tests.
+ *
+ * The runner is intentionally independent from HMI/UNERBUS/app_core. It
+ * executes complete primitive actions, not low-level controllers, so manual
+ * tests exercise the same action layer used by the supervisor.
+ *
+ * Current first stage supports only smooth-left/right tests. Additional
+ * primitives can be added here without exposing low-level controller APIs.
+ */
+typedef enum
+{
+    APP_NAV_PRIMITIVE_TEST_NONE = 0,
+    APP_NAV_PRIMITIVE_TEST_SMOOTH_LEFT,
+    APP_NAV_PRIMITIVE_TEST_SMOOTH_RIGHT
+} AppNavPrimitiveTestType;
+
+typedef enum
+{
+    APP_NAV_PRIMITIVE_TEST_IDLE = 0,
+    APP_NAV_PRIMITIVE_TEST_RUNNING,
+    APP_NAV_PRIMITIVE_TEST_DONE,
+    APP_NAV_PRIMITIVE_TEST_TIMEOUT,
+    APP_NAV_PRIMITIVE_TEST_ERROR,
+    APP_NAV_PRIMITIVE_TEST_REJECTED
+} AppNavPrimitiveTestState;
+
+bool App_NavPrimitiveTest_Start(AppNavPrimitiveTestType type);
+AppNavPrimitiveTestState App_NavPrimitiveTest_Tick(const AppNavInput *input,
+                                                   const AppNavPerception *perception,
+                                                   AppNavOutput *output);
+void App_NavPrimitiveTest_Stop(void);
+AppNavPrimitiveTestState App_NavPrimitiveTest_GetState(void);
+
 /* -------------------------------------------------------------------------- */
 /* Complete primitive actions used by app_nav_supervisor                        */
 /* -------------------------------------------------------------------------- */

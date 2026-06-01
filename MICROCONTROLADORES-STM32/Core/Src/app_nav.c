@@ -80,6 +80,9 @@ static uint8_t app_nav_smooth_turn_active;
 static uint8_t app_nav_smooth_action_active;
 static uint8_t app_nav_smooth_was_rear_tape_detected;
 static uint8_t app_nav_pivot_turn_active;
+static AppNavPrimitiveTestType app_nav_primitive_test_type;
+static AppNavPrimitiveTestState app_nav_primitive_test_state;
+static uint8_t app_nav_primitive_test_action_started;
 
 static bool App_Nav_StartYawHoldAdvanceInternal(int32_t yaw_target_q16_deg,
                                                 uint8_t clear_smooth_action);
@@ -295,6 +298,13 @@ static void App_Nav_ClearSmoothActionState(void)
     app_nav_smooth_action_active = 0U;
     app_nav_smooth_was_rear_tape_detected = 0U;
     app_nav_smooth_post_yaw_ticks = 0U;
+}
+
+static void App_Nav_ClearPrimitiveTestState(void)
+{
+    app_nav_primitive_test_type = APP_NAV_PRIMITIVE_TEST_NONE;
+    app_nav_primitive_test_state = APP_NAV_PRIMITIVE_TEST_IDLE;
+    app_nav_primitive_test_action_started = 0U;
 }
 
 static void App_Nav_SetSmoothActionTerminal(AppNavSmoothActionState terminal_state)
@@ -544,6 +554,7 @@ void App_Nav_Init(const AppNavConfig *config)
     App_Nav_ClearCenterFrontTapeActionState();
     App_Nav_ClearSmoothActionState();
     App_Nav_ClearPivotActionState();
+    App_Nav_ClearPrimitiveTestState();
     App_Nav_ApplyAdvancePidConfig(1U);
     App_Nav_ApplySmoothTurnPidConfig(1U);
     App_Nav_ApplyPivotTurnPidConfig(1U);
@@ -585,6 +596,7 @@ void App_Nav_Reset(void)
     App_Nav_ClearApproachFrontWallActionState();
     App_Nav_ClearSmoothActionState();
     App_Nav_ClearPivotActionState();
+    App_Nav_ClearPrimitiveTestState();
     PID_Reset(&app_nav_advance_pid);
     PID_Reset(&app_nav_smooth_turn_pid);
     PID_Reset(&app_nav_pivot_turn_pid);
@@ -1334,6 +1346,126 @@ void App_Nav_StopAdvanceAction(void)
     app_nav_straight_active = 0U;
     App_Nav_ClearAdvanceActionState();
     PID_Reset(&app_nav_advance_pid);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Portable primitive-test runner                                              */
+/* -------------------------------------------------------------------------- */
+
+bool App_NavPrimitiveTest_Start(AppNavPrimitiveTestType type)
+{
+    if (app_nav_primitive_test_state == APP_NAV_PRIMITIVE_TEST_RUNNING)
+    {
+        return false;
+    }
+
+    if ((type != APP_NAV_PRIMITIVE_TEST_SMOOTH_LEFT) &&
+        (type != APP_NAV_PRIMITIVE_TEST_SMOOTH_RIGHT))
+    {
+        app_nav_primitive_test_type = APP_NAV_PRIMITIVE_TEST_NONE;
+        app_nav_primitive_test_state = APP_NAV_PRIMITIVE_TEST_REJECTED;
+        app_nav_primitive_test_action_started = 0U;
+        return false;
+    }
+
+    app_nav_primitive_test_type = type;
+    app_nav_primitive_test_state = APP_NAV_PRIMITIVE_TEST_RUNNING;
+    app_nav_primitive_test_action_started = 0U;
+
+    return true;
+}
+
+AppNavPrimitiveTestState App_NavPrimitiveTest_Tick(const AppNavInput *input,
+                                                   const AppNavPerception *perception,
+                                                   AppNavOutput *output)
+{
+    AppNavSmoothActionType smooth_action;
+    AppNavSmoothActionState smooth_state;
+
+    App_Nav_ClearOutput(output);
+
+    if ((input == NULL) || (perception == NULL) || (output == NULL))
+    {
+        app_nav_primitive_test_state = APP_NAV_PRIMITIVE_TEST_ERROR;
+        app_nav_primitive_test_action_started = 0U;
+        return app_nav_primitive_test_state;
+    }
+
+    if (app_nav_primitive_test_state != APP_NAV_PRIMITIVE_TEST_RUNNING)
+    {
+        return app_nav_primitive_test_state;
+    }
+
+    if (app_nav_primitive_test_type == APP_NAV_PRIMITIVE_TEST_SMOOTH_LEFT)
+    {
+        smooth_action = APP_NAV_SMOOTH_ACTION_LEFT;
+    }
+    else if (app_nav_primitive_test_type == APP_NAV_PRIMITIVE_TEST_SMOOTH_RIGHT)
+    {
+        smooth_action = APP_NAV_SMOOTH_ACTION_RIGHT;
+    }
+    else
+    {
+        app_nav_primitive_test_state = APP_NAV_PRIMITIVE_TEST_REJECTED;
+        app_nav_primitive_test_action_started = 0U;
+        return app_nav_primitive_test_state;
+    }
+
+    if (app_nav_primitive_test_action_started == 0U)
+    {
+        if (!App_Nav_StartSmoothActionWithRearTapeProfile(
+                smooth_action,
+                APP_NAV_REAR_TAPE_PROFILE_NORMAL_CELL))
+        {
+            app_nav_primitive_test_state = APP_NAV_PRIMITIVE_TEST_ERROR;
+            app_nav_primitive_test_action_started = 0U;
+            return app_nav_primitive_test_state;
+        }
+
+        app_nav_primitive_test_action_started = 1U;
+    }
+
+    smooth_state = App_Nav_TickSmoothAction(input, perception, output);
+
+    if ((smooth_state == APP_NAV_SMOOTH_ACTION_TURNING) ||
+        (smooth_state == APP_NAV_SMOOTH_ACTION_POST_YAW_SEEK_REAR_TAPE))
+    {
+        app_nav_primitive_test_state = APP_NAV_PRIMITIVE_TEST_RUNNING;
+    }
+    else if ((smooth_state == APP_NAV_SMOOTH_ACTION_DONE_REAR_TAPE) ||
+             (smooth_state == APP_NAV_SMOOTH_ACTION_DONE_POST_YAW_REAR_TAPE))
+    {
+        app_nav_primitive_test_state = APP_NAV_PRIMITIVE_TEST_DONE;
+        app_nav_primitive_test_action_started = 0U;
+    }
+    else if (smooth_state == APP_NAV_SMOOTH_ACTION_POST_YAW_TIMEOUT)
+    {
+        app_nav_primitive_test_state = APP_NAV_PRIMITIVE_TEST_TIMEOUT;
+        app_nav_primitive_test_action_started = 0U;
+    }
+    else
+    {
+        app_nav_primitive_test_state = APP_NAV_PRIMITIVE_TEST_ERROR;
+        app_nav_primitive_test_action_started = 0U;
+    }
+
+    return app_nav_primitive_test_state;
+}
+
+void App_NavPrimitiveTest_Stop(void)
+{
+    if ((app_nav_primitive_test_type == APP_NAV_PRIMITIVE_TEST_SMOOTH_LEFT) ||
+        (app_nav_primitive_test_type == APP_NAV_PRIMITIVE_TEST_SMOOTH_RIGHT))
+    {
+        App_Nav_StopSmoothAction();
+    }
+
+    App_Nav_ClearPrimitiveTestState();
+}
+
+AppNavPrimitiveTestState App_NavPrimitiveTest_GetState(void)
+{
+    return app_nav_primitive_test_state;
 }
 
 /* -------------------------------------------------------------------------- */
