@@ -692,12 +692,12 @@ bool App_Nav_ComputeYawHoldAdvancePwm(const AppNavInput *input,
     int32_t right_pwm;
     int32_t left_pwm;
 
-    App_Nav_ClearOutput(output);
-
     if ((input == NULL) || (output == NULL))
     {
         return false;
     }
+
+    App_Nav_ClearOutput(output);
 
     if (app_nav_straight_active == 0U)
     {
@@ -789,12 +789,12 @@ bool App_Nav_ComputeSmoothTurnPwm(const AppNavInput *input,
     int16_t right_speed;
     int16_t left_speed;
 
-    App_Nav_ClearOutput(output);
-
     if ((input == NULL) || (output == NULL))
     {
         return false;
     }
+
+    App_Nav_ClearOutput(output);
 
     if (app_nav_smooth_turn_active == 0U)
     {
@@ -894,13 +894,13 @@ AppNavSmoothActionState App_Nav_TickSmoothAction(const AppNavInput *input,
     int32_t yaw_completion_threshold;
     bool yaw_target_reached;
 
-    App_Nav_ClearOutput(output);
-
     if ((input == NULL) || (perception == NULL) || (output == NULL))
     {
         app_nav_smooth_action_state = APP_NAV_SMOOTH_ACTION_ERROR;
         return app_nav_smooth_action_state;
     }
+
+    App_Nav_ClearOutput(output);
 
     if (app_nav_smooth_action_state == APP_NAV_SMOOTH_ACTION_IDLE)
     {
@@ -1035,12 +1035,12 @@ bool App_Nav_ComputePivotTurnPwm(const AppNavInput *input,
     int32_t pid_output_fixed;
     int16_t correction_pwm;
 
-    App_Nav_ClearOutput(output);
-
     if ((input == NULL) || (output == NULL))
     {
         return false;
     }
+
+    App_Nav_ClearOutput(output);
 
     if (app_nav_pivot_turn_active == 0U)
     {
@@ -1104,13 +1104,13 @@ AppNavPivotActionState App_Nav_TickPivotAction(const AppNavInput *input,
     int16_t base_target_dps;
     int16_t target_dps;
 
-    App_Nav_ClearOutput(output);
-
     if ((input == NULL) || (perception == NULL) || (output == NULL))
     {
         app_nav_pivot_action_state = APP_NAV_PIVOT_ACTION_ERROR;
         return app_nav_pivot_action_state;
     }
+
+    App_Nav_ClearOutput(output);
 
     (void)perception;
 
@@ -1193,12 +1193,12 @@ bool App_Nav_ComputeWallFollowPwm(const AppNavInput *input,
     int32_t right_pwm;
     int32_t left_pwm;
 
-    App_Nav_ClearOutput(output);
-
     if ((input == NULL) || (perception == NULL) || (output == NULL))
     {
         return false;
     }
+
+    App_Nav_ClearOutput(output);
 
     if (app_nav_wall_follow_active == 0U)
     {
@@ -1382,14 +1382,14 @@ AppNavPrimitiveTestState App_NavPrimitiveTest_Tick(const AppNavInput *input,
     AppNavSmoothActionType smooth_action;
     AppNavSmoothActionState smooth_state;
 
-    App_Nav_ClearOutput(output);
-
     if ((input == NULL) || (perception == NULL) || (output == NULL))
     {
         app_nav_primitive_test_state = APP_NAV_PRIMITIVE_TEST_ERROR;
         app_nav_primitive_test_action_started = 0U;
         return app_nav_primitive_test_state;
     }
+
+    App_Nav_ClearOutput(output);
 
     if (app_nav_primitive_test_state != APP_NAV_PRIMITIVE_TEST_RUNNING)
     {
@@ -1514,13 +1514,13 @@ AppNavAdvanceActionState App_Nav_TickAdvanceAction(const AppNavInput *input,
 {
     bool current_rear_tape;
 
-    App_Nav_ClearOutput(output);
-
     if ((input == NULL) || (perception == NULL) || (output == NULL))
     {
         app_nav_advance_action_state = APP_NAV_ADVANCE_ACTION_ERROR;
         return app_nav_advance_action_state;
     }
+
+    App_Nav_ClearOutput(output);
 
     if (app_nav_advance_action_state == APP_NAV_ADVANCE_ACTION_IDLE)
     {
@@ -1678,13 +1678,13 @@ AppNavApproachFrontWallActionState App_Nav_TickApproachFrontWallAction(const App
     uint16_t front_avg_mm;
     uint8_t force_yaw_hold;
 
-    App_Nav_ClearOutput(output);
-
     if ((input == NULL) || (perception == NULL) || (output == NULL))
     {
         app_nav_approach_front_wall_action_state = APP_NAV_APPROACH_FRONT_WALL_ACTION_ERROR;
         return app_nav_approach_front_wall_action_state;
     }
+
+    App_Nav_ClearOutput(output);
 
     if (app_nav_approach_front_wall_action_state == APP_NAV_APPROACH_FRONT_WALL_ACTION_IDLE)
     {
@@ -1846,13 +1846,13 @@ AppNavCenterFrontTapeActionState App_Nav_TickCenterByFrontTapeForPivotAction(con
     bool current_front_tape;
     uint8_t force_yaw_hold;
 
-    App_Nav_ClearOutput(output);
-
     if ((input == NULL) || (perception == NULL) || (output == NULL))
     {
         app_nav_center_front_tape_action_state = APP_NAV_CENTER_FRONT_TAPE_ACTION_ERROR;
         return app_nav_center_front_tape_action_state;
     }
+
+    App_Nav_ClearOutput(output);
 
     if (app_nav_center_front_tape_action_state == APP_NAV_CENTER_FRONT_TAPE_ACTION_IDLE)
     {
