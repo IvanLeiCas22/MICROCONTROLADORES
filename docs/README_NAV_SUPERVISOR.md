@@ -1279,6 +1279,51 @@ App_Nav_StopCenterByFrontTapeForPivotAction()
 
 ---
 
+## Configuración runtime de navegación
+
+La configuración runtime de las primitivas de navegación tiene una única fuente de verdad:
+
+```text
+AppNavConfig
+```
+
+Flujo vigente:
+
+```text
+HMI / UNERBUS
+-> app_core.c interpreta CMD_SET_* / CMD_GET_*
+-> App_Nav_GetConfig() / App_Nav_SetConfig()
+-> app_nav.c mantiene la instancia activa app_nav_config
+-> primitivas, percepción e histéresis consumen esa configuración
+```
+
+Responsabilidades:
+
+```text
+app_nav_config.h
+    Define los defaults vivos de navegación.
+
+app_nav.c
+    Mantiene la instancia activa de AppNavConfig.
+    Aplica los valores a PID, percepción, histéresis y primitivas.
+
+app_core.c
+    Traduce comandos HMI/UNERBUS.
+    No mantiene una segunda copia runtime de configuración de navegación.
+    Para CMD_SET_*:
+        App_Nav_GetConfig() -> modificar campos -> App_Nav_SetConfig()
+    Para CMD_GET_*:
+        App_Nav_GetConfig() -> serializar respuesta.
+
+app_config.h
+    Conserva configuración de hardware, sensores y protocolo.
+    No debe volver a acumular defaults runtime de navegación.
+```
+
+No reintroducir variables runtime duplicadas en `app_core.c` para parámetros que ya pertenecen a `AppNavConfig`. Si un comando nuevo de HMI modifica navegación, debe hacerlo mediante `App_Nav_GetConfig()` / `App_Nav_SetConfig()` y conservar el contrato UNERBUS correspondiente.
+
+---
+
 ## HMI y comandos relevantes
 
 Comandos principales relacionados con mapa/supervisor:
@@ -1530,9 +1575,11 @@ Cambios futuros deben respetar:
 8. No hacer que app_route_planner devuelva acciones, reasons de misión o modifique el mapa.
 9. No usar estructuras de debug como fuente operativa de percepción; usar AppNavPerception.
 10. No reintroducir App_Nav_Tick/App_Nav_GetDebug/AppNavDebug como shell legacy.
-11. No agregar telemetría pesada o temporal si no es necesaria para operación/debug real.
-12. No agregar comportamiento shadow; si se implementa un modo, debe estar conectado o permanecer explícitamente no soportado.
-13. Cuando se agregue un estado/action de supervisor:
+11. No reintroducir variables runtime duplicadas de navegación en app_core.c; usar AppNavConfig.
+12. No volver a poner defaults runtime de navegación en app_config.h; usar app_nav_config.h.
+13. No agregar telemetría pesada o temporal si no es necesaria para operación/debug real.
+14. No agregar comportamiento shadow; si se implementa un modo, debe estar conectado o permanecer explícitamente no soportado.
+15. Cuando se agregue un estado/action de supervisor:
       actualizar STM32,
       HMI,
       simulador/bridge,

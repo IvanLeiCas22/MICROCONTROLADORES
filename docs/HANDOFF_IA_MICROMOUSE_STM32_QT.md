@@ -147,7 +147,28 @@ No volver a introducir flags de piso negro dentro de `AppNavInput`.
 
 No volver a copiar ADCs o distancias dentro de `AppNavPerception`.
 
-### 4.2 Legacy eliminado
+### 4.2 Configuración runtime de navegación
+
+Estado vigente:
+
+```text
+AppNavConfig es la fuente de verdad runtime para configuración de navegación.
+app_nav_config.h define los defaults vivos de navegación.
+app_nav.c mantiene la instancia activa de configuración.
+app_core.c no mantiene variables runtime legacy duplicadas de navegación.
+app_config.h no debe volver a contener defaults runtime de navegación.
+```
+
+Los comandos HMI/UNERBUS que leen o escriben configuración de navegación deben pasar por:
+
+```text
+App_Nav_GetConfig()
+App_Nav_SetConfig()
+```
+
+No reintroducir `Build_AppNavConfig_From_LegacyRuntime()`, `Sync_AppNavConfig_From_LegacyRuntime()`, `pid_configs[]` ni variables duplicadas en `app_core.c` para parámetros que pertenecen a `AppNavConfig`.
+
+### 4.3 Legacy eliminado
 
 No reintroducir:
 
@@ -162,11 +183,16 @@ legacy braking controller
 CMD_SET/GET_BRAKING_*
 PID_ROLE_BRAKING
 APP_NAV_SMOOTH_ACTION_FRONT_WALL_SAFETY
+Build_AppNavConfig_From_LegacyRuntime()
+Sync_AppNavConfig_From_LegacyRuntime()
+pid_configs[]
+variables runtime legacy de navegación en app_core.c
+defaults runtime de navegación en app_config.h
 ```
 
 Si aparece una necesidad parecida, diseñarla explícitamente y justificarla. No restaurar legacy.
 
-### 4.3 Approach front wall
+### 4.4 Approach front wall
 
 Conservar:
 
