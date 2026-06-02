@@ -116,46 +116,25 @@ Regla rápida:
 
 ---
 
-## 4. Estado de diseño importante
+## 4. Invariantes críticos del diseño actual
+
+Esta sección no reemplaza la documentación técnica. Resume restricciones de diseño que una IA no debe romper al proponer cambios.
 
 ### 4.1 Percepción portable
 
-Modelo vigente:
-
-```text
-AppNavInput
-    Mediciones del tick:
-    - ADC filtrados;
-    - distancias IR en mm;
-    - yaw/yaw-rate;
-    - dt.
-
-AppNavPerception
-    Interpretación filtrada:
-    - floor_front_black;
-    - floor_rear_black;
-    - wall_front;
-    - wall_left;
-    - wall_right;
-    - wall_diag_left;
-    - wall_diag_right.
-```
-
-Regla obligatoria:
+Reglas obligatorias:
 
 ```text
 App_Nav_EvaluatePerception() debe llamarse una sola vez por tick de control, desde app_core.c.
 El mismo AppNavInput + AppNavPerception debe pasarse al supervisor o al runner portable de primitive tests.
 Las primitivas y el supervisor no deben recalcular percepción.
+No volver a introducir flags de piso negro dentro de AppNavInput.
+No volver a copiar ADCs o distancias dentro de AppNavPerception.
 ```
-
-No volver a introducir flags de piso negro dentro de `AppNavInput`.
-
-No volver a copiar ADCs o distancias dentro de `AppNavPerception`.
 
 ### 4.2 Configuración runtime de navegación
 
-Estado vigente:
+Reglas obligatorias:
 
 ```text
 AppNavConfig es la fuente de verdad runtime para configuración de navegación.
@@ -172,11 +151,9 @@ App_Nav_GetConfig()
 App_Nav_SetConfig()
 ```
 
-No reintroducir `Build_AppNavConfig_From_LegacyRuntime()`, `Sync_AppNavConfig_From_LegacyRuntime()`, `pid_configs[]` ni variables duplicadas en `app_core.c` para parámetros que pertenecen a `AppNavConfig`.
-
 ### 4.3 Primitive tests portables
 
-Estado vigente:
+Flujo vigente:
 
 ```text
 HMI / CMD_PRIMITIVE_TEST
@@ -186,18 +163,11 @@ HMI / CMD_PRIMITIVE_TEST
 -> app_core.c aplica AppNavOutput a motores y publica status
 ```
 
-El runner portable actual vive en `app_nav.h/c` y soporta solo:
-
-```text
-APP_NAV_PRIMITIVE_TEST_SMOOTH_LEFT
-APP_NAV_PRIMITIVE_TEST_SMOOTH_RIGHT
-```
-
-Internamente debe ejecutar acciones completas, no controladores low-level. Para smooth usa `SmoothAction` completa con `APP_NAV_REAR_TAPE_PROFILE_NORMAL_CELL`, por lo que el test valida giro, búsqueda de cinta trasera y terminación de acción.
-
 Reglas obligatorias:
 
 ```text
+El runner portable actual vive en app_nav.h/c.
+Los primitive tests deben ejecutar acciones completas, no controladores low-level.
 app_core.c no debe llamar controladores internos como StartSmoothTurn, ComputeSmoothTurnPwm, StartPivotTurn, ComputePivotTurnPwm, WallFollow o YawHold directo.
 No reexponer controladores low-level en app_nav.h para resolver primitive tests.
 Si se agregan tests de Advance/Pivot/Approach/Center, agregarlos a App_NavPrimitiveTest_*.
@@ -205,35 +175,26 @@ Si se agregan tests de Advance/Pivot/Approach/Center, agregarlos a App_NavPrimit
 
 ### 4.4 Legacy eliminado
 
-No reintroducir:
+No reintroducir patrones legacy ya eliminados:
 
 ```text
-App_Nav_Tick() legacy shell
-App_Nav_GetDebug()
-AppNavDebug
-app_nav_debug.h
-CMD_GET_NAV_DEBUG_STATUS = 0x94
-nav_debug legacy de app_core.c
-legacy braking controller
-CMD_SET/GET_BRAKING_*
-PID_ROLE_BRAKING
-APP_NAV_SMOOTH_ACTION_FRONT_WALL_SAFETY
-Build_AppNavConfig_From_LegacyRuntime()
-Sync_AppNavConfig_From_LegacyRuntime()
-pid_configs[]
-variables runtime legacy de navegación en app_core.c
-defaults runtime de navegación en app_config.h
-parámetro random_value en App_Nav_RecommendAction()
-acciones frontales duplicadas GO_FRONT_NAVIGATING / GO_FRONT_STRAIGHT
-primitive tests que llamen controladores low-level desde app_core.c
-controladores low-level públicos en app_nav.h si solo los usa app_nav.c
+- shell global App_Nav_Tick/AppNavDebug/app_nav_debug.h;
+- debug nav paralelo como fuente de verdad;
+- braking controller legacy y comandos asociados;
+- configuración runtime duplicada fuera de AppNavConfig;
+- parámetro random_value en App_Nav_RecommendAction();
+- acciones frontales duplicadas para avanzar al frente;
+- primitive tests que llamen controladores low-level desde app_core.c;
+- controladores low-level públicos en app_nav.h si solo los usa app_nav.c.
 ```
 
-Si aparece una necesidad parecida, diseñarla explícitamente y justificarla. No restaurar legacy.
+Si aparece una necesidad parecida, diseñarla explícitamente en la capa correcta y justificarla. No restaurar código eliminado solo porque parece resolver rápido el problema.
 
 ### 4.5 Approach front wall
 
-Conservar:
+La aproximación frontal para pivot es funcional. No confundirla con el braking controller eliminado.
+
+Conservar su configuración/protocolo mientras siga vigente:
 
 ```text
 CMD_SET_APPROACH_FRONT_WALL_TARGET = 0x96
@@ -241,11 +202,11 @@ CMD_GET_APPROACH_FRONT_WALL_TARGET = 0x97
 approach_front_wall_target_mm
 ```
 
-La aproximación frontal para pivot es funcional. No confundirla con el braking controller eliminado.
-
 ---
 
 ## 5. Reglas de comportamiento de la IA
+
+### 5.1 Conducta general
 
 La IA debe trabajar de forma conservadora:
 
@@ -260,6 +221,42 @@ La IA debe trabajar de forma conservadora:
 - No mezclar cambios independientes.
 - No tocar HMI/protocolo si el cambio es interno portable.
 - No afirmar que compiló/probó salvo que el usuario lo confirme.
+```
+
+### 5.2 Reutilización equilibrada
+
+```text
+- Reutilizar código existente cuando sea razonable, especialmente primitivas, helpers portables, APIs públicas y lógica ya validada.
+- Antes de crear una función nueva, revisar si ya existe una función equivalente o una abstracción cercana en la capa correcta.
+- No duplicar lógica funcional por comodidad si puede reutilizarse sin romper responsabilidades.
+- No forzar reutilización si vuelve el código menos claro, menos eficiente, más acoplado o mezcla capas.
+- No crear abstracciones genéricas grandes solo para evitar pocas líneas duplicadas.
+- Duplicar localmente una lógica simple puede ser aceptable si evita acoplamiento artificial o abstracciones prematuras.
+```
+
+### 5.3 Conciencia STM32/Bluepill
+
+```text
+- Tener siempre presente que el firmware corre en STM32 Bluepill con recursos limitados.
+- Evitar malloc/free, recursión, buffers grandes en stack, float/double innecesarios y abstracciones que aumenten RAM/Flash sin beneficio claro.
+- Si una solución nueva agrega tablas, workspaces, telemetría o estructuras persistentes, justificar brevemente su costo y su necesidad.
+- Preferir lógica portable simple, determinística y de bajo costo.
+```
+
+### 5.4 Control de alcance
+
+```text
+- No incluir mejoras oportunistas dentro de un patch cuyo objetivo era otro.
+- Si durante el análisis aparece una limpieza, bug potencial o refactor conveniente pero no necesario, mencionarlo aparte como hallazgo.
+- Solo incluirlo en los parches si el usuario lo aprueba o si es requisito directo para resolver el objetivo actual.
+```
+
+### 5.5 Validación y límites de la IA
+
+```text
+- Distinguir siempre entre revisión estática, compilación, prueba en simulador y prueba en hardware real.
+- No tratar una prueba en simulador como validación completa del robot físico.
+- Si una lógica depende de sensores reales, ruido, tiempos o dinámica física, marcarla como pendiente de validación en hardware aunque el simulador funcione.
 ```
 
 El usuario compila y prueba. La IA puede hacer revisión estática, pero no debe presentar eso como validación completa del proyecto STM32/Qt.
@@ -279,7 +276,7 @@ Para cualquier cambio de código:
       - cambios necesarios;
       - cambios opcionales;
       - cambios que conviene evitar.
-6. Confirmar el alcance.
+6. Delimitar el alcance; pedir confirmación solo si hay ambigüedad, riesgo arquitectónico o alternativas razonables.
 7. Generar un .patch por archivo modificado.
 8. Entregar comandos:
       git apply --check ...
@@ -372,21 +369,45 @@ app_core
 
 ## 10. Validación esperada
 
-Después de cambios que afecten navegación, el usuario debería probar como mínimo:
+La validación sugerida debe ser proporcional al alcance del cambio. No todos los cambios requieren probar todo el flujo.
+
+Validación base:
 
 ```text
 - Compilación STM32.
-- Compilación HMI Qt si se tocó HMI/protocolo.
-- FIND_CELLS completo.
+- Compilación HMI Qt solo si se tocó HMI/protocolo.
+- Prueba funcional mínima de la zona afectada.
+```
+
+Si se tocó una primitiva:
+
+```text
+- Primitive test correspondiente, si existe.
+- Caso nominal de terminación.
+- Caso de seguridad/error si aplica.
+```
+
+Si se tocó supervisor o policies:
+
+```text
+- FIND_CELLS.
 - GO_A_TO_B con ruta simple.
-- GO_A_TO_B con replanificación por pared descubierta.
-- Advance normal hasta cinta trasera.
-- Smooth turn hasta cinta trasera.
+- Replanificación solo si se tocó ruta, mapa, paredes o GO_A_TO_B.
+```
+
+Si se tocó mapa o celdas especiales:
+
+```text
+- Paso por celda especial.
+- Verificar que no haya falsa detección de cinta límite posterior.
+```
+
+Si se tocó backtracking, pivots o preparación de pivots:
+
+```text
 - Backtracking con frente abierto.
 - Backtracking con frente cerrado.
-- Paso por celda especial.
-- CenterByFrontTapeForPivot.
-- ApproachFrontWallForPivot.
+- CenterByFrontTapeForPivot o ApproachFrontWallForPivot según corresponda.
 ```
 
 La IA puede sugerir pruebas, pero el usuario es quien confirma resultados.
@@ -423,11 +444,9 @@ No escribir el diff completo en el chat.
 
 ## 12. Qué evitar
 
-Evitar:
+Evitar estos anti-patrones específicos del proyecto:
 
 ```text
-- Refactors grandes sin necesidad.
-- Reintroducir legacy eliminado.
 - Mover lógica de misión a app_core.
 - Mover HAL o protocolo a módulos portables.
 - Duplicar fuentes de verdad.
@@ -436,7 +455,6 @@ Evitar:
 - Agregar mediciones redundantes en AppNavPerception.
 - Mezclar documentación, protocolo y lógica en un cambio si no corresponde.
 - Cambiar payloads sin actualizar Qt y README_COMUNICACION.
-- Decir que algo “funciona” sin prueba del usuario.
 ```
 
 ---

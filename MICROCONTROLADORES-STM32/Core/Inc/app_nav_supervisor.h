@@ -76,10 +76,6 @@ typedef enum
     APP_NAV_SUPERVISOR_ACTION_SMOOTH_LEFT,
     APP_NAV_SUPERVISOR_ACTION_SMOOTH_RIGHT,
     APP_NAV_SUPERVISOR_ACTION_PIVOT_180,
-
-    /*
-     * Preparation action for open-cell route backtracking.
-     */
     APP_NAV_SUPERVISOR_ACTION_CENTER_FRONT_TAPE_FOR_PIVOT
 } AppNavSupervisorAction;
 
