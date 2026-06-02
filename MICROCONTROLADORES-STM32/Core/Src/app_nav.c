@@ -45,6 +45,13 @@ typedef enum
 
 typedef enum
 {
+    APP_NAV_CENTER_FRONT_TAPE_GATE_CONTINUE = 0,
+    APP_NAV_CENTER_FRONT_TAPE_GATE_BOUNDARY_DETECTED,
+    APP_NAV_CENTER_FRONT_TAPE_GATE_ERROR
+} AppNavCenterFrontTapeGateResult;
+
+typedef enum
+{
     APP_NAV_FORWARD_GUIDANCE_WALL_FOLLOW = 0,
     APP_NAV_FORWARD_GUIDANCE_YAW_HOLD
 } AppNavForwardGuidanceMode;
@@ -1791,7 +1798,7 @@ AppNavApproachFrontWallActionState App_Nav_TickApproachFrontWallAction(const App
 /* CenterByFrontTapeForPivotAction: prepare in-cell 180 pivot in open cell      */
 /* -------------------------------------------------------------------------- */
 
-static bool App_Nav_UpdateCenterFrontTapeGate(bool current_front_tape)
+static AppNavCenterFrontTapeGateResult App_Nav_UpdateCenterFrontTapeGate(bool current_front_tape)
 {
     switch (app_nav_center_front_tape_gate_state)
     {
@@ -1814,25 +1821,25 @@ static bool App_Nav_UpdateCenterFrontTapeGate(bool current_front_tape)
             app_nav_center_front_tape_was_front_tape_detected = 0U;
             app_nav_center_front_tape_gate_state = APP_NAV_FRONT_TAPE_GATE_ARMED_FOR_BOUNDARY_TAPE;
         }
-        return false;
+        return APP_NAV_CENTER_FRONT_TAPE_GATE_CONTINUE;
 
     case APP_NAV_FRONT_TAPE_GATE_WAIT_LEAVE_CURRENT_BLACK:
         if (current_front_tape)
         {
             app_nav_center_front_tape_was_front_tape_detected = 1U;
-            return false;
+            return APP_NAV_CENTER_FRONT_TAPE_GATE_CONTINUE;
         }
 
         app_nav_center_front_tape_was_front_tape_detected = 0U;
         app_nav_center_front_tape_gate_state = APP_NAV_FRONT_TAPE_GATE_ARMED_FOR_BOUNDARY_TAPE;
-        return false;
+        return APP_NAV_CENTER_FRONT_TAPE_GATE_CONTINUE;
 
     case APP_NAV_FRONT_TAPE_GATE_ARMED_FOR_BOUNDARY_TAPE:
         if (current_front_tape)
         {
             if (app_nav_center_front_tape_was_front_tape_detected == 0U)
             {
-                return true;
+                return APP_NAV_CENTER_FRONT_TAPE_GATE_BOUNDARY_DETECTED;
             }
 
             app_nav_center_front_tape_was_front_tape_detected = 1U;
@@ -1841,11 +1848,10 @@ static bool App_Nav_UpdateCenterFrontTapeGate(bool current_front_tape)
         {
             app_nav_center_front_tape_was_front_tape_detected = 0U;
         }
-        return false;
+        return APP_NAV_CENTER_FRONT_TAPE_GATE_CONTINUE;
 
     default:
-        App_Nav_SetCenterFrontTapeActionTerminal(APP_NAV_CENTER_FRONT_TAPE_ACTION_ERROR);
-        return false;
+        return APP_NAV_CENTER_FRONT_TAPE_GATE_ERROR;
     }
 }
 
@@ -1887,6 +1893,7 @@ AppNavCenterFrontTapeActionState App_Nav_TickCenterByFrontTapeForPivotAction(con
                                                                              AppNavOutput *output)
 {
     AppNavForwardGuidanceMode guidance_mode;
+    AppNavCenterFrontTapeGateResult front_tape_gate_result;
     bool current_front_tape;
     uint8_t force_yaw_hold;
 
@@ -1922,10 +1929,17 @@ AppNavCenterFrontTapeActionState App_Nav_TickCenterByFrontTapeForPivotAction(con
      * perception layer that provides floor_front_black.
      */
     current_front_tape = (perception->floor_front_black != 0U);
+    front_tape_gate_result = App_Nav_UpdateCenterFrontTapeGate(current_front_tape);
 
-    if (App_Nav_UpdateCenterFrontTapeGate(current_front_tape))
+    if (front_tape_gate_result == APP_NAV_CENTER_FRONT_TAPE_GATE_BOUNDARY_DETECTED)
     {
         App_Nav_SetCenterFrontTapeActionTerminal(APP_NAV_CENTER_FRONT_TAPE_ACTION_DONE_FRONT_TAPE);
+        return app_nav_center_front_tape_action_state;
+    }
+
+    if (front_tape_gate_result == APP_NAV_CENTER_FRONT_TAPE_GATE_ERROR)
+    {
+        App_Nav_SetCenterFrontTapeActionTerminal(APP_NAV_CENTER_FRONT_TAPE_ACTION_ERROR);
         return app_nav_center_front_tape_action_state;
     }
 
