@@ -313,6 +313,15 @@ Si un patch borra un archivo completo y falla por fin de línea/whitespace, prop
 
 No pedir a Codex u otra IA “diff completo” en texto si eso puede contaminar el contexto. Preferir archivos `.patch`.
 
+Formato de código en parches:
+
+```text
+El repositorio define el estilo C/C++ mediante .clang-format en la raíz.
+Toda modificación de código STM32 o Qt debe respetar ese formato.
+No reintroducir alineaciones verticales manuales, cortes innecesarios de argumentos/parámetros ni estilos inconsistentes con .clang-format.
+Si un cambio requiere reformateo amplio, debe proponerse como commit separado de cualquier cambio funcional.
+```
+
 ---
 
 ## 8. Reglas para protocolo/HMI
