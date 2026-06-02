@@ -43,10 +43,8 @@ bool App_Maze_IsValidCell(uint8_t x, uint8_t y)
 
 static bool App_Maze_IsValidHeading(HeadingTypeDef heading)
 {
-    return ((heading == HEADING_NORTH) ||
-            (heading == HEADING_EAST) ||
-            (heading == HEADING_SOUTH) ||
-            (heading == HEADING_WEST));
+    return ((heading == HEADING_NORTH) || (heading == HEADING_EAST) || (heading == HEADING_SOUTH) ||
+        (heading == HEADING_WEST));
 }
 
 static uint8_t App_Maze_DirectionToWallBit(HeadingTypeDef dir)
@@ -110,8 +108,7 @@ HeadingTypeDef App_Maze_RotateLeft(HeadingTypeDef heading)
     return (HeadingTypeDef)((heading + 3) % 4);
 }
 
-void App_Maze_BuildRelativeDirections(HeadingTypeDef heading,
-                                      HeadingTypeDef directions[APP_MAZE_REL_COUNT])
+void App_Maze_BuildRelativeDirections(HeadingTypeDef heading, HeadingTypeDef directions[APP_MAZE_REL_COUNT])
 {
     if (directions == NULL)
     {
@@ -139,11 +136,8 @@ uint8_t App_Maze_IndexToY(uint8_t index)
     return (uint8_t)(index / MAZE_WIDTH);
 }
 
-static bool App_Maze_GetNeighborInternal(uint8_t x,
-                                         uint8_t y,
-                                         HeadingTypeDef dir,
-                                         uint8_t *neighbor_x,
-                                         uint8_t *neighbor_y)
+static bool App_Maze_GetNeighborInternal(
+    uint8_t x, uint8_t y, HeadingTypeDef dir, uint8_t *neighbor_x, uint8_t *neighbor_y)
 {
     if ((neighbor_x == NULL) || (neighbor_y == NULL) || !App_Maze_IsValidCell(x, y))
     {
@@ -267,16 +261,13 @@ bool App_Maze_SetRobotPose(uint8_t x, uint8_t y, HeadingTypeDef heading)
 
 void App_Maze_ResetRobotPosition(void)
 {
-    (void)App_Maze_SetRobotPose(APP_MAZE_DEFAULT_START_X,
-                                APP_MAZE_DEFAULT_START_Y,
-                                APP_MAZE_DEFAULT_START_HEADING);
+    (void)App_Maze_SetRobotPose(APP_MAZE_DEFAULT_START_X, APP_MAZE_DEFAULT_START_Y, APP_MAZE_DEFAULT_START_HEADING);
 }
 
 void App_Maze_ResetState(void)
 {
-    (void)App_Maze_ResetStateWithPose(APP_MAZE_DEFAULT_START_X,
-                                      APP_MAZE_DEFAULT_START_Y,
-                                      APP_MAZE_DEFAULT_START_HEADING);
+    (void)App_Maze_ResetStateWithPose(
+        APP_MAZE_DEFAULT_START_X, APP_MAZE_DEFAULT_START_Y, APP_MAZE_DEFAULT_START_HEADING);
 }
 
 bool App_Maze_ResetStateWithPose(uint8_t x, uint8_t y, HeadingTypeDef heading)
@@ -340,9 +331,7 @@ void App_Maze_UpdateRobotHeading(TurnTypeDef turn_direction)
 /* Cell mapping and wall mirroring                                             */
 /* -------------------------------------------------------------------------- */
 
-void App_Maze_MapCurrentCell(bool front_wall_detected,
-                             bool right_wall_detected,
-                             bool left_wall_detected)
+void App_Maze_MapCurrentCell(bool front_wall_detected, bool right_wall_detected, bool left_wall_detected)
 {
     HeadingTypeDef front_dir = current_pos.heading;
     HeadingTypeDef right_dir = App_Maze_RotateRight(current_pos.heading);
@@ -426,9 +415,7 @@ uint8_t App_Maze_GetCurrentCellData(void)
 /* Read-only map query API for planning                                        */
 /* -------------------------------------------------------------------------- */
 
-bool App_Maze_GetRobotPose(uint8_t *x,
-                           uint8_t *y,
-                           HeadingTypeDef *heading)
+bool App_Maze_GetRobotPose(uint8_t *x, uint8_t *y, HeadingTypeDef *heading)
 {
     if ((x == NULL) || (y == NULL) || (heading == NULL))
     {
@@ -442,9 +429,7 @@ bool App_Maze_GetRobotPose(uint8_t *x,
     return true;
 }
 
-bool App_Maze_GetCellData(uint8_t x,
-                          uint8_t y,
-                          uint8_t *cell_out)
+bool App_Maze_GetCellData(uint8_t x, uint8_t y, uint8_t *cell_out)
 {
     if ((cell_out == NULL) || !App_Maze_IsValidCell(x, y))
     {
@@ -475,9 +460,7 @@ bool App_Maze_IsCellSpecial(uint8_t x, uint8_t y)
     return ((maze_map[x][y] & CELL_SPECIAL) != 0U);
 }
 
-bool App_Maze_IsEdgeKnown(uint8_t x,
-                          uint8_t y,
-                          HeadingTypeDef dir)
+bool App_Maze_IsEdgeKnown(uint8_t x, uint8_t y, HeadingTypeDef dir)
 {
     uint8_t known_bit = App_Maze_DirectionToKnownBit(dir);
 
@@ -489,9 +472,7 @@ bool App_Maze_IsEdgeKnown(uint8_t x,
     return ((maze_known_edges[x][y] & known_bit) != 0U);
 }
 
-bool App_Maze_CellHasWall(uint8_t x,
-                          uint8_t y,
-                          HeadingTypeDef dir)
+bool App_Maze_CellHasWall(uint8_t x, uint8_t y, HeadingTypeDef dir)
 {
     uint8_t wall_bit = App_Maze_DirectionToWallBit(dir);
 
@@ -503,9 +484,7 @@ bool App_Maze_CellHasWall(uint8_t x,
     return ((maze_map[x][y] & wall_bit) != 0U);
 }
 
-bool App_Maze_IsKnownOpenEdge(uint8_t x,
-                              uint8_t y,
-                              HeadingTypeDef dir)
+bool App_Maze_IsKnownOpenEdge(uint8_t x, uint8_t y, HeadingTypeDef dir)
 {
     uint8_t neighbor_x = 0U;
     uint8_t neighbor_y = 0U;
@@ -528,11 +507,7 @@ bool App_Maze_IsKnownOpenEdge(uint8_t x,
     return true;
 }
 
-bool App_Maze_GetNeighbor(uint8_t x,
-                          uint8_t y,
-                          HeadingTypeDef dir,
-                          uint8_t *neighbor_x,
-                          uint8_t *neighbor_y)
+bool App_Maze_GetNeighbor(uint8_t x, uint8_t y, HeadingTypeDef dir, uint8_t *neighbor_x, uint8_t *neighbor_y)
 {
     return App_Maze_GetNeighborInternal(x, y, dir, neighbor_x, neighbor_y);
 }

@@ -6,13 +6,8 @@
 
 #define APP_FIND_CELLS_INVALID_COORD 0xFFU
 
-static const AppNavRecommendedAction app_find_cells_relative_actions[APP_MAZE_REL_COUNT] =
-{
-    APP_NAV_ACTION_GO_FRONT,
-    APP_NAV_ACTION_SMOOTH_RIGHT,
-    APP_NAV_ACTION_SMOOTH_LEFT,
-    APP_NAV_ACTION_NONE
-};
+static const AppNavRecommendedAction app_find_cells_relative_actions[APP_MAZE_REL_COUNT] = {
+    APP_NAV_ACTION_GO_FRONT, APP_NAV_ACTION_SMOOTH_RIGHT, APP_NAV_ACTION_SMOOTH_LEFT, APP_NAV_ACTION_NONE};
 
 static void App_FindCellsPolicy_ClearDecision(AppFindCellsDecision *decision)
 {
@@ -28,11 +23,8 @@ static void App_FindCellsPolicy_ClearDecision(AppFindCellsDecision *decision)
     decision->reason = APP_FIND_CELLS_DECISION_REASON_NONE;
 }
 
-static bool App_FindCellsPolicy_IsReachableUnvisitedNeighbor(uint8_t x,
-                                                             uint8_t y,
-                                                             HeadingTypeDef dir,
-                                                             uint8_t *neighbor_x,
-                                                             uint8_t *neighbor_y)
+static bool App_FindCellsPolicy_IsReachableUnvisitedNeighbor(
+    uint8_t x, uint8_t y, HeadingTypeDef dir, uint8_t *neighbor_x, uint8_t *neighbor_y)
 {
     uint8_t nx = 0U;
     uint8_t ny = 0U;
@@ -62,9 +54,7 @@ static bool App_FindCellsPolicy_IsReachableUnvisitedNeighbor(uint8_t x,
     return true;
 }
 
-static bool App_FindCellsPolicy_HasOpenNonBackExit(uint8_t x,
-                                                   uint8_t y,
-                                                   HeadingTypeDef heading)
+static bool App_FindCellsPolicy_HasOpenNonBackExit(uint8_t x, uint8_t y, HeadingTypeDef heading)
 {
     HeadingTypeDef relative_dirs[APP_MAZE_REL_COUNT];
 
@@ -83,13 +73,7 @@ static bool App_FindCellsPolicy_HasOpenNonBackExit(uint8_t x,
 
 static bool App_FindCellsPolicy_IsFrontierCell(uint8_t x, uint8_t y)
 {
-    static const HeadingTypeDef dirs[4] =
-    {
-        HEADING_NORTH,
-        HEADING_EAST,
-        HEADING_SOUTH,
-        HEADING_WEST
-    };
+    static const HeadingTypeDef dirs[4] = {HEADING_NORTH, HEADING_EAST, HEADING_SOUTH, HEADING_WEST};
 
     if (!App_Maze_IsCellVisited(x, y))
     {
@@ -153,10 +137,8 @@ static bool App_FindCellsPolicy_RunFrontierFloodFill(void)
     return App_RoutePlanner_Run(APP_ROUTE_TRAVERSAL_KNOWN_OPEN_VISITED_ONLY);
 }
 
-static bool App_FindCellsPolicy_SelectRouteStep(uint8_t x,
-                                                uint8_t y,
-                                                HeadingTypeDef heading,
-                                                AppFindCellsDecision *decision_out)
+static bool App_FindCellsPolicy_SelectRouteStep(
+    uint8_t x, uint8_t y, HeadingTypeDef heading, AppFindCellsDecision *decision_out)
 {
     HeadingTypeDef relative_dirs[APP_MAZE_REL_COUNT];
     uint8_t best_cost = APP_ROUTE_DISTANCE_INF;
@@ -181,12 +163,7 @@ static bool App_FindCellsPolicy_SelectRouteStep(uint8_t x,
         uint8_t ny = 0U;
         uint8_t neighbor_cost = APP_ROUTE_DISTANCE_INF;
 
-        if (!App_RoutePlanner_CanCross(x,
-                                       y,
-                                       relative_dirs[i],
-                                       APP_ROUTE_TRAVERSAL_KNOWN_OPEN_VISITED_ONLY,
-                                       &nx,
-                                       &ny))
+        if (!App_RoutePlanner_CanCross(x, y, relative_dirs[i], APP_ROUTE_TRAVERSAL_KNOWN_OPEN_VISITED_ONLY, &nx, &ny))
         {
             continue;
         }
@@ -219,13 +196,13 @@ static bool App_FindCellsPolicy_SelectRouteStep(uint8_t x,
 
     if (app_find_cells_relative_actions[best_candidate_index] == APP_NAV_ACTION_NONE)
     {
-    	/*
-    	 * The route exists, but the next step is behind the robot.
-    	 * Do not use APP_NAV_ACTION_GO_BACK here: that action remains reserved for
-    	 * the local dead-end recommendation path. The supervisor handles
-    	 * BACKTRACK_REQUIRED by choosing the correct 180° pivot preparation method
-    	 * from the current front edge.
-    	 */
+        /*
+         * The route exists, but the next step is behind the robot.
+         * Do not use APP_NAV_ACTION_GO_BACK here: that action remains reserved for
+         * the local dead-end recommendation path. The supervisor handles
+         * BACKTRACK_REQUIRED by choosing the correct 180° pivot preparation method
+         * from the current front edge.
+         */
         decision_out->action = APP_NAV_ACTION_NONE;
         decision_out->reason = APP_FIND_CELLS_DECISION_REASON_BACKTRACK_REQUIRED;
         return false;
@@ -270,11 +247,7 @@ bool App_FindCellsPolicy_Evaluate(AppFindCellsDecision *decision_out)
         uint8_t target_x = 0U;
         uint8_t target_y = 0U;
 
-        if (App_FindCellsPolicy_IsReachableUnvisitedNeighbor(x,
-                                                             y,
-                                                             relative_dirs[i],
-                                                             &target_x,
-                                                             &target_y))
+        if (App_FindCellsPolicy_IsReachableUnvisitedNeighbor(x, y, relative_dirs[i], &target_x, &target_y))
         {
             decision_out->action = app_find_cells_relative_actions[i];
             decision_out->desired_dir = relative_dirs[i];
@@ -307,11 +280,7 @@ bool App_FindCellsPolicy_Evaluate(AppFindCellsDecision *decision_out)
         uint8_t back_target_y = 0U;
         HeadingTypeDef back_dir = relative_dirs[APP_MAZE_REL_BACK];
 
-        if (App_FindCellsPolicy_IsReachableUnvisitedNeighbor(x,
-                                                             y,
-                                                             back_dir,
-                                                             &back_target_x,
-                                                             &back_target_y))
+        if (App_FindCellsPolicy_IsReachableUnvisitedNeighbor(x, y, back_dir, &back_target_x, &back_target_y))
         {
             decision_out->action = APP_NAV_ACTION_NONE;
             decision_out->desired_dir = back_dir;

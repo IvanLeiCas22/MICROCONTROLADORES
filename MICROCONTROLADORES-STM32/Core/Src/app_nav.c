@@ -112,25 +112,16 @@ static AppNavPrimitiveTestType app_nav_primitive_test_type;
 static AppNavPrimitiveTestState app_nav_primitive_test_state;
 static uint8_t app_nav_primitive_test_action_started;
 
-static bool App_Nav_StartYawHoldAdvanceInternal(int32_t yaw_target_q16_deg,
-                                                uint8_t clear_smooth_action);
-static bool App_Nav_ComputeYawHoldAdvancePwm(const AppNavInput *input,
-                                             uint16_t right_base_pwm,
-                                             uint16_t left_base_pwm,
-                                             AppNavOutput *output);
+static bool App_Nav_StartYawHoldAdvanceInternal(int32_t yaw_target_q16_deg, uint8_t clear_smooth_action);
+static bool App_Nav_ComputeYawHoldAdvancePwm(
+    const AppNavInput *input, uint16_t right_base_pwm, uint16_t left_base_pwm, AppNavOutput *output);
 static bool App_Nav_StartWallFollowAdvance(void);
-static bool App_Nav_ComputeWallFollowPwm(const AppNavInput *input,
-                                         const AppNavPerception *perception,
-                                         uint16_t right_base_pwm,
-                                         uint16_t left_base_pwm,
-                                         AppNavOutput *output);
+static bool App_Nav_ComputeWallFollowPwm(const AppNavInput *input, const AppNavPerception *perception,
+    uint16_t right_base_pwm, uint16_t left_base_pwm, AppNavOutput *output);
 static bool App_Nav_StartSmoothTurn(AppNavSmoothTurnDirection direction);
-static bool App_Nav_ComputeSmoothTurnPwm(const AppNavInput *input,
-                                         AppNavOutput *output);
+static bool App_Nav_ComputeSmoothTurnPwm(const AppNavInput *input, AppNavOutput *output);
 static bool App_Nav_StartPivotTurn(void);
-static bool App_Nav_ComputePivotTurnPwm(const AppNavInput *input,
-                                        int16_t target_dps,
-                                        AppNavOutput *output);
+static bool App_Nav_ComputePivotTurnPwm(const AppNavInput *input, int16_t target_dps, AppNavOutput *output);
 
 /* Mirrors the legacy ADC channel order without depending on app_config.h. */
 typedef enum
@@ -231,9 +222,7 @@ static void App_Nav_SetSmoothTurnSetpoint(AppNavSmoothTurnDirection direction)
     PID_Set_Setpoint(&app_nav_smooth_turn_pid, target_dps);
 }
 
-static int32_t App_Nav_LimitCorrectionToMotorBases(int32_t correction,
-                                                   uint16_t right_base_pwm,
-                                                   uint16_t left_base_pwm)
+static int32_t App_Nav_LimitCorrectionToMotorBases(int32_t correction, uint16_t right_base_pwm, uint16_t left_base_pwm)
 {
     int32_t right_base = (int32_t)right_base_pwm;
     int32_t left_base = (int32_t)left_base_pwm;
@@ -314,8 +303,8 @@ static void App_Nav_SetAdvanceActionTerminal(AppNavAdvanceActionState terminal_s
 static void App_Nav_SetAdvanceActionRunningState(void)
 {
     app_nav_advance_action_state = (app_nav_advance_yaw_hold_started != 0U)
-                                       ? APP_NAV_ADVANCE_ACTION_RUNNING_YAW_HOLD
-                                       : APP_NAV_ADVANCE_ACTION_RUNNING_WALL_FOLLOW;
+        ? APP_NAV_ADVANCE_ACTION_RUNNING_YAW_HOLD
+        : APP_NAV_ADVANCE_ACTION_RUNNING_WALL_FOLLOW;
 }
 
 static void App_Nav_SetApproachFrontWallActionTerminal(AppNavApproachFrontWallActionState terminal_state)
@@ -361,8 +350,7 @@ static void App_Nav_SetSmoothActionTerminal(AppNavSmoothActionState terminal_sta
     app_nav_smooth_post_yaw_ticks = 0U;
 }
 
-static void App_Nav_EnterSmoothPostYawSeek(const AppNavInput *input,
-                                           AppNavOutput *output)
+static void App_Nav_EnterSmoothPostYawSeek(const AppNavInput *input, AppNavOutput *output)
 {
     app_nav_smooth_action_state = APP_NAV_SMOOTH_ACTION_POST_YAW_SEEK_REAR_TAPE;
     app_nav_smooth_post_yaw_ticks = 0U;
@@ -374,8 +362,7 @@ static void App_Nav_EnterSmoothPostYawSeek(const AppNavInput *input,
 }
 
 static AppNavSmoothRearTapeGateResult App_Nav_UpdateSmoothRearTapeGate(
-    bool current_rear_tape,
-    bool exit_detection_enabled)
+    bool current_rear_tape, bool exit_detection_enabled)
 {
     switch (app_nav_smooth_rear_tape_gate_state)
     {
@@ -429,8 +416,7 @@ static AppNavSmoothRearTapeGateResult App_Nav_UpdateSmoothRearTapeGate(
             return APP_NAV_SMOOTH_REAR_TAPE_GATE_CONTINUE;
         }
 
-        if ((app_nav_smooth_was_rear_tape_detected == 0U) &&
-            exit_detection_enabled)
+        if ((app_nav_smooth_was_rear_tape_detected == 0U) && exit_detection_enabled)
         {
             app_nav_smooth_was_rear_tape_detected = 1U;
             return APP_NAV_SMOOTH_REAR_TAPE_GATE_EXIT_DETECTED;
@@ -528,9 +514,8 @@ static AppNavAdvanceRearTapeGateResult App_Nav_UpdateAdvanceRearTapeGate(bool cu
     }
 }
 
-static bool App_Nav_GetPivotActionTargets(AppNavPivotActionType action,
-                                          int16_t *target_yaw_degrees,
-                                          int16_t *base_target_dps)
+static bool App_Nav_GetPivotActionTargets(
+    AppNavPivotActionType action, int16_t *target_yaw_degrees, int16_t *base_target_dps)
 {
     int16_t target_dps = (int16_t)app_nav_config.pivot_turn_target_dps;
 
@@ -562,10 +547,8 @@ static bool App_Nav_GetPivotActionTargets(AppNavPivotActionType action,
     }
 }
 
-static uint8_t App_Nav_DetectLowWithHysteresis(uint16_t value,
-                                               uint16_t threshold,
-                                               uint16_t hysteresis,
-                                               uint8_t was_detected)
+static uint8_t App_Nav_DetectLowWithHysteresis(
+    uint16_t value, uint16_t threshold, uint16_t hysteresis, uint8_t was_detected)
 {
     uint32_t release_threshold = (uint32_t)threshold + (uint32_t)hysteresis;
 
@@ -577,18 +560,14 @@ static uint8_t App_Nav_DetectLowWithHysteresis(uint16_t value,
     return (value < threshold) ? 1U : 0U;
 }
 
-static uint8_t App_Nav_DetectFrontWallWithHysteresis(uint16_t left_value,
-                                                     uint16_t right_value,
-                                                     uint16_t threshold,
-                                                     uint16_t hysteresis,
-                                                     uint8_t was_detected)
+static uint8_t App_Nav_DetectFrontWallWithHysteresis(
+    uint16_t left_value, uint16_t right_value, uint16_t threshold, uint16_t hysteresis, uint8_t was_detected)
 {
     uint32_t release_threshold = (uint32_t)threshold + (uint32_t)hysteresis;
 
     if (was_detected != 0U)
     {
-        return (((uint32_t)left_value < release_threshold) &&
-                ((uint32_t)right_value < release_threshold)) ? 1U : 0U;
+        return (((uint32_t)left_value < release_threshold) && ((uint32_t)right_value < release_threshold)) ? 1U : 0U;
     }
 
     return ((left_value < threshold) && (right_value < threshold)) ? 1U : 0U;
@@ -607,51 +586,39 @@ static bool App_Nav_UpdatePerception(const AppNavInput *input)
     floor_front_adc = input->adc_filtered[APP_NAV_ADC_FLOOR_FRONT_CH];
     floor_rear_adc = input->adc_filtered[APP_NAV_ADC_FLOOR_REAR_CH];
 
-    app_nav_perception.wall_front = App_Nav_DetectFrontWallWithHysteresis(input->dist_front_left_mm,
-                                              	  	  	  	  	  	  	  input->dist_front_right_mm,
-																		  app_nav_config.wall_threshold_mm_front,
-																		  app_nav_config.wall_hysteresis_mm,
-																		  app_nav_perception.wall_front);
+    app_nav_perception.wall_front =
+        App_Nav_DetectFrontWallWithHysteresis(input->dist_front_left_mm, input->dist_front_right_mm,
+            app_nav_config.wall_threshold_mm_front, app_nav_config.wall_hysteresis_mm, app_nav_perception.wall_front);
 
     app_nav_perception.wall_left = App_Nav_DetectLowWithHysteresis(input->dist_left_lat_mm,
-                                        							app_nav_config.wall_threshold_mm_side,
-																	app_nav_config.wall_hysteresis_mm,
-																	app_nav_perception.wall_left);
+        app_nav_config.wall_threshold_mm_side, app_nav_config.wall_hysteresis_mm, app_nav_perception.wall_left);
 
     app_nav_perception.wall_right = App_Nav_DetectLowWithHysteresis(input->dist_right_lat_mm,
-                                        							app_nav_config.wall_threshold_mm_side,
-																	app_nav_config.wall_hysteresis_mm,
-																	app_nav_perception.wall_right);
+        app_nav_config.wall_threshold_mm_side, app_nav_config.wall_hysteresis_mm, app_nav_perception.wall_right);
 
-    app_nav_perception.wall_diag_left = App_Nav_DetectLowWithHysteresis(input->dist_diagonal_left_mm,
-                                        								app_nav_config.wall_threshold_mm_diagonal,
-																		app_nav_config.wall_hysteresis_mm,
-																		app_nav_perception.wall_diag_left);
+    app_nav_perception.wall_diag_left =
+        App_Nav_DetectLowWithHysteresis(input->dist_diagonal_left_mm, app_nav_config.wall_threshold_mm_diagonal,
+            app_nav_config.wall_hysteresis_mm, app_nav_perception.wall_diag_left);
 
-    app_nav_perception.wall_diag_right = App_Nav_DetectLowWithHysteresis(input->dist_diagonal_right_mm,
-                                        								app_nav_config.wall_threshold_mm_diagonal,
-																		app_nav_config.wall_hysteresis_mm,
-																		app_nav_perception.wall_diag_right);
+    app_nav_perception.wall_diag_right =
+        App_Nav_DetectLowWithHysteresis(input->dist_diagonal_right_mm, app_nav_config.wall_threshold_mm_diagonal,
+            app_nav_config.wall_hysteresis_mm, app_nav_perception.wall_diag_right);
 
-    app_nav_perception.floor_front_black = App_Nav_DetectLowWithHysteresis(floor_front_adc,
-                                        									app_nav_config.tape_detection_threshold_adc,
-																			app_nav_config.tape_hysteresis_adc,
-																			app_nav_perception.floor_front_black);
+    app_nav_perception.floor_front_black =
+        App_Nav_DetectLowWithHysteresis(floor_front_adc, app_nav_config.tape_detection_threshold_adc,
+            app_nav_config.tape_hysteresis_adc, app_nav_perception.floor_front_black);
 
-    app_nav_perception.floor_rear_black = App_Nav_DetectLowWithHysteresis(floor_rear_adc,
-                                        									app_nav_config.tape_detection_threshold_adc,
-																			app_nav_config.tape_hysteresis_adc,
-																			app_nav_perception.floor_rear_black);
+    app_nav_perception.floor_rear_black =
+        App_Nav_DetectLowWithHysteresis(floor_rear_adc, app_nav_config.tape_detection_threshold_adc,
+            app_nav_config.tape_hysteresis_adc, app_nav_perception.floor_rear_black);
 
     return true;
 }
-
 
 static void App_Nav_ResetPerception(void)
 {
     memset(&app_nav_perception, 0, sizeof(app_nav_perception));
 }
-
 
 /* -------------------------------------------------------------------------- */
 /* Configuration, lifecycle and perception                                      */
@@ -728,8 +695,7 @@ void App_Nav_Reset(void)
     App_Nav_ResetPerception();
 }
 
-bool App_Nav_EvaluatePerception(const AppNavInput *input,
-                                AppNavPerception *perception_out)
+bool App_Nav_EvaluatePerception(const AppNavInput *input, AppNavPerception *perception_out)
 {
     if ((input == NULL) || (perception_out == NULL))
     {
@@ -745,13 +711,11 @@ bool App_Nav_EvaluatePerception(const AppNavInput *input,
     return true;
 }
 
-
 /* -------------------------------------------------------------------------- */
 /* Local recommendation policy                                                  */
 /* -------------------------------------------------------------------------- */
 
-bool App_Nav_RecommendAction(const AppNavPerception *perception,
-                              AppNavRecommendedAction *action_out)
+bool App_Nav_RecommendAction(const AppNavPerception *perception, AppNavRecommendedAction *action_out)
 {
     if ((perception == NULL) || (action_out == NULL))
     {
@@ -780,8 +744,7 @@ bool App_Nav_RecommendAction(const AppNavPerception *perception,
     return true;
 }
 
-static bool App_Nav_StartYawHoldAdvanceInternal(int32_t yaw_target_q16_deg,
-                                                uint8_t clear_smooth_action)
+static bool App_Nav_StartYawHoldAdvanceInternal(int32_t yaw_target_q16_deg, uint8_t clear_smooth_action)
 {
     app_nav_straight_yaw_target_q16_deg = yaw_target_q16_deg;
     app_nav_straight_active = 1U;
@@ -806,10 +769,8 @@ static bool App_Nav_StartYawHoldAdvanceInternal(int32_t yaw_target_q16_deg,
 /* Reusable low-level drive controllers                                         */
 /* -------------------------------------------------------------------------- */
 
-static bool App_Nav_ComputeYawHoldAdvancePwm(const AppNavInput *input,
-                                      uint16_t right_base_pwm,
-                                      uint16_t left_base_pwm,
-                                      AppNavOutput *output)
+static bool App_Nav_ComputeYawHoldAdvancePwm(
+    const AppNavInput *input, uint16_t right_base_pwm, uint16_t left_base_pwm, AppNavOutput *output)
 {
     int32_t pid_output_fixed;
     int32_t correction;
@@ -829,11 +790,8 @@ static bool App_Nav_ComputeYawHoldAdvancePwm(const AppNavInput *input,
         return false;
     }
 
-    PID_Set_Setpoint_Fixed(&app_nav_advance_pid,
-                           app_nav_straight_yaw_target_q16_deg);
-    pid_output_fixed = PID_Update_Fixed(&app_nav_advance_pid,
-                                        input->yaw_q16_deg,
-                                        input->dt_ms);
+    PID_Set_Setpoint_Fixed(&app_nav_advance_pid, app_nav_straight_yaw_target_q16_deg);
+    pid_output_fixed = PID_Update_Fixed(&app_nav_advance_pid, input->yaw_q16_deg, input->dt_ms);
     correction = FIXED_TO_INT(pid_output_fixed);
     correction_limit = (right_base_pwm < left_base_pwm) ? (int32_t)right_base_pwm : (int32_t)left_base_pwm;
 
@@ -854,7 +812,6 @@ static bool App_Nav_ComputeYawHoldAdvancePwm(const AppNavInput *input,
 
     return true;
 }
-
 
 static bool App_Nav_StartWallFollowAdvance(void)
 {
@@ -880,8 +837,7 @@ static bool App_Nav_StartWallFollowAdvance(void)
 
 static bool App_Nav_StartSmoothTurn(AppNavSmoothTurnDirection direction)
 {
-    if ((direction != APP_NAV_SMOOTH_TURN_LEFT) &&
-        (direction != APP_NAV_SMOOTH_TURN_RIGHT))
+    if ((direction != APP_NAV_SMOOTH_TURN_LEFT) && (direction != APP_NAV_SMOOTH_TURN_RIGHT))
     {
         return false;
     }
@@ -904,8 +860,7 @@ static bool App_Nav_StartSmoothTurn(AppNavSmoothTurnDirection direction)
     return true;
 }
 
-static bool App_Nav_ComputeSmoothTurnPwm(const AppNavInput *input,
-                                  AppNavOutput *output)
+static bool App_Nav_ComputeSmoothTurnPwm(const AppNavInput *input, AppNavOutput *output)
 {
     int16_t base_right;
     int16_t base_left;
@@ -942,9 +897,7 @@ static bool App_Nav_ComputeSmoothTurnPwm(const AppNavInput *input,
     }
 
     App_Nav_SetSmoothTurnSetpoint(app_nav_smooth_turn_direction);
-    pid_output_fixed = PID_Update(&app_nav_smooth_turn_pid,
-                                  input->yaw_rate_dps,
-                                  input->dt_ms);
+    pid_output_fixed = PID_Update(&app_nav_smooth_turn_pid, input->yaw_rate_dps, input->dt_ms);
     correction = (int16_t)FIXED_TO_INT(pid_output_fixed);
 
     right_speed = base_right + correction;
@@ -965,8 +918,8 @@ void App_Nav_StopSmoothAction(void)
     PID_Reset(&app_nav_advance_pid);
 }
 
-bool App_Nav_StartSmoothActionWithRearTapeProfile(AppNavSmoothActionType action,
-                                                  AppNavRearTapeProfile rear_tape_profile)
+bool App_Nav_StartSmoothActionWithRearTapeProfile(
+    AppNavSmoothActionType action, AppNavRearTapeProfile rear_tape_profile)
 {
     AppNavSmoothTurnDirection direction;
 
@@ -1009,9 +962,7 @@ bool App_Nav_StartSmoothActionWithRearTapeProfile(AppNavSmoothActionType action,
 }
 
 static AppNavSmoothActionState App_Nav_TickSmoothActionPostYawSeek(
-    const AppNavInput *input,
-    bool rear_tape_detected,
-    AppNavOutput *output)
+    const AppNavInput *input, bool rear_tape_detected, AppNavOutput *output)
 {
     if (rear_tape_detected)
     {
@@ -1026,10 +977,8 @@ static AppNavSmoothActionState App_Nav_TickSmoothActionPostYawSeek(
         return app_nav_smooth_action_state;
     }
 
-    if (!App_Nav_ComputeYawHoldAdvancePwm(input,
-                                          app_nav_config.right_motor_base_speed,
-                                          app_nav_config.left_motor_base_speed,
-                                          output))
+    if (!App_Nav_ComputeYawHoldAdvancePwm(
+            input, app_nav_config.right_motor_base_speed, app_nav_config.left_motor_base_speed, output))
     {
         App_Nav_SetSmoothActionTerminal(APP_NAV_SMOOTH_ACTION_ERROR);
         return app_nav_smooth_action_state;
@@ -1040,10 +989,7 @@ static AppNavSmoothActionState App_Nav_TickSmoothActionPostYawSeek(
 }
 
 static AppNavSmoothActionState App_Nav_TickSmoothActionTurning(
-    const AppNavInput *input,
-    int32_t yaw_deg,
-    bool rear_tape_detected,
-    AppNavOutput *output)
+    const AppNavInput *input, int32_t yaw_deg, bool rear_tape_detected, AppNavOutput *output)
 {
     bool wall_detected;
     int32_t yaw_completion_threshold;
@@ -1073,15 +1019,13 @@ static AppNavSmoothActionState App_Nav_TickSmoothActionTurning(
 
     if (wall_detected)
     {
-        App_Nav_EnterSmoothPostYawSeek(input,
-                                       output);
+        App_Nav_EnterSmoothPostYawSeek(input, output);
         return app_nav_smooth_action_state;
     }
 
     if (yaw_target_reached)
     {
-        App_Nav_EnterSmoothPostYawSeek(input,
-                                       output);
+        App_Nav_EnterSmoothPostYawSeek(input, output);
         return app_nav_smooth_action_state;
     }
 
@@ -1095,9 +1039,8 @@ static AppNavSmoothActionState App_Nav_TickSmoothActionTurning(
     return app_nav_smooth_action_state;
 }
 
-AppNavSmoothActionState App_Nav_TickSmoothAction(const AppNavInput *input,
-                                                 const AppNavPerception *perception,
-                                                 AppNavOutput *output)
+AppNavSmoothActionState App_Nav_TickSmoothAction(
+    const AppNavInput *input, const AppNavPerception *perception, AppNavOutput *output)
 {
     int32_t yaw_deg;
     bool current_rear_tape;
@@ -1135,8 +1078,7 @@ AppNavSmoothActionState App_Nav_TickSmoothAction(const AppNavInput *input,
     current_rear_tape = (perception->floor_rear_black != 0U);
 
     smooth_rear_tape_gate_result = App_Nav_UpdateSmoothRearTapeGate(
-        current_rear_tape,
-        (App_Nav_AbsInt32(yaw_deg) > (int32_t)app_nav_config.smooth_rear_tape_min_yaw_deg));
+        current_rear_tape, (App_Nav_AbsInt32(yaw_deg) > (int32_t)app_nav_config.smooth_rear_tape_min_yaw_deg));
 
     if (smooth_rear_tape_gate_result == APP_NAV_SMOOTH_REAR_TAPE_GATE_ERROR)
     {
@@ -1144,8 +1086,7 @@ AppNavSmoothActionState App_Nav_TickSmoothAction(const AppNavInput *input,
         return app_nav_smooth_action_state;
     }
 
-    rear_tape_detected =
-        (smooth_rear_tape_gate_result == APP_NAV_SMOOTH_REAR_TAPE_GATE_EXIT_DETECTED);
+    rear_tape_detected = (smooth_rear_tape_gate_result == APP_NAV_SMOOTH_REAR_TAPE_GATE_EXIT_DETECTED);
 
     if ((app_nav_smooth_action_type != APP_NAV_SMOOTH_ACTION_LEFT) &&
         (app_nav_smooth_action_type != APP_NAV_SMOOTH_ACTION_RIGHT))
@@ -1156,17 +1097,12 @@ AppNavSmoothActionState App_Nav_TickSmoothAction(const AppNavInput *input,
 
     if (app_nav_smooth_action_state == APP_NAV_SMOOTH_ACTION_POST_YAW_SEEK_REAR_TAPE)
     {
-        return App_Nav_TickSmoothActionPostYawSeek(input,
-                                                   rear_tape_detected,
-                                                   output);
+        return App_Nav_TickSmoothActionPostYawSeek(input, rear_tape_detected, output);
     }
 
     if (app_nav_smooth_action_state == APP_NAV_SMOOTH_ACTION_TURNING)
     {
-        return App_Nav_TickSmoothActionTurning(input,
-                                               yaw_deg,
-                                               rear_tape_detected,
-                                               output);
+        return App_Nav_TickSmoothActionTurning(input, yaw_deg, rear_tape_detected, output);
     }
 
     App_Nav_SetSmoothActionTerminal(APP_NAV_SMOOTH_ACTION_ERROR);
@@ -1194,9 +1130,7 @@ static bool App_Nav_StartPivotTurn(void)
     return true;
 }
 
-static bool App_Nav_ComputePivotTurnPwm(const AppNavInput *input,
-                                 int16_t target_dps,
-                                 AppNavOutput *output)
+static bool App_Nav_ComputePivotTurnPwm(const AppNavInput *input, int16_t target_dps, AppNavOutput *output)
 {
     int32_t pid_output_fixed;
     int16_t correction_pwm;
@@ -1214,9 +1148,7 @@ static bool App_Nav_ComputePivotTurnPwm(const AppNavInput *input,
     }
 
     PID_Set_Setpoint(&app_nav_pivot_turn_pid, target_dps);
-    pid_output_fixed = PID_Update(&app_nav_pivot_turn_pid,
-                                  input->yaw_rate_dps,
-                                  input->dt_ms);
+    pid_output_fixed = PID_Update(&app_nav_pivot_turn_pid, input->yaw_rate_dps, input->dt_ms);
     correction_pwm = (int16_t)FIXED_TO_INT(pid_output_fixed);
 
     output->right_motor_pwm = correction_pwm;
@@ -1237,9 +1169,7 @@ bool App_Nav_StartPivotAction(AppNavPivotActionType action)
     int16_t target_yaw_degrees;
     int16_t base_target_dps;
 
-    if (!App_Nav_GetPivotActionTargets(action,
-                                       &target_yaw_degrees,
-                                       &base_target_dps))
+    if (!App_Nav_GetPivotActionTargets(action, &target_yaw_degrees, &base_target_dps))
     {
         app_nav_pivot_action_state = APP_NAV_PIVOT_ACTION_ERROR;
         return false;
@@ -1260,9 +1190,8 @@ bool App_Nav_StartPivotAction(AppNavPivotActionType action)
     return true;
 }
 
-AppNavPivotActionState App_Nav_TickPivotAction(const AppNavInput *input,
-                                               const AppNavPerception *perception,
-                                               AppNavOutput *output)
+AppNavPivotActionState App_Nav_TickPivotAction(
+    const AppNavInput *input, const AppNavPerception *perception, AppNavOutput *output)
 {
     int32_t current_yaw_degrees;
     int32_t target_abs;
@@ -1301,9 +1230,7 @@ AppNavPivotActionState App_Nav_TickPivotAction(const AppNavInput *input,
         app_nav_pivot_elapsed_ms = UINT32_MAX;
     }
 
-    if (!App_Nav_GetPivotActionTargets(app_nav_pivot_action_type,
-                                       &app_nav_pivot_target_yaw_degrees,
-                                       &base_target_dps))
+    if (!App_Nav_GetPivotActionTargets(app_nav_pivot_action_type, &app_nav_pivot_target_yaw_degrees, &base_target_dps))
     {
         app_nav_pivot_turn_active = 0U;
         app_nav_pivot_action_state = APP_NAV_PIVOT_ACTION_ERROR;
@@ -1322,10 +1249,7 @@ AppNavPivotActionState App_Nav_TickPivotAction(const AppNavInput *input,
     }
 
     target_dps = (int16_t)(((int32_t)base_target_dps *
-                            (int32_t)(((((target_abs - current_abs) * (int16_t)100) /
-                                        target_abs) +
-                                       (int16_t)40)) /
-                           100));
+        (int32_t)(((((target_abs - current_abs) * (int16_t)100) / target_abs) + (int16_t)40)) / 100));
     app_nav_pivot_last_target_dps = target_dps;
 
     if (current_abs >= (target_abs - APP_NAV_PIVOT_COMPLETION_DEAD_ZONE_DEG))
@@ -1347,11 +1271,8 @@ AppNavPivotActionState App_Nav_TickPivotAction(const AppNavInput *input,
     return app_nav_pivot_action_state;
 }
 
-static bool App_Nav_ComputeWallFollowPwm(const AppNavInput *input,
-                                  const AppNavPerception *perception,
-                                  uint16_t right_base_pwm,
-                                  uint16_t left_base_pwm,
-                                  AppNavOutput *output)
+static bool App_Nav_ComputeWallFollowPwm(const AppNavInput *input, const AppNavPerception *perception,
+    uint16_t right_base_pwm, uint16_t left_base_pwm, AppNavOutput *output)
 {
     int32_t measured_diff;
     int32_t pid_output_fixed;
@@ -1371,27 +1292,18 @@ static bool App_Nav_ComputeWallFollowPwm(const AppNavInput *input,
         return false;
     }
 
-    if ((perception->wall_diag_left != 0U) &&
-        (perception->wall_diag_right != 0U) &&
-        (perception->wall_left != 0U) &&
+    if ((perception->wall_diag_left != 0U) && (perception->wall_diag_right != 0U) && (perception->wall_left != 0U) &&
         (perception->wall_right != 0U))
     {
-        measured_diff = (int32_t)input->dist_left_lat_mm -
-                        (int32_t)input->dist_right_lat_mm;
+        measured_diff = (int32_t)input->dist_left_lat_mm - (int32_t)input->dist_right_lat_mm;
     }
-    else if ((perception->wall_diag_right != 0U) &&
-             (perception->wall_right != 0U))
+    else if ((perception->wall_diag_right != 0U) && (perception->wall_right != 0U))
     {
-        measured_diff = ((int32_t)app_nav_config.wall_target_mm -
-                         (int32_t)input->dist_right_lat_mm) *
-                        2;
+        measured_diff = ((int32_t)app_nav_config.wall_target_mm - (int32_t)input->dist_right_lat_mm) * 2;
     }
-    else if ((perception->wall_diag_left != 0U) &&
-             (perception->wall_left != 0U))
+    else if ((perception->wall_diag_left != 0U) && (perception->wall_left != 0U))
     {
-        measured_diff = ((int32_t)input->dist_left_lat_mm -
-                         (int32_t)app_nav_config.wall_target_mm) *
-                        2;
+        measured_diff = ((int32_t)input->dist_left_lat_mm - (int32_t)app_nav_config.wall_target_mm) * 2;
     }
     else
     {
@@ -1400,9 +1312,7 @@ static bool App_Nav_ComputeWallFollowPwm(const AppNavInput *input,
 
     PID_Set_Setpoint_Fixed(&app_nav_advance_pid, 0);
     pid_output_fixed = PID_Update(&app_nav_advance_pid, measured_diff, input->dt_ms);
-    correction = App_Nav_LimitCorrectionToMotorBases(FIXED_TO_INT(pid_output_fixed),
-                                                     right_base_pwm,
-                                                     left_base_pwm);
+    correction = App_Nav_LimitCorrectionToMotorBases(FIXED_TO_INT(pid_output_fixed), right_base_pwm, left_base_pwm);
 
     right_pwm = (int32_t)right_base_pwm - correction;
     left_pwm = (int32_t)left_base_pwm + correction;
@@ -1413,17 +1323,10 @@ static bool App_Nav_ComputeWallFollowPwm(const AppNavInput *input,
     return true;
 }
 
-static bool App_Nav_ComputeForwardGuidedPwm(const AppNavInput *input,
-                                            const AppNavPerception *perception,
-                                            AppNavOutput *output,
-                                            uint8_t force_yaw_hold,
-                                            uint8_t *yaw_hold_started,
-                                            AppNavForwardGuidanceMode *guidance_mode)
+static bool App_Nav_ComputeForwardGuidedPwm(const AppNavInput *input, const AppNavPerception *perception,
+    AppNavOutput *output, uint8_t force_yaw_hold, uint8_t *yaw_hold_started, AppNavForwardGuidanceMode *guidance_mode)
 {
-    if ((input == NULL) ||
-        (perception == NULL) ||
-        (output == NULL) ||
-        (yaw_hold_started == NULL) ||
+    if ((input == NULL) || (perception == NULL) || (output == NULL) || (yaw_hold_started == NULL) ||
         (guidance_mode == NULL))
     {
         return false;
@@ -1437,10 +1340,8 @@ static bool App_Nav_ComputeForwardGuidedPwm(const AppNavInput *input,
             *yaw_hold_started = 1U;
         }
 
-        if (!App_Nav_ComputeYawHoldAdvancePwm(input,
-                                              app_nav_config.right_motor_base_speed,
-                                              app_nav_config.left_motor_base_speed,
-                                              output))
+        if (!App_Nav_ComputeYawHoldAdvancePwm(
+                input, app_nav_config.right_motor_base_speed, app_nav_config.left_motor_base_speed, output))
         {
             return false;
         }
@@ -1449,11 +1350,8 @@ static bool App_Nav_ComputeForwardGuidedPwm(const AppNavInput *input,
         return true;
     }
 
-    if (App_Nav_ComputeWallFollowPwm(input,
-                                     perception,
-                                     app_nav_config.right_motor_base_speed,
-                                     app_nav_config.left_motor_base_speed,
-                                     output))
+    if (App_Nav_ComputeWallFollowPwm(
+            input, perception, app_nav_config.right_motor_base_speed, app_nav_config.left_motor_base_speed, output))
     {
         *guidance_mode = APP_NAV_FORWARD_GUIDANCE_WALL_FOLLOW;
         return true;
@@ -1462,10 +1360,8 @@ static bool App_Nav_ComputeForwardGuidedPwm(const AppNavInput *input,
     (void)App_Nav_StartYawHoldAdvanceInternal(input->yaw_q16_deg, 0U);
     *yaw_hold_started = 1U;
 
-    if (!App_Nav_ComputeYawHoldAdvancePwm(input,
-                                          app_nav_config.right_motor_base_speed,
-                                          app_nav_config.left_motor_base_speed,
-                                          output))
+    if (!App_Nav_ComputeYawHoldAdvancePwm(
+            input, app_nav_config.right_motor_base_speed, app_nav_config.left_motor_base_speed, output))
     {
         return false;
     }
@@ -1474,22 +1370,16 @@ static bool App_Nav_ComputeForwardGuidedPwm(const AppNavInput *input,
     return true;
 }
 
-static bool App_Nav_ComputeAdvanceActionPwm(const AppNavInput *input,
-                                            const AppNavPerception *perception,
-                                            AppNavOutput *output)
+static bool App_Nav_ComputeAdvanceActionPwm(
+    const AppNavInput *input, const AppNavPerception *perception, AppNavOutput *output)
 {
     AppNavForwardGuidanceMode guidance_mode;
     uint8_t force_yaw_hold;
 
-    force_yaw_hold =
-        (app_nav_advance_action_state == APP_NAV_ADVANCE_ACTION_RUNNING_YAW_HOLD) ? 1U : 0U;
+    force_yaw_hold = (app_nav_advance_action_state == APP_NAV_ADVANCE_ACTION_RUNNING_YAW_HOLD) ? 1U : 0U;
 
-    if (!App_Nav_ComputeForwardGuidedPwm(input,
-                                         perception,
-                                         output,
-                                         force_yaw_hold,
-                                         &app_nav_advance_yaw_hold_started,
-                                         &guidance_mode))
+    if (!App_Nav_ComputeForwardGuidedPwm(
+            input, perception, output, force_yaw_hold, &app_nav_advance_yaw_hold_started, &guidance_mode))
     {
         return false;
     }
@@ -1525,8 +1415,7 @@ bool App_NavPrimitiveTest_Start(AppNavPrimitiveTestType type)
         return false;
     }
 
-    if ((type != APP_NAV_PRIMITIVE_TEST_SMOOTH_LEFT) &&
-        (type != APP_NAV_PRIMITIVE_TEST_SMOOTH_RIGHT))
+    if ((type != APP_NAV_PRIMITIVE_TEST_SMOOTH_LEFT) && (type != APP_NAV_PRIMITIVE_TEST_SMOOTH_RIGHT))
     {
         app_nav_primitive_test_type = APP_NAV_PRIMITIVE_TEST_NONE;
         app_nav_primitive_test_state = APP_NAV_PRIMITIVE_TEST_REJECTED;
@@ -1541,9 +1430,8 @@ bool App_NavPrimitiveTest_Start(AppNavPrimitiveTestType type)
     return true;
 }
 
-AppNavPrimitiveTestState App_NavPrimitiveTest_Tick(const AppNavInput *input,
-                                                   const AppNavPerception *perception,
-                                                   AppNavOutput *output)
+AppNavPrimitiveTestState App_NavPrimitiveTest_Tick(
+    const AppNavInput *input, const AppNavPerception *perception, AppNavOutput *output)
 {
     AppNavSmoothActionType smooth_action;
     AppNavSmoothActionState smooth_state;
@@ -1579,9 +1467,7 @@ AppNavPrimitiveTestState App_NavPrimitiveTest_Tick(const AppNavInput *input,
 
     if (app_nav_primitive_test_action_started == 0U)
     {
-        if (!App_Nav_StartSmoothActionWithRearTapeProfile(
-                smooth_action,
-                APP_NAV_REAR_TAPE_PROFILE_NORMAL_CELL))
+        if (!App_Nav_StartSmoothActionWithRearTapeProfile(smooth_action, APP_NAV_REAR_TAPE_PROFILE_NORMAL_CELL))
         {
             app_nav_primitive_test_state = APP_NAV_PRIMITIVE_TEST_ERROR;
             app_nav_primitive_test_action_started = 0U;
@@ -1599,7 +1485,7 @@ AppNavPrimitiveTestState App_NavPrimitiveTest_Tick(const AppNavInput *input,
         app_nav_primitive_test_state = APP_NAV_PRIMITIVE_TEST_RUNNING;
     }
     else if ((smooth_state == APP_NAV_SMOOTH_ACTION_DONE_REAR_TAPE) ||
-             (smooth_state == APP_NAV_SMOOTH_ACTION_DONE_POST_YAW_REAR_TAPE))
+        (smooth_state == APP_NAV_SMOOTH_ACTION_DONE_POST_YAW_REAR_TAPE))
     {
         app_nav_primitive_test_state = APP_NAV_PRIMITIVE_TEST_DONE;
         app_nav_primitive_test_action_started = 0U;
@@ -1638,8 +1524,8 @@ AppNavPrimitiveTestState App_NavPrimitiveTest_GetState(void)
 /* AdvanceAction: drive until rear tape confirms next cell boundary             */
 /* -------------------------------------------------------------------------- */
 
-bool App_Nav_StartAdvanceActionWithRearTapeProfile(AppNavAdvanceActionMode mode,
-                                                   AppNavRearTapeProfile rear_tape_profile)
+bool App_Nav_StartAdvanceActionWithRearTapeProfile(
+    AppNavAdvanceActionMode mode, AppNavRearTapeProfile rear_tape_profile)
 {
     if (mode != APP_NAV_ADVANCE_ACTION_WALL_FOLLOW_AUTO_YAW_HOLD)
     {
@@ -1674,9 +1560,8 @@ bool App_Nav_StartAdvanceActionWithRearTapeProfile(AppNavAdvanceActionMode mode,
     return true;
 }
 
-AppNavAdvanceActionState App_Nav_TickAdvanceAction(const AppNavInput *input,
-                                                   const AppNavPerception *perception,
-                                                   AppNavOutput *output)
+AppNavAdvanceActionState App_Nav_TickAdvanceAction(
+    const AppNavInput *input, const AppNavPerception *perception, AppNavOutput *output)
 {
     bool current_rear_tape;
     AppNavAdvanceRearTapeGateResult rear_tape_gate_result;
@@ -1769,9 +1654,8 @@ bool App_Nav_StartApproachFrontWallAction(void)
     return true;
 }
 
-AppNavApproachFrontWallActionState App_Nav_TickApproachFrontWallAction(const AppNavInput *input,
-                                                                       const AppNavPerception *perception,
-                                                                       AppNavOutput *output)
+AppNavApproachFrontWallActionState App_Nav_TickApproachFrontWallAction(
+    const AppNavInput *input, const AppNavPerception *perception, AppNavOutput *output)
 {
     AppNavForwardGuidanceMode guidance_mode;
     uint16_t front_avg_mm;
@@ -1803,9 +1687,7 @@ AppNavApproachFrontWallActionState App_Nav_TickApproachFrontWallAction(const App
         return app_nav_approach_front_wall_action_state;
     }
 
-    front_avg_mm = (uint16_t)(((uint32_t)input->dist_front_left_mm +
-                               (uint32_t)input->dist_front_right_mm) /
-                              2U);
+    front_avg_mm = (uint16_t)(((uint32_t)input->dist_front_left_mm + (uint32_t)input->dist_front_right_mm) / 2U);
 
     if (front_avg_mm <= app_nav_config.approach_front_wall_target_mm)
     {
@@ -1814,15 +1696,10 @@ AppNavApproachFrontWallActionState App_Nav_TickApproachFrontWallAction(const App
     }
 
     force_yaw_hold =
-        (app_nav_approach_front_wall_action_state ==
-         APP_NAV_APPROACH_FRONT_WALL_ACTION_RUNNING_YAW_HOLD) ? 1U : 0U;
+        (app_nav_approach_front_wall_action_state == APP_NAV_APPROACH_FRONT_WALL_ACTION_RUNNING_YAW_HOLD) ? 1U : 0U;
 
-    if (!App_Nav_ComputeForwardGuidedPwm(input,
-                                         perception,
-                                         output,
-                                         force_yaw_hold,
-                                         &app_nav_approach_front_wall_yaw_hold_started,
-                                         &guidance_mode))
+    if (!App_Nav_ComputeForwardGuidedPwm(
+            input, perception, output, force_yaw_hold, &app_nav_approach_front_wall_yaw_hold_started, &guidance_mode))
     {
         App_Nav_SetApproachFrontWallActionTerminal(APP_NAV_APPROACH_FRONT_WALL_ACTION_ERROR);
         return app_nav_approach_front_wall_action_state;
@@ -1830,13 +1707,11 @@ AppNavApproachFrontWallActionState App_Nav_TickApproachFrontWallAction(const App
 
     if (guidance_mode == APP_NAV_FORWARD_GUIDANCE_YAW_HOLD)
     {
-        app_nav_approach_front_wall_action_state =
-            APP_NAV_APPROACH_FRONT_WALL_ACTION_RUNNING_YAW_HOLD;
+        app_nav_approach_front_wall_action_state = APP_NAV_APPROACH_FRONT_WALL_ACTION_RUNNING_YAW_HOLD;
     }
     else
     {
-        app_nav_approach_front_wall_action_state =
-            APP_NAV_APPROACH_FRONT_WALL_ACTION_RUNNING_WALL_FOLLOW;
+        app_nav_approach_front_wall_action_state = APP_NAV_APPROACH_FRONT_WALL_ACTION_RUNNING_WALL_FOLLOW;
     }
 
     return app_nav_approach_front_wall_action_state;
@@ -1936,9 +1811,8 @@ bool App_Nav_StartCenterByFrontTapeForPivotAction(AppNavFrontTapeProfile front_t
     return true;
 }
 
-AppNavCenterFrontTapeActionState App_Nav_TickCenterByFrontTapeForPivotAction(const AppNavInput *input,
-                                                                             const AppNavPerception *perception,
-                                                                             AppNavOutput *output)
+AppNavCenterFrontTapeActionState App_Nav_TickCenterByFrontTapeForPivotAction(
+    const AppNavInput *input, const AppNavPerception *perception, AppNavOutput *output)
 {
     AppNavForwardGuidanceMode guidance_mode;
     AppNavCenterFrontTapeGateResult front_tape_gate_result;
@@ -1992,15 +1866,10 @@ AppNavCenterFrontTapeActionState App_Nav_TickCenterByFrontTapeForPivotAction(con
     }
 
     force_yaw_hold =
-        (app_nav_center_front_tape_action_state ==
-         APP_NAV_CENTER_FRONT_TAPE_ACTION_RUNNING_YAW_HOLD) ? 1U : 0U;
+        (app_nav_center_front_tape_action_state == APP_NAV_CENTER_FRONT_TAPE_ACTION_RUNNING_YAW_HOLD) ? 1U : 0U;
 
-    if (!App_Nav_ComputeForwardGuidedPwm(input,
-                                         perception,
-                                         output,
-                                         force_yaw_hold,
-                                         &app_nav_center_front_tape_yaw_hold_started,
-                                         &guidance_mode))
+    if (!App_Nav_ComputeForwardGuidedPwm(
+            input, perception, output, force_yaw_hold, &app_nav_center_front_tape_yaw_hold_started, &guidance_mode))
     {
         App_Nav_SetCenterFrontTapeActionTerminal(APP_NAV_CENTER_FRONT_TAPE_ACTION_ERROR);
         return app_nav_center_front_tape_action_state;
@@ -2008,13 +1877,11 @@ AppNavCenterFrontTapeActionState App_Nav_TickCenterByFrontTapeForPivotAction(con
 
     if (guidance_mode == APP_NAV_FORWARD_GUIDANCE_YAW_HOLD)
     {
-        app_nav_center_front_tape_action_state =
-            APP_NAV_CENTER_FRONT_TAPE_ACTION_RUNNING_YAW_HOLD;
+        app_nav_center_front_tape_action_state = APP_NAV_CENTER_FRONT_TAPE_ACTION_RUNNING_YAW_HOLD;
     }
     else
     {
-        app_nav_center_front_tape_action_state =
-            APP_NAV_CENTER_FRONT_TAPE_ACTION_RUNNING_WALL_FOLLOW;
+        app_nav_center_front_tape_action_state = APP_NAV_CENTER_FRONT_TAPE_ACTION_RUNNING_WALL_FOLLOW;
     }
 
     return app_nav_center_front_tape_action_state;

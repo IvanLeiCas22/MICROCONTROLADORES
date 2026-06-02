@@ -21,8 +21,10 @@
 #define SSD1306_BUSY -2
 
 /* Hardware abstraction function pointer types */
-typedef int8_t (*SSD1306_I2C_WriteFunc)(uint8_t device_addr, uint8_t reg_addr, uint8_t *data, uint16_t data_len, void *context);
-typedef int8_t (*SSD1306_I2C_WriteDMAFunc)(uint8_t device_addr, uint8_t reg_addr, uint8_t *data, uint16_t data_len, void *context);
+typedef int8_t (*SSD1306_I2C_WriteFunc)(
+    uint8_t device_addr, uint8_t reg_addr, uint8_t *data, uint16_t data_len, void *context);
+typedef int8_t (*SSD1306_I2C_WriteDMAFunc)(
+    uint8_t device_addr, uint8_t reg_addr, uint8_t *data, uint16_t data_len, void *context);
 typedef void (*SSD1306_DelayFunc)(uint32_t ms);
 
 /* Text alignment options */
@@ -55,7 +57,8 @@ int8_t SSD1306_Init(SSD1306_HandleTypeDef *hssd);
 int8_t SSD1306_DrawPixel(SSD1306_HandleTypeDef *hssd, uint8_t x, uint8_t y, bool color);
 int8_t SSD1306_DrawLine(SSD1306_HandleTypeDef *hssd, uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, bool color);
 int8_t SSD1306_DrawRect(SSD1306_HandleTypeDef *hssd, uint8_t x, uint8_t y, uint8_t w, uint8_t h, bool color);
-int8_t SSD1306_DrawBitmap(SSD1306_HandleTypeDef *hssd, uint8_t x, uint8_t y, const uint8_t *bitmap, uint8_t w, uint8_t h);
+int8_t SSD1306_DrawBitmap(
+    SSD1306_HandleTypeDef *hssd, uint8_t x, uint8_t y, const uint8_t *bitmap, uint8_t w, uint8_t h);
 int8_t SSD1306_DrawText(SSD1306_HandleTypeDef *hssd, uint8_t x, uint8_t y, const char *text, SSD1306_TextAlign align);
 int8_t SSD1306_DrawMultilineText(SSD1306_HandleTypeDef *hssd, uint8_t x, uint8_t y, const char *text);
 int8_t SSD1306_UpdateScreen_DMA(SSD1306_HandleTypeDef *hssd);

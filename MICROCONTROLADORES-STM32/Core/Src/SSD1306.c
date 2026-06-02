@@ -140,23 +140,12 @@ int8_t SSD1306_Init(SSD1306_HandleTypeDef *hssd)
 {
     if (hssd == NULL || hssd->i2c_write_blocking == NULL)
         return SSD1306_ERROR;
-    uint8_t cmds[] = {
-        SSD1306_CMD_DISPLAY_OFF,
-        SSD1306_CMD_SET_DISPLAY_CLOCK_DIV, 0x80,
-        SSD1306_CMD_SET_MULTIPLEX, SSD1306_HEIGHT - 1,
-        SSD1306_CMD_SET_DISPLAY_OFFSET, 0x00,
-        SSD1306_CMD_SET_START_LINE | 0x00,
-        SSD1306_CMD_SET_CHARGE_PUMP, 0x14,
-        SSD1306_CMD_SET_MEMORY_MODE, 0x00,
-        SSD1306_CMD_SET_SEG_REMAP | 0x01,
-        SSD1306_CMD_SET_COM_SCAN_DEC,
-        SSD1306_CMD_SET_COM_PINS, 0x12,
-        SSD1306_CMD_SET_CONTRAST, 0xCF,
-        SSD1306_CMD_SET_PRECHARGE, 0xF1,
-        SSD1306_CMD_SET_VCOM_DETECT, 0x40,
-        SSD1306_CMD_SET_DISPLAY_ALL_ON_RESUME,
-        SSD1306_CMD_SET_NORMAL_DISPLAY,
-        SSD1306_CMD_DISPLAY_ON};
+    uint8_t cmds[] = {SSD1306_CMD_DISPLAY_OFF, SSD1306_CMD_SET_DISPLAY_CLOCK_DIV, 0x80, SSD1306_CMD_SET_MULTIPLEX,
+        SSD1306_HEIGHT - 1, SSD1306_CMD_SET_DISPLAY_OFFSET, 0x00, SSD1306_CMD_SET_START_LINE | 0x00,
+        SSD1306_CMD_SET_CHARGE_PUMP, 0x14, SSD1306_CMD_SET_MEMORY_MODE, 0x00, SSD1306_CMD_SET_SEG_REMAP | 0x01,
+        SSD1306_CMD_SET_COM_SCAN_DEC, SSD1306_CMD_SET_COM_PINS, 0x12, SSD1306_CMD_SET_CONTRAST, 0xCF,
+        SSD1306_CMD_SET_PRECHARGE, 0xF1, SSD1306_CMD_SET_VCOM_DETECT, 0x40, SSD1306_CMD_SET_DISPLAY_ALL_ON_RESUME,
+        SSD1306_CMD_SET_NORMAL_DISPLAY, SSD1306_CMD_DISPLAY_ON};
     for (uint8_t i = 0; i < sizeof(cmds); i++)
     {
         if (hssd->i2c_write_blocking(hssd->device_address, 0x00, &cmds[i], 1, hssd->i2c_context) != SSD1306_OK)
@@ -220,7 +209,8 @@ int8_t SSD1306_DrawRect(SSD1306_HandleTypeDef *hssd, uint8_t x, uint8_t y, uint8
     return SSD1306_OK;
 }
 
-int8_t SSD1306_DrawBitmap(SSD1306_HandleTypeDef *hssd, uint8_t x, uint8_t y, const uint8_t *bitmap, uint8_t w, uint8_t h)
+int8_t SSD1306_DrawBitmap(
+    SSD1306_HandleTypeDef *hssd, uint8_t x, uint8_t y, const uint8_t *bitmap, uint8_t w, uint8_t h)
 {
     if (!hssd || !bitmap)
         return SSD1306_ERROR;
@@ -361,7 +351,8 @@ int8_t SSD1306_UpdateScreen_DMA(SSD1306_HandleTypeDef *hssd)
     }
 
     // Ahora, transfiere el framebuffer completo por DMA
-    if (hssd->i2c_write_dma(hssd->device_address, 0x40, hssd->buffer, SSD1306_BUFFER_SIZE, hssd->i2c_context) != SSD1306_OK)
+    if (hssd->i2c_write_dma(hssd->device_address, 0x40, hssd->buffer, SSD1306_BUFFER_SIZE, hssd->i2c_context) !=
+        SSD1306_OK)
     {
         return SSD1306_ERROR;
     }

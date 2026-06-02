@@ -137,21 +137,16 @@ typedef struct
 
 void App_NavSupervisor_Init(void);
 void App_NavSupervisor_Reset(void);
-bool App_NavSupervisor_SetInitialPose(uint8_t x,
-                                      uint8_t y,
-                                      HeadingTypeDef heading);
-bool App_NavSupervisor_ResetWithInitialPose(uint8_t x,
-                                            uint8_t y,
-                                            HeadingTypeDef heading);
+bool App_NavSupervisor_SetInitialPose(uint8_t x, uint8_t y, HeadingTypeDef heading);
+bool App_NavSupervisor_ResetWithInitialPose(uint8_t x, uint8_t y, HeadingTypeDef heading);
 bool App_NavSupervisor_SetGoalCell(uint8_t x, uint8_t y);
 bool App_NavSupervisor_GetGoalCell(uint8_t *x, uint8_t *y, bool *valid);
 bool App_NavSupervisor_SetMission(AppNavSupervisorMission mission);
 AppNavSupervisorMission App_NavSupervisor_GetMission(void);
 bool App_NavSupervisor_Start(void);
 void App_NavSupervisor_Stop(void);
-AppNavSupervisorState App_NavSupervisor_Tick(const AppNavInput *input,
-                                             const AppNavPerception *perception,
-                                             AppNavOutput *output);
+AppNavSupervisorState App_NavSupervisor_Tick(
+    const AppNavInput *input, const AppNavPerception *perception, AppNavOutput *output);
 void App_NavSupervisor_GetDebug(AppNavSupervisorDebug *debug_out);
 bool App_NavSupervisor_IsActive(void);
 

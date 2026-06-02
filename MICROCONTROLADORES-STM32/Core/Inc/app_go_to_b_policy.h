@@ -38,8 +38,6 @@ typedef struct
     AppGoToBDecisionReason reason;
 } AppGoToBDecision;
 
-bool App_GoToBPolicy_Evaluate(uint8_t goal_x,
-                              uint8_t goal_y,
-                              AppGoToBDecision *decision_out);
+bool App_GoToBPolicy_Evaluate(uint8_t goal_x, uint8_t goal_y, AppGoToBDecision *decision_out);
 
 #endif /* INC_APP_GO_TO_B_POLICY_H_ */

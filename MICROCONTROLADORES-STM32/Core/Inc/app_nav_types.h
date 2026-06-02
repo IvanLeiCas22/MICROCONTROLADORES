@@ -200,5 +200,4 @@ typedef struct
     int32_t pivot_turn_pid_output_limit_pwm;
 } AppNavConfig;
 
-
 #endif /* INC_APP_NAV_TYPES_H_ */

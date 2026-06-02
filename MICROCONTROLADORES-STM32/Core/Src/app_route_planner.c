@@ -19,8 +19,7 @@ void App_RoutePlanner_Reset(void)
     route_queue_tail = 0U;
 }
 
-bool App_RoutePlanner_AddSeed(uint8_t x,
-                              uint8_t y)
+bool App_RoutePlanner_AddSeed(uint8_t x, uint8_t y)
 {
     uint8_t idx = 0U;
 
@@ -48,12 +47,8 @@ bool App_RoutePlanner_AddSeed(uint8_t x,
     return true;
 }
 
-bool App_RoutePlanner_CanCross(uint8_t x,
-                               uint8_t y,
-                               HeadingTypeDef dir,
-                               AppRouteTraversalMode mode,
-                               uint8_t *neighbor_x,
-                               uint8_t *neighbor_y)
+bool App_RoutePlanner_CanCross(
+    uint8_t x, uint8_t y, HeadingTypeDef dir, AppRouteTraversalMode mode, uint8_t *neighbor_x, uint8_t *neighbor_y)
 {
     uint8_t nx = 0U;
     uint8_t ny = 0U;
@@ -100,13 +95,7 @@ bool App_RoutePlanner_CanCross(uint8_t x,
 
 bool App_RoutePlanner_Run(AppRouteTraversalMode mode)
 {
-    static const HeadingTypeDef dirs[4] =
-    {
-        HEADING_NORTH,
-        HEADING_EAST,
-        HEADING_SOUTH,
-        HEADING_WEST
-    };
+    static const HeadingTypeDef dirs[4] = {HEADING_NORTH, HEADING_EAST, HEADING_SOUTH, HEADING_WEST};
 
     if (route_queue_tail == 0U)
     {
@@ -135,12 +124,7 @@ bool App_RoutePlanner_Run(AppRouteTraversalMode mode)
             uint8_t ny = 0U;
             uint8_t neighbor_idx = 0U;
 
-            if (!App_RoutePlanner_CanCross(current_x,
-                                           current_y,
-                                           dirs[i],
-                                           mode,
-                                           &nx,
-                                           &ny))
+            if (!App_RoutePlanner_CanCross(current_x, current_y, dirs[i], mode, &nx, &ny))
             {
                 continue;
             }
@@ -166,8 +150,7 @@ bool App_RoutePlanner_Run(AppRouteTraversalMode mode)
     return true;
 }
 
-uint8_t App_RoutePlanner_GetDistance(uint8_t x,
-                                     uint8_t y)
+uint8_t App_RoutePlanner_GetDistance(uint8_t x, uint8_t y)
 {
     if (!App_Maze_IsValidCell(x, y))
     {

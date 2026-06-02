@@ -99,17 +99,17 @@ typedef enum
     CMD_GET_PWM_PERIOD = 0x51,
     CMD_SET_MPU_CONFIG = 0xA7,
     CMD_GET_MPU_CONFIG = 0xA8,
-    CMD_SET_PIVOT_TURN_DPS = 0x4C,  // Para configurar la velocidad de giro en pivote
-    CMD_GET_PIVOT_TURN_DPS = 0x4D,  // Para leer la velocidad de giro en pivote
-    CMD_SET_WALL_THRESHOLDS = 0x60, // Configurar el umbral de pared
-    CMD_GET_WALL_THRESHOLDS = 0x61, // Leer el umbral de pared
-    CMD_SET_WALL_TARGET_ADC = 0x62, // Configurar el valor ADC objetivo para seguimiento de pared
-    CMD_GET_WALL_TARGET_ADC = 0x63, // Leer el valor ADC objetivo
-    CMD_SET_APP_STATE = 0x70,       // Para cambiar entre MENU y RUNNING
-    CMD_GET_APP_STATE = 0x71,       // Para leer el estado de la app
-    CMD_SET_MENU_MODE = 0x72,       // Para seleccionar un modo de operación
-    CMD_GET_MENU_MODE = 0x73,       // Para leer el modo de operación actual
-    CMD_GET_ROBOT_STATUS = 0x74,    // Para leer el estado completo (AppState y MenuMode)
+    CMD_SET_PIVOT_TURN_DPS = 0x4C,          // Para configurar la velocidad de giro en pivote
+    CMD_GET_PIVOT_TURN_DPS = 0x4D,          // Para leer la velocidad de giro en pivote
+    CMD_SET_WALL_THRESHOLDS = 0x60,         // Configurar el umbral de pared
+    CMD_GET_WALL_THRESHOLDS = 0x61,         // Leer el umbral de pared
+    CMD_SET_WALL_TARGET_ADC = 0x62,         // Configurar el valor ADC objetivo para seguimiento de pared
+    CMD_GET_WALL_TARGET_ADC = 0x63,         // Leer el valor ADC objetivo
+    CMD_SET_APP_STATE = 0x70,               // Para cambiar entre MENU y RUNNING
+    CMD_GET_APP_STATE = 0x71,               // Para leer el estado de la app
+    CMD_SET_MENU_MODE = 0x72,               // Para seleccionar un modo de operación
+    CMD_GET_MENU_MODE = 0x73,               // Para leer el modo de operación actual
+    CMD_GET_ROBOT_STATUS = 0x74,            // Para leer el estado completo (AppState y MenuMode)
     CMD_GET_YAW_ANGLE = 0x75,               // Para leer el ángulo de guiñada actual
     CMD_GET_SMOOTH_TURN_CONFIG = 0x80,      // Para leer la configuración de giro suave
     CMD_SET_SMOOTH_TURN_CONFIG = 0x81,      // Para configurar el giro suave
@@ -292,9 +292,9 @@ extern uint16_t pwm_max_value;
 #define WIFI_SSID "FCAL"
 #define WIFI_PASSWORD "fcalconcordia.06-2019"
 #define WIFI_UDP_REMOTE_IP "172.23.225.120"
-//#define WIFI_SSID "InternetPlus_8e2fbb"
-//#define WIFI_PASSWORD "Akhantos2340"
-//#define WIFI_UDP_REMOTE_IP "192.168.1.120"
+// #define WIFI_SSID "InternetPlus_8e2fbb"
+// #define WIFI_PASSWORD "Akhantos2340"
+// #define WIFI_UDP_REMOTE_IP "192.168.1.120"
 #define WIFI_UDP_REMOTE_PORT 30010
 #define WIFI_UDP_LOCAL_PORT 30000
 

@@ -26,16 +26,12 @@
 
 bool App_Maze_IsValidPose(uint8_t x, uint8_t y, HeadingTypeDef heading);
 
-bool App_Maze_SetRobotPose(uint8_t x,
-                           uint8_t y,
-                           HeadingTypeDef heading);
+bool App_Maze_SetRobotPose(uint8_t x, uint8_t y, HeadingTypeDef heading);
 
 void App_Maze_ResetRobotPosition(void);
 void App_Maze_ResetState(void);
 
-bool App_Maze_ResetStateWithPose(uint8_t x,
-                                 uint8_t y,
-                                 HeadingTypeDef heading);
+bool App_Maze_ResetStateWithPose(uint8_t x, uint8_t y, HeadingTypeDef heading);
 
 /* -------------------------------------------------------------------------- */
 /* Logical movement                                                            */
@@ -62,9 +58,7 @@ void App_Maze_UpdateRobotHeading(TurnTypeDef turn_direction);
  * Mark the current cell as visited and OR in detected walls relative to the
  * current heading. Opposite wall bits are mirrored into adjacent cells.
  */
-void App_Maze_MapCurrentCell(bool front_wall_detected,
-                             bool right_wall_detected,
-                             bool left_wall_detected);
+void App_Maze_MapCurrentCell(bool front_wall_detected, bool right_wall_detected, bool left_wall_detected);
 
 /*
  * Mark current cell as special.
@@ -92,52 +86,33 @@ typedef enum
 
 #define APP_MAZE_REL_DIRECT_COUNT 3U
 
-bool App_Maze_IsValidCell(uint8_t x,
-                           uint8_t y);
+bool App_Maze_IsValidCell(uint8_t x, uint8_t y);
 
 HeadingTypeDef App_Maze_RotateRight(HeadingTypeDef heading);
 HeadingTypeDef App_Maze_RotateLeft(HeadingTypeDef heading);
 HeadingTypeDef App_Maze_GetOppositeDirection(HeadingTypeDef dir);
 
-void App_Maze_BuildRelativeDirections(HeadingTypeDef heading,
-                                      HeadingTypeDef directions[APP_MAZE_REL_COUNT]);
+void App_Maze_BuildRelativeDirections(HeadingTypeDef heading, HeadingTypeDef directions[APP_MAZE_REL_COUNT]);
 
-uint8_t App_Maze_CellIndex(uint8_t x,
-                           uint8_t y);
+uint8_t App_Maze_CellIndex(uint8_t x, uint8_t y);
 uint8_t App_Maze_IndexToX(uint8_t index);
 uint8_t App_Maze_IndexToY(uint8_t index);
 
-bool App_Maze_GetRobotPose(uint8_t *x,
-                           uint8_t *y,
-                           HeadingTypeDef *heading);
+bool App_Maze_GetRobotPose(uint8_t *x, uint8_t *y, HeadingTypeDef *heading);
 
-bool App_Maze_GetCellData(uint8_t x,
-                          uint8_t y,
-                          uint8_t *cell_out);
+bool App_Maze_GetCellData(uint8_t x, uint8_t y, uint8_t *cell_out);
 
-bool App_Maze_IsCellVisited(uint8_t x,
-                            uint8_t y);
+bool App_Maze_IsCellVisited(uint8_t x, uint8_t y);
 
-bool App_Maze_IsCellSpecial(uint8_t x,
-                            uint8_t y);
+bool App_Maze_IsCellSpecial(uint8_t x, uint8_t y);
 
-bool App_Maze_IsEdgeKnown(uint8_t x,
-                          uint8_t y,
-                          HeadingTypeDef dir);
+bool App_Maze_IsEdgeKnown(uint8_t x, uint8_t y, HeadingTypeDef dir);
 
-bool App_Maze_CellHasWall(uint8_t x,
-                          uint8_t y,
-                          HeadingTypeDef dir);
+bool App_Maze_CellHasWall(uint8_t x, uint8_t y, HeadingTypeDef dir);
 
-bool App_Maze_IsKnownOpenEdge(uint8_t x,
-                              uint8_t y,
-                              HeadingTypeDef dir);
+bool App_Maze_IsKnownOpenEdge(uint8_t x, uint8_t y, HeadingTypeDef dir);
 
-bool App_Maze_GetNeighbor(uint8_t x,
-                          uint8_t y,
-                          HeadingTypeDef dir,
-                          uint8_t *neighbor_x,
-                          uint8_t *neighbor_y);
+bool App_Maze_GetNeighbor(uint8_t x, uint8_t y, HeadingTypeDef dir, uint8_t *neighbor_x, uint8_t *neighbor_y);
 
 /* -------------------------------------------------------------------------- */
 /* STM32/Qt synchronization payloads                                           */

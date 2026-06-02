@@ -26,20 +26,14 @@ typedef enum
  */
 void App_RoutePlanner_Reset(void);
 
-bool App_RoutePlanner_AddSeed(uint8_t x,
-                              uint8_t y);
+bool App_RoutePlanner_AddSeed(uint8_t x, uint8_t y);
 
-bool App_RoutePlanner_CanCross(uint8_t x,
-                               uint8_t y,
-                               HeadingTypeDef dir,
-                               AppRouteTraversalMode mode,
-                               uint8_t *neighbor_x,
-                               uint8_t *neighbor_y);
+bool App_RoutePlanner_CanCross(
+    uint8_t x, uint8_t y, HeadingTypeDef dir, AppRouteTraversalMode mode, uint8_t *neighbor_x, uint8_t *neighbor_y);
 
 bool App_RoutePlanner_Run(AppRouteTraversalMode mode);
 
-uint8_t App_RoutePlanner_GetDistance(uint8_t x,
-                                     uint8_t y);
+uint8_t App_RoutePlanner_GetDistance(uint8_t x, uint8_t y);
 
 uint8_t App_RoutePlanner_GetDistanceByIndex(uint8_t index);
 

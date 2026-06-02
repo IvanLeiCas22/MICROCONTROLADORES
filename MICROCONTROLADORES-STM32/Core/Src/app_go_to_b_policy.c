@@ -6,13 +6,8 @@
 
 #define APP_GO_TO_B_INVALID_COORD 0xFFU
 
-static const AppNavRecommendedAction app_go_to_b_relative_actions[APP_MAZE_REL_COUNT] =
-{
-    APP_NAV_ACTION_GO_FRONT,
-    APP_NAV_ACTION_SMOOTH_RIGHT,
-    APP_NAV_ACTION_SMOOTH_LEFT,
-    APP_NAV_ACTION_NONE
-};
+static const AppNavRecommendedAction app_go_to_b_relative_actions[APP_MAZE_REL_COUNT] = {
+    APP_NAV_ACTION_GO_FRONT, APP_NAV_ACTION_SMOOTH_RIGHT, APP_NAV_ACTION_SMOOTH_LEFT, APP_NAV_ACTION_NONE};
 
 static void App_GoToBPolicy_ClearDecision(AppGoToBDecision *decision)
 {
@@ -28,10 +23,8 @@ static void App_GoToBPolicy_ClearDecision(AppGoToBDecision *decision)
     decision->reason = APP_GO_TO_B_DECISION_REASON_NONE;
 }
 
-static bool App_GoToBPolicy_SelectRouteStep(uint8_t x,
-                                            uint8_t y,
-                                            HeadingTypeDef heading,
-                                            AppGoToBDecision *decision_out)
+static bool App_GoToBPolicy_SelectRouteStep(
+    uint8_t x, uint8_t y, HeadingTypeDef heading, AppGoToBDecision *decision_out)
 {
     HeadingTypeDef relative_dirs[APP_MAZE_REL_COUNT];
     uint8_t current_idx = App_Maze_CellIndex(x, y);
@@ -61,12 +54,8 @@ static bool App_GoToBPolicy_SelectRouteStep(uint8_t x,
         uint8_t neighbor_idx = 0U;
         uint8_t neighbor_cost = APP_ROUTE_DISTANCE_INF;
 
-        if (!App_RoutePlanner_CanCross(x,
-                                        y,
-                                        relative_dirs[i],
-                                        APP_ROUTE_TRAVERSAL_OPTIMISTIC_UNKNOWN_ALLOWED,
-                                        &nx,
-                                        &ny))
+        if (!App_RoutePlanner_CanCross(
+                x, y, relative_dirs[i], APP_ROUTE_TRAVERSAL_OPTIMISTIC_UNKNOWN_ALLOWED, &nx, &ny))
         {
             continue;
         }
@@ -115,9 +104,7 @@ static bool App_GoToBPolicy_SelectRouteStep(uint8_t x,
     return true;
 }
 
-bool App_GoToBPolicy_Evaluate(uint8_t goal_x,
-                              uint8_t goal_y,
-                              AppGoToBDecision *decision_out)
+bool App_GoToBPolicy_Evaluate(uint8_t goal_x, uint8_t goal_y, AppGoToBDecision *decision_out)
 {
     uint8_t x = 0U;
     uint8_t y = 0U;

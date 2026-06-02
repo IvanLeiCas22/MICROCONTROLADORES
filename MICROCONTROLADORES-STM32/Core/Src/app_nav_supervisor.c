@@ -43,8 +43,7 @@ static uint8_t app_nav_supervisor_initial_pose_valid;
 static uint8_t app_nav_supervisor_goal_x;
 static uint8_t app_nav_supervisor_goal_y;
 static uint8_t app_nav_supervisor_goal_valid;
-static AppNavSupervisorMission app_nav_supervisor_mission =
-    APP_NAV_SUPERVISOR_MISSION_FIND_CELLS;
+static AppNavSupervisorMission app_nav_supervisor_mission = APP_NAV_SUPERVISOR_MISSION_FIND_CELLS;
 
 /* -------------------------------------------------------------------------- */
 /* State, output and shared utility helpers                                    */
@@ -122,19 +121,16 @@ static bool App_NavSupervisor_CaptureActionYawReference(const AppNavInput *input
     return true;
 }
 
-static bool App_NavSupervisor_BuildActionInput(const AppNavInput *input,
-                                               AppNavInput *action_input)
+static bool App_NavSupervisor_BuildActionInput(const AppNavInput *input, AppNavInput *action_input)
 {
-    if ((input == NULL) || (action_input == NULL) ||
-        (app_nav_supervisor_action_yaw_reference_valid == 0U))
+    if ((input == NULL) || (action_input == NULL) || (app_nav_supervisor_action_yaw_reference_valid == 0U))
     {
         return false;
     }
 
     *action_input = *input;
     action_input->yaw_q16_deg = App_NavSupervisor_NormalizeYawDeltaQ16(
-        (int64_t)input->yaw_q16_deg -
-        (int64_t)app_nav_supervisor_action_yaw_reference_q16_deg);
+        (int64_t)input->yaw_q16_deg - (int64_t)app_nav_supervisor_action_yaw_reference_q16_deg);
 
     return true;
 }
@@ -167,15 +163,12 @@ static void App_NavSupervisor_MapCurrentCellFromPerception(const AppNavPerceptio
         return;
     }
 
-    App_Maze_MapCurrentCell((perception->wall_front != 0U),
-                            (perception->wall_right != 0U),
-                            (perception->wall_left != 0U));
+    App_Maze_MapCurrentCell(
+        (perception->wall_front != 0U), (perception->wall_right != 0U), (perception->wall_left != 0U));
     App_NavSupervisor_UpdateMazeDebug();
 }
 
-static void App_NavSupervisor_SetState(AppNavSupervisorState state,
-                                       AppNavSupervisorAction action,
-                                       uint8_t result)
+static void App_NavSupervisor_SetState(AppNavSupervisorState state, AppNavSupervisorAction action, uint8_t result)
 {
     app_nav_supervisor_debug.state = state;
     app_nav_supervisor_debug.current_action = action;
@@ -187,9 +180,7 @@ static AppNavSupervisorState App_NavSupervisor_SetError(uint8_t result)
     App_NavSupervisor_StopActions();
     App_NavSupervisor_ClearActionYawReference();
     App_NavSupervisor_ClearPivotExitLatch();
-    App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_ERROR,
-                               APP_NAV_SUPERVISOR_ACTION_NONE,
-                               result);
+    App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_ERROR, APP_NAV_SUPERVISOR_ACTION_NONE, result);
     return app_nav_supervisor_debug.state;
 }
 
@@ -197,8 +188,7 @@ static AppNavSupervisorState App_NavSupervisor_SetError(uint8_t result)
 /* Mission completion and special-cell detection                               */
 /* -------------------------------------------------------------------------- */
 
-static AppNavSupervisorState App_NavSupervisor_FinishMissionWithResult(AppNavOutput *output,
-                                                                       uint8_t result)
+static AppNavSupervisorState App_NavSupervisor_FinishMissionWithResult(AppNavOutput *output, uint8_t result)
 {
     App_NavSupervisor_ClearOutput(output);
     App_NavSupervisor_StopActions();
@@ -208,18 +198,14 @@ static AppNavSupervisorState App_NavSupervisor_FinishMissionWithResult(AppNavOut
     app_nav_supervisor_debug.active = 0U;
 
     App_NavSupervisor_UpdateMazeDebug();
-    App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_IDLE,
-                               APP_NAV_SUPERVISOR_ACTION_NONE,
-                               result);
+    App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_IDLE, APP_NAV_SUPERVISOR_ACTION_NONE, result);
 
     return app_nav_supervisor_debug.state;
 }
 
 static AppNavSupervisorState App_NavSupervisor_FinishFindCells(AppNavOutput *output)
 {
-    return App_NavSupervisor_FinishMissionWithResult(
-        output,
-        APP_NAV_SUPERVISOR_RESULT_FIND_CELLS_COMPLETE);
+    return App_NavSupervisor_FinishMissionWithResult(output, APP_NAV_SUPERVISOR_RESULT_FIND_CELLS_COMPLETE);
 }
 
 static bool App_NavSupervisor_CheckSpecialAtConfirmedCellEntry(const AppNavPerception *perception)
@@ -229,8 +215,7 @@ static bool App_NavSupervisor_CheckSpecialAtConfirmedCellEntry(const AppNavPerce
         return false;
     }
 
-    if ((perception->floor_front_black == 0U) ||
-        (perception->floor_rear_black == 0U))
+    if ((perception->floor_front_black == 0U) || (perception->floor_rear_black == 0U))
     {
         return false;
     }
@@ -265,9 +250,8 @@ static TurnTypeDef App_NavSupervisor_SmoothTurnForState(AppNavSupervisorState st
     return (state == APP_NAV_SUPERVISOR_RUN_SMOOTH_LEFT) ? TURN_LEFT : TURN_RIGHT;
 }
 
-static bool App_NavSupervisor_StartAdvanceWithState(const AppNavInput *input,
-                                                    AppNavSupervisorState state,
-                                                    AppNavSupervisorAction action)
+static bool App_NavSupervisor_StartAdvanceWithState(
+    const AppNavInput *input, AppNavSupervisorState state, AppNavSupervisorAction action)
 {
     AppNavRearTapeProfile rear_tape_profile = APP_NAV_REAR_TAPE_PROFILE_NORMAL_CELL;
 
@@ -276,40 +260,34 @@ static bool App_NavSupervisor_StartAdvanceWithState(const AppNavInput *input,
         return false;
     }
 
-    if ((action != APP_NAV_SUPERVISOR_ACTION_INITIAL_ADVANCE) &&
-        App_Maze_IsCurrentCellSpecial())
+    if ((action != APP_NAV_SUPERVISOR_ACTION_INITIAL_ADVANCE) && App_Maze_IsCurrentCellSpecial())
     {
-        rear_tape_profile =
-            (app_nav_supervisor_pivot_180_exit_requires_advance != 0U)
-                ? APP_NAV_REAR_TAPE_PROFILE_SPECIAL_CELL_AFTER_PIVOT
-                : APP_NAV_REAR_TAPE_PROFILE_SPECIAL_CELL;
+        rear_tape_profile = (app_nav_supervisor_pivot_180_exit_requires_advance != 0U)
+            ? APP_NAV_REAR_TAPE_PROFILE_SPECIAL_CELL_AFTER_PIVOT
+            : APP_NAV_REAR_TAPE_PROFILE_SPECIAL_CELL;
     }
 
-    if (!App_Nav_StartAdvanceActionWithRearTapeProfile(APP_NAV_ADVANCE_ACTION_WALL_FOLLOW_AUTO_YAW_HOLD,
-                                                       rear_tape_profile))
+    if (!App_Nav_StartAdvanceActionWithRearTapeProfile(
+            APP_NAV_ADVANCE_ACTION_WALL_FOLLOW_AUTO_YAW_HOLD, rear_tape_profile))
     {
         App_NavSupervisor_ClearActionYawReference();
         return false;
     }
 
-    App_NavSupervisor_SetState(state,
-                               action,
-                               APP_NAV_SUPERVISOR_RESULT_OK);
+    App_NavSupervisor_SetState(state, action, APP_NAV_SUPERVISOR_RESULT_OK);
     return true;
 }
 
 static bool App_NavSupervisor_StartInitialAdvance(const AppNavInput *input)
 {
-    return App_NavSupervisor_StartAdvanceWithState(input,
-                                                  APP_NAV_SUPERVISOR_RUN_INITIAL_ADVANCE,
-                                                  APP_NAV_SUPERVISOR_ACTION_INITIAL_ADVANCE);
+    return App_NavSupervisor_StartAdvanceWithState(
+        input, APP_NAV_SUPERVISOR_RUN_INITIAL_ADVANCE, APP_NAV_SUPERVISOR_ACTION_INITIAL_ADVANCE);
 }
 
 static bool App_NavSupervisor_StartAdvance(const AppNavInput *input)
 {
-    return App_NavSupervisor_StartAdvanceWithState(input,
-                                                  APP_NAV_SUPERVISOR_RUN_ADVANCE,
-                                                  APP_NAV_SUPERVISOR_ACTION_ADVANCE);
+    return App_NavSupervisor_StartAdvanceWithState(
+        input, APP_NAV_SUPERVISOR_RUN_ADVANCE, APP_NAV_SUPERVISOR_ACTION_ADVANCE);
 }
 
 static bool App_NavSupervisor_StartApproachFrontWallForPivot(const AppNavInput *input)
@@ -326,8 +304,7 @@ static bool App_NavSupervisor_StartApproachFrontWallForPivot(const AppNavInput *
     }
 
     App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_RUN_APPROACH_FRONT_WALL_FOR_PIVOT,
-                               APP_NAV_SUPERVISOR_ACTION_APPROACH_FRONT_WALL_FOR_PIVOT,
-                               APP_NAV_SUPERVISOR_RESULT_OK);
+        APP_NAV_SUPERVISOR_ACTION_APPROACH_FRONT_WALL_FOR_PIVOT, APP_NAV_SUPERVISOR_RESULT_OK);
     return true;
 }
 
@@ -373,8 +350,7 @@ static bool App_NavSupervisor_StartCenterFrontTapeForPivot(const AppNavInput *in
     }
 
     App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_RUN_CENTER_FRONT_TAPE_FOR_PIVOT,
-                               APP_NAV_SUPERVISOR_ACTION_CENTER_FRONT_TAPE_FOR_PIVOT,
-                               APP_NAV_SUPERVISOR_RESULT_OK);
+        APP_NAV_SUPERVISOR_ACTION_CENTER_FRONT_TAPE_FOR_PIVOT, APP_NAV_SUPERVISOR_RESULT_OK);
     return true;
 }
 
@@ -418,9 +394,8 @@ static bool App_NavSupervisor_StartPivot180(const AppNavInput *input)
         return false;
     }
 
-    App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_RUN_PIVOT_180,
-                               APP_NAV_SUPERVISOR_ACTION_PIVOT_180,
-                               APP_NAV_SUPERVISOR_RESULT_OK);
+    App_NavSupervisor_SetState(
+        APP_NAV_SUPERVISOR_RUN_PIVOT_180, APP_NAV_SUPERVISOR_ACTION_PIVOT_180, APP_NAV_SUPERVISOR_RESULT_OK);
     return true;
 }
 
@@ -436,10 +411,8 @@ static AppNavSupervisorState App_NavSupervisor_StartPivot180AfterPreparation(con
     return app_nav_supervisor_debug.state;
 }
 
-static bool App_NavSupervisor_StartSmoothWithState(const AppNavInput *input,
-                                                   AppNavSmoothActionType smooth_action,
-                                                   AppNavSupervisorState state,
-                                                   AppNavSupervisorAction action)
+static bool App_NavSupervisor_StartSmoothWithState(const AppNavInput *input, AppNavSmoothActionType smooth_action,
+    AppNavSupervisorState state, AppNavSupervisorAction action)
 {
     AppNavRearTapeProfile rear_tape_profile = APP_NAV_REAR_TAPE_PROFILE_NORMAL_CELL;
 
@@ -453,21 +426,17 @@ static bool App_NavSupervisor_StartSmoothWithState(const AppNavInput *input,
         rear_tape_profile = APP_NAV_REAR_TAPE_PROFILE_SPECIAL_CELL;
     }
 
-    if (!App_Nav_StartSmoothActionWithRearTapeProfile(smooth_action,
-                                                      rear_tape_profile))
+    if (!App_Nav_StartSmoothActionWithRearTapeProfile(smooth_action, rear_tape_profile))
     {
         App_NavSupervisor_ClearActionYawReference();
         return false;
     }
 
-    App_NavSupervisor_SetState(state,
-                               action,
-                               APP_NAV_SUPERVISOR_RESULT_OK);
+    App_NavSupervisor_SetState(state, action, APP_NAV_SUPERVISOR_RESULT_OK);
     return true;
 }
 
-static bool App_NavSupervisor_StartRecommendedAction(AppNavRecommendedAction action,
-                                                     const AppNavInput *input)
+static bool App_NavSupervisor_StartRecommendedAction(AppNavRecommendedAction action, const AppNavInput *input)
 {
     switch (action)
     {
@@ -475,16 +444,12 @@ static bool App_NavSupervisor_StartRecommendedAction(AppNavRecommendedAction act
         return App_NavSupervisor_StartAdvance(input);
 
     case APP_NAV_ACTION_SMOOTH_LEFT:
-        return App_NavSupervisor_StartSmoothWithState(input,
-                                                      APP_NAV_SMOOTH_ACTION_LEFT,
-                                                      APP_NAV_SUPERVISOR_RUN_SMOOTH_LEFT,
-                                                      APP_NAV_SUPERVISOR_ACTION_SMOOTH_LEFT);
+        return App_NavSupervisor_StartSmoothWithState(input, APP_NAV_SMOOTH_ACTION_LEFT,
+            APP_NAV_SUPERVISOR_RUN_SMOOTH_LEFT, APP_NAV_SUPERVISOR_ACTION_SMOOTH_LEFT);
 
     case APP_NAV_ACTION_SMOOTH_RIGHT:
-        return App_NavSupervisor_StartSmoothWithState(input,
-                                                      APP_NAV_SMOOTH_ACTION_RIGHT,
-                                                      APP_NAV_SUPERVISOR_RUN_SMOOTH_RIGHT,
-                                                      APP_NAV_SUPERVISOR_ACTION_SMOOTH_RIGHT);
+        return App_NavSupervisor_StartSmoothWithState(input, APP_NAV_SMOOTH_ACTION_RIGHT,
+            APP_NAV_SUPERVISOR_RUN_SMOOTH_RIGHT, APP_NAV_SUPERVISOR_ACTION_SMOOTH_RIGHT);
 
     case APP_NAV_ACTION_GO_BACK:
         return App_NavSupervisor_StartApproachFrontWallForPivot(input);
@@ -499,9 +464,8 @@ static bool App_NavSupervisor_StartRecommendedAction(AppNavRecommendedAction act
 /* Supervisor state handlers                                                   */
 /* -------------------------------------------------------------------------- */
 
-static AppNavSupervisorState App_NavSupervisor_HandleFindCellsDecide(const AppNavInput *input,
-                                                                     const AppNavPerception *perception,
-                                                                     AppNavOutput *output)
+static AppNavSupervisorState App_NavSupervisor_HandleFindCellsDecide(
+    const AppNavInput *input, const AppNavPerception *perception, AppNavOutput *output)
 {
     AppNavRecommendedAction recommended_action = APP_NAV_ACTION_NONE;
     AppFindCellsDecision find_cells_decision = {0};
@@ -516,16 +480,14 @@ static AppNavSupervisorState App_NavSupervisor_HandleFindCellsDecide(const AppNa
      *   from the current front edge: front-wall approach if a front wall is known,
      *   front-tape centering if the front edge is open.
      */
-    if (App_FindCellsPolicy_Evaluate(&find_cells_decision) &&
-        (find_cells_decision.action != APP_NAV_ACTION_NONE))
+    if (App_FindCellsPolicy_Evaluate(&find_cells_decision) && (find_cells_decision.action != APP_NAV_ACTION_NONE))
     {
         recommended_action = find_cells_decision.action;
     }
     else if (find_cells_decision.reason == APP_FIND_CELLS_DECISION_REASON_NO_FRONTIER)
     {
         return App_NavSupervisor_FinishMissionWithResult(
-            output,
-            APP_NAV_SUPERVISOR_RESULT_FIND_CELLS_INCOMPLETE_NO_FRONTIER);
+            output, APP_NAV_SUPERVISOR_RESULT_FIND_CELLS_INCOMPLETE_NO_FRONTIER);
     }
     else if (find_cells_decision.reason == APP_FIND_CELLS_DECISION_REASON_BACKTRACK_REQUIRED)
     {
@@ -547,20 +509,15 @@ static AppNavSupervisorState App_NavSupervisor_HandleFindCellsDecide(const AppNa
     return app_nav_supervisor_debug.state;
 }
 
-static AppNavSupervisorState App_NavSupervisor_HandleGoToBDecide(const AppNavInput *input,
-                                                                 AppNavOutput *output)
+static AppNavSupervisorState App_NavSupervisor_HandleGoToBDecide(const AppNavInput *input, AppNavOutput *output)
 {
     AppGoToBDecision go_to_b_decision = {0};
 
-    if (!App_GoToBPolicy_Evaluate(app_nav_supervisor_goal_x,
-                                  app_nav_supervisor_goal_y,
-                                  &go_to_b_decision))
+    if (!App_GoToBPolicy_Evaluate(app_nav_supervisor_goal_x, app_nav_supervisor_goal_y, &go_to_b_decision))
     {
         if (go_to_b_decision.reason == APP_GO_TO_B_DECISION_REASON_NO_PATH)
         {
-            return App_NavSupervisor_FinishMissionWithResult(
-                output,
-                APP_NAV_SUPERVISOR_RESULT_GO_TO_B_NO_PATH);
+            return App_NavSupervisor_FinishMissionWithResult(output, APP_NAV_SUPERVISOR_RESULT_GO_TO_B_NO_PATH);
         }
 
         if (go_to_b_decision.reason == APP_GO_TO_B_DECISION_REASON_BACKTRACK_REQUIRED)
@@ -573,9 +530,7 @@ static AppNavSupervisorState App_NavSupervisor_HandleGoToBDecide(const AppNavInp
 
     if (go_to_b_decision.reason == APP_GO_TO_B_DECISION_REASON_GOAL_REACHED)
     {
-        return App_NavSupervisor_FinishMissionWithResult(
-            output,
-            APP_NAV_SUPERVISOR_RESULT_GO_TO_B_COMPLETE);
+        return App_NavSupervisor_FinishMissionWithResult(output, APP_NAV_SUPERVISOR_RESULT_GO_TO_B_COMPLETE);
     }
 
     if ((go_to_b_decision.reason != APP_GO_TO_B_DECISION_REASON_ROUTE_STEP) ||
@@ -592,9 +547,8 @@ static AppNavSupervisorState App_NavSupervisor_HandleGoToBDecide(const AppNavInp
     return app_nav_supervisor_debug.state;
 }
 
-static AppNavSupervisorState App_NavSupervisor_HandleDecide(const AppNavInput *input,
-                                                            const AppNavPerception *perception,
-                                                            AppNavOutput *output)
+static AppNavSupervisorState App_NavSupervisor_HandleDecide(
+    const AppNavInput *input, const AppNavPerception *perception, AppNavOutput *output)
 {
     App_NavSupervisor_MapCurrentCellFromPerception(perception);
 
@@ -611,9 +565,8 @@ static AppNavSupervisorState App_NavSupervisor_HandleDecide(const AppNavInput *i
     }
 }
 
-static AppNavSupervisorState App_NavSupervisor_HandleStartInitialAdvance(const AppNavInput *input,
-                                                                         const AppNavPerception *perception,
-                                                                         AppNavOutput *output)
+static AppNavSupervisorState App_NavSupervisor_HandleStartInitialAdvance(
+    const AppNavInput *input, const AppNavPerception *perception, AppNavOutput *output)
 {
     App_NavSupervisor_ClearOutput(output);
     App_NavSupervisor_MapCurrentCellFromPerception(perception);
@@ -627,10 +580,8 @@ static AppNavSupervisorState App_NavSupervisor_HandleStartInitialAdvance(const A
 }
 
 static AppNavSupervisorState App_NavSupervisor_HandleAdvanceWithState(const AppNavInput *input,
-                                                                      const AppNavPerception *perception,
-                                                                      AppNavOutput *output,
-                                                                      AppNavSupervisorState running_state,
-                                                                      AppNavSupervisorAction running_action)
+    const AppNavPerception *perception, AppNavOutput *output, AppNavSupervisorState running_state,
+    AppNavSupervisorAction running_action)
 {
     AppNavInput action_input = {0};
     AppNavAdvanceActionState advance_state;
@@ -648,9 +599,7 @@ static AppNavSupervisorState App_NavSupervisor_HandleAdvanceWithState(const AppN
     case APP_NAV_ADVANCE_ACTION_WAIT_LEAVE_REAR_TAPE:
     case APP_NAV_ADVANCE_ACTION_RUNNING_WALL_FOLLOW:
     case APP_NAV_ADVANCE_ACTION_RUNNING_YAW_HOLD:
-        App_NavSupervisor_SetState(running_state,
-                                   running_action,
-                                   APP_NAV_SUPERVISOR_RESULT_OK);
+        App_NavSupervisor_SetState(running_state, running_action, APP_NAV_SUPERVISOR_RESULT_OK);
         return app_nav_supervisor_debug.state;
 
     case APP_NAV_ADVANCE_ACTION_DONE_REAR_TAPE:
@@ -665,9 +614,8 @@ static AppNavSupervisorState App_NavSupervisor_HandleAdvanceWithState(const AppN
         App_Nav_StopAdvanceAction();
         App_NavSupervisor_ClearActionYawReference();
         App_NavSupervisor_UpdateMazeDebug();
-        App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_DECIDE,
-                                   APP_NAV_SUPERVISOR_ACTION_NONE,
-                                   APP_NAV_SUPERVISOR_RESULT_OK);
+        App_NavSupervisor_SetState(
+            APP_NAV_SUPERVISOR_DECIDE, APP_NAV_SUPERVISOR_ACTION_NONE, APP_NAV_SUPERVISOR_RESULT_OK);
         return app_nav_supervisor_debug.state;
 
     case APP_NAV_ADVANCE_ACTION_TIMEOUT:
@@ -679,31 +627,22 @@ static AppNavSupervisorState App_NavSupervisor_HandleAdvanceWithState(const AppN
     }
 }
 
-static AppNavSupervisorState App_NavSupervisor_HandleAdvance(const AppNavInput *input,
-                                                             const AppNavPerception *perception,
-                                                             AppNavOutput *output)
+static AppNavSupervisorState App_NavSupervisor_HandleAdvance(
+    const AppNavInput *input, const AppNavPerception *perception, AppNavOutput *output)
 {
-    return App_NavSupervisor_HandleAdvanceWithState(input,
-                                                    perception,
-                                                    output,
-                                                    APP_NAV_SUPERVISOR_RUN_ADVANCE,
-                                                    APP_NAV_SUPERVISOR_ACTION_ADVANCE);
+    return App_NavSupervisor_HandleAdvanceWithState(
+        input, perception, output, APP_NAV_SUPERVISOR_RUN_ADVANCE, APP_NAV_SUPERVISOR_ACTION_ADVANCE);
 }
 
-static AppNavSupervisorState App_NavSupervisor_HandleInitialAdvance(const AppNavInput *input,
-                                                                    const AppNavPerception *perception,
-                                                                    AppNavOutput *output)
+static AppNavSupervisorState App_NavSupervisor_HandleInitialAdvance(
+    const AppNavInput *input, const AppNavPerception *perception, AppNavOutput *output)
 {
-    return App_NavSupervisor_HandleAdvanceWithState(input,
-                                                    perception,
-                                                    output,
-                                                    APP_NAV_SUPERVISOR_RUN_INITIAL_ADVANCE,
-                                                    APP_NAV_SUPERVISOR_ACTION_INITIAL_ADVANCE);
+    return App_NavSupervisor_HandleAdvanceWithState(
+        input, perception, output, APP_NAV_SUPERVISOR_RUN_INITIAL_ADVANCE, APP_NAV_SUPERVISOR_ACTION_INITIAL_ADVANCE);
 }
 
-static AppNavSupervisorState App_NavSupervisor_HandleApproachFrontWallForPivot(const AppNavInput *input,
-                                                                               const AppNavPerception *perception,
-                                                                               AppNavOutput *output)
+static AppNavSupervisorState App_NavSupervisor_HandleApproachFrontWallForPivot(
+    const AppNavInput *input, const AppNavPerception *perception, AppNavOutput *output)
 {
     AppNavInput action_input = {0};
     AppNavApproachFrontWallActionState approach_state;
@@ -721,8 +660,7 @@ static AppNavSupervisorState App_NavSupervisor_HandleApproachFrontWallForPivot(c
     case APP_NAV_APPROACH_FRONT_WALL_ACTION_RUNNING_WALL_FOLLOW:
     case APP_NAV_APPROACH_FRONT_WALL_ACTION_RUNNING_YAW_HOLD:
         App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_RUN_APPROACH_FRONT_WALL_FOR_PIVOT,
-                                   APP_NAV_SUPERVISOR_ACTION_APPROACH_FRONT_WALL_FOR_PIVOT,
-                                   APP_NAV_SUPERVISOR_RESULT_OK);
+            APP_NAV_SUPERVISOR_ACTION_APPROACH_FRONT_WALL_FOR_PIVOT, APP_NAV_SUPERVISOR_RESULT_OK);
         return app_nav_supervisor_debug.state;
 
     case APP_NAV_APPROACH_FRONT_WALL_ACTION_DONE_FRONT_WALL:
@@ -739,9 +677,8 @@ static AppNavSupervisorState App_NavSupervisor_HandleApproachFrontWallForPivot(c
     }
 }
 
-static AppNavSupervisorState App_NavSupervisor_HandleCenterFrontTapeForPivot(const AppNavInput *input,
-                                                                             const AppNavPerception *perception,
-                                                                             AppNavOutput *output)
+static AppNavSupervisorState App_NavSupervisor_HandleCenterFrontTapeForPivot(
+    const AppNavInput *input, const AppNavPerception *perception, AppNavOutput *output)
 {
     AppNavInput action_input = {0};
     AppNavCenterFrontTapeActionState center_state;
@@ -759,8 +696,7 @@ static AppNavSupervisorState App_NavSupervisor_HandleCenterFrontTapeForPivot(con
     case APP_NAV_CENTER_FRONT_TAPE_ACTION_RUNNING_WALL_FOLLOW:
     case APP_NAV_CENTER_FRONT_TAPE_ACTION_RUNNING_YAW_HOLD:
         App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_RUN_CENTER_FRONT_TAPE_FOR_PIVOT,
-                                   APP_NAV_SUPERVISOR_ACTION_CENTER_FRONT_TAPE_FOR_PIVOT,
-                                   APP_NAV_SUPERVISOR_RESULT_OK);
+            APP_NAV_SUPERVISOR_ACTION_CENTER_FRONT_TAPE_FOR_PIVOT, APP_NAV_SUPERVISOR_RESULT_OK);
         return app_nav_supervisor_debug.state;
 
     case APP_NAV_CENTER_FRONT_TAPE_ACTION_DONE_FRONT_TAPE:
@@ -777,9 +713,8 @@ static AppNavSupervisorState App_NavSupervisor_HandleCenterFrontTapeForPivot(con
     }
 }
 
-static AppNavSupervisorState App_NavSupervisor_HandleSmooth(const AppNavInput *input,
-                                                            const AppNavPerception *perception,
-                                                            AppNavOutput *output)
+static AppNavSupervisorState App_NavSupervisor_HandleSmooth(
+    const AppNavInput *input, const AppNavPerception *perception, AppNavOutput *output)
 {
     AppNavSupervisorState current_state = app_nav_supervisor_debug.state;
     AppNavInput action_input = {0};
@@ -798,9 +733,8 @@ static AppNavSupervisorState App_NavSupervisor_HandleSmooth(const AppNavInput *i
     {
     case APP_NAV_SMOOTH_ACTION_TURNING:
     case APP_NAV_SMOOTH_ACTION_POST_YAW_SEEK_REAR_TAPE:
-        App_NavSupervisor_SetState(current_state,
-                                   app_nav_supervisor_debug.current_action,
-                                   APP_NAV_SUPERVISOR_RESULT_OK);
+        App_NavSupervisor_SetState(
+            current_state, app_nav_supervisor_debug.current_action, APP_NAV_SUPERVISOR_RESULT_OK);
         return app_nav_supervisor_debug.state;
 
     case APP_NAV_SMOOTH_ACTION_DONE_REAR_TAPE:
@@ -817,9 +751,8 @@ static AppNavSupervisorState App_NavSupervisor_HandleSmooth(const AppNavInput *i
         App_Nav_StopSmoothAction();
         App_NavSupervisor_ClearActionYawReference();
         App_NavSupervisor_UpdateMazeDebug();
-        App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_DECIDE,
-                                   APP_NAV_SUPERVISOR_ACTION_NONE,
-                                   APP_NAV_SUPERVISOR_RESULT_OK);
+        App_NavSupervisor_SetState(
+            APP_NAV_SUPERVISOR_DECIDE, APP_NAV_SUPERVISOR_ACTION_NONE, APP_NAV_SUPERVISOR_RESULT_OK);
         return app_nav_supervisor_debug.state;
 
     case APP_NAV_SMOOTH_ACTION_POST_YAW_TIMEOUT:
@@ -831,9 +764,8 @@ static AppNavSupervisorState App_NavSupervisor_HandleSmooth(const AppNavInput *i
     }
 }
 
-static AppNavSupervisorState App_NavSupervisor_HandlePivot(const AppNavInput *input,
-                                                           const AppNavPerception *perception,
-                                                           AppNavOutput *output)
+static AppNavSupervisorState App_NavSupervisor_HandlePivot(
+    const AppNavInput *input, const AppNavPerception *perception, AppNavOutput *output)
 {
     AppNavInput action_input = {0};
     AppNavPivotActionState pivot_state;
@@ -849,9 +781,8 @@ static AppNavSupervisorState App_NavSupervisor_HandlePivot(const AppNavInput *in
     switch (pivot_state)
     {
     case APP_NAV_PIVOT_ACTION_RUNNING:
-        App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_RUN_PIVOT_180,
-                                   APP_NAV_SUPERVISOR_ACTION_PIVOT_180,
-                                   APP_NAV_SUPERVISOR_RESULT_OK);
+        App_NavSupervisor_SetState(
+            APP_NAV_SUPERVISOR_RUN_PIVOT_180, APP_NAV_SUPERVISOR_ACTION_PIVOT_180, APP_NAV_SUPERVISOR_RESULT_OK);
         return app_nav_supervisor_debug.state;
 
     case APP_NAV_PIVOT_ACTION_DONE:
@@ -872,9 +803,8 @@ static AppNavSupervisorState App_NavSupervisor_HandlePivot(const AppNavInput *in
             return app_nav_supervisor_debug.state;
         }
 
-        App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_DECIDE,
-                                   APP_NAV_SUPERVISOR_ACTION_NONE,
-                                   APP_NAV_SUPERVISOR_RESULT_OK);
+        App_NavSupervisor_SetState(
+            APP_NAV_SUPERVISOR_DECIDE, APP_NAV_SUPERVISOR_ACTION_NONE, APP_NAV_SUPERVISOR_RESULT_OK);
         return app_nav_supervisor_debug.state;
 
     case APP_NAV_PIVOT_ACTION_TIMEOUT:
@@ -910,14 +840,12 @@ void App_NavSupervisor_Reset(void)
 
     if (app_nav_supervisor_initial_pose_valid != 0U)
     {
-        if (!App_Maze_ResetStateWithPose(app_nav_supervisor_initial_x,
-                                         app_nav_supervisor_initial_y,
-                                         app_nav_supervisor_initial_heading))
+        if (!App_Maze_ResetStateWithPose(
+                app_nav_supervisor_initial_x, app_nav_supervisor_initial_y, app_nav_supervisor_initial_heading))
         {
             App_NavSupervisor_SetDefaultInitialPose();
-            (void)App_Maze_ResetStateWithPose(app_nav_supervisor_initial_x,
-                                              app_nav_supervisor_initial_y,
-                                              app_nav_supervisor_initial_heading);
+            (void)App_Maze_ResetStateWithPose(
+                app_nav_supervisor_initial_x, app_nav_supervisor_initial_y, app_nav_supervisor_initial_heading);
         }
     }
     else
@@ -926,15 +854,11 @@ void App_NavSupervisor_Reset(void)
     }
 
     app_nav_supervisor_debug.active = 0U;
-    App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_IDLE,
-                               APP_NAV_SUPERVISOR_ACTION_NONE,
-                               APP_NAV_SUPERVISOR_RESULT_OK);
+    App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_IDLE, APP_NAV_SUPERVISOR_ACTION_NONE, APP_NAV_SUPERVISOR_RESULT_OK);
     App_NavSupervisor_UpdateMazeDebug();
 }
 
-bool App_NavSupervisor_SetInitialPose(uint8_t x,
-                                      uint8_t y,
-                                      HeadingTypeDef heading)
+bool App_NavSupervisor_SetInitialPose(uint8_t x, uint8_t y, HeadingTypeDef heading)
 {
     if (!App_Maze_IsValidPose(x, y, heading))
     {
@@ -949,9 +873,7 @@ bool App_NavSupervisor_SetInitialPose(uint8_t x,
     return true;
 }
 
-bool App_NavSupervisor_ResetWithInitialPose(uint8_t x,
-                                            uint8_t y,
-                                            HeadingTypeDef heading)
+bool App_NavSupervisor_ResetWithInitialPose(uint8_t x, uint8_t y, HeadingTypeDef heading)
 {
     if (!App_NavSupervisor_SetInitialPose(x, y, heading))
     {
@@ -1028,21 +950,18 @@ bool App_NavSupervisor_Start(void)
         if (app_nav_supervisor_goal_valid == 0U)
         {
             app_nav_supervisor_debug.active = 0U;
-            App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_IDLE,
-                                       APP_NAV_SUPERVISOR_ACTION_NONE,
-                                       APP_NAV_SUPERVISOR_RESULT_GO_TO_B_INVALID_TARGET);
+            App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_IDLE, APP_NAV_SUPERVISOR_ACTION_NONE,
+                APP_NAV_SUPERVISOR_RESULT_GO_TO_B_INVALID_TARGET);
             App_NavSupervisor_UpdateMazeDebug();
             return false;
         }
 
         if (App_Maze_GetRobotPose(&current_x, &current_y, &current_heading) &&
-            (current_x == app_nav_supervisor_goal_x) &&
-            (current_y == app_nav_supervisor_goal_y))
+            (current_x == app_nav_supervisor_goal_x) && (current_y == app_nav_supervisor_goal_y))
         {
             app_nav_supervisor_debug.active = 0U;
-            App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_IDLE,
-                                       APP_NAV_SUPERVISOR_ACTION_NONE,
-                                       APP_NAV_SUPERVISOR_RESULT_GO_TO_B_COMPLETE);
+            App_NavSupervisor_SetState(
+                APP_NAV_SUPERVISOR_IDLE, APP_NAV_SUPERVISOR_ACTION_NONE, APP_NAV_SUPERVISOR_RESULT_GO_TO_B_COMPLETE);
             App_NavSupervisor_UpdateMazeDebug();
             return true;
         }
@@ -1050,17 +969,15 @@ bool App_NavSupervisor_Start(void)
     else if (app_nav_supervisor_mission != APP_NAV_SUPERVISOR_MISSION_FIND_CELLS)
     {
         app_nav_supervisor_debug.active = 0U;
-        App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_ERROR,
-                                   APP_NAV_SUPERVISOR_ACTION_NONE,
-                                   APP_NAV_SUPERVISOR_RESULT_UNSUPPORTED_ACTION);
+        App_NavSupervisor_SetState(
+            APP_NAV_SUPERVISOR_ERROR, APP_NAV_SUPERVISOR_ACTION_NONE, APP_NAV_SUPERVISOR_RESULT_UNSUPPORTED_ACTION);
         App_NavSupervisor_UpdateMazeDebug();
         return false;
     }
 
     app_nav_supervisor_debug.active = 1U;
-    App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_START_INITIAL_ADVANCE,
-                               APP_NAV_SUPERVISOR_ACTION_INITIAL_ADVANCE,
-                               APP_NAV_SUPERVISOR_RESULT_OK);
+    App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_START_INITIAL_ADVANCE, APP_NAV_SUPERVISOR_ACTION_INITIAL_ADVANCE,
+        APP_NAV_SUPERVISOR_RESULT_OK);
     App_NavSupervisor_UpdateMazeDebug();
 
     return true;
@@ -1073,15 +990,12 @@ void App_NavSupervisor_Stop(void)
     App_NavSupervisor_ClearPivotExitLatch();
 
     app_nav_supervisor_debug.active = 0U;
-    App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_IDLE,
-                               APP_NAV_SUPERVISOR_ACTION_NONE,
-                               APP_NAV_SUPERVISOR_RESULT_OK);
+    App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_IDLE, APP_NAV_SUPERVISOR_ACTION_NONE, APP_NAV_SUPERVISOR_RESULT_OK);
     App_NavSupervisor_UpdateMazeDebug();
 }
 
-AppNavSupervisorState App_NavSupervisor_Tick(const AppNavInput *input,
-                                             const AppNavPerception *perception,
-                                             AppNavOutput *output)
+AppNavSupervisorState App_NavSupervisor_Tick(
+    const AppNavInput *input, const AppNavPerception *perception, AppNavOutput *output)
 {
     if (output != NULL)
     {
@@ -1097,9 +1011,8 @@ AppNavSupervisorState App_NavSupervisor_Tick(const AppNavInput *input,
     {
         if (app_nav_supervisor_debug.state != APP_NAV_SUPERVISOR_IDLE)
         {
-            App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_IDLE,
-                                       APP_NAV_SUPERVISOR_ACTION_NONE,
-                                       APP_NAV_SUPERVISOR_RESULT_OK);
+            App_NavSupervisor_SetState(
+                APP_NAV_SUPERVISOR_IDLE, APP_NAV_SUPERVISOR_ACTION_NONE, APP_NAV_SUPERVISOR_RESULT_OK);
         }
 
         return app_nav_supervisor_debug.state;
@@ -1138,9 +1051,8 @@ AppNavSupervisorState App_NavSupervisor_Tick(const AppNavInput *input,
 
     case APP_NAV_SUPERVISOR_IDLE:
     default:
-        App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_IDLE,
-                                   APP_NAV_SUPERVISOR_ACTION_NONE,
-                                   APP_NAV_SUPERVISOR_RESULT_OK);
+        App_NavSupervisor_SetState(
+            APP_NAV_SUPERVISOR_IDLE, APP_NAV_SUPERVISOR_ACTION_NONE, APP_NAV_SUPERVISOR_RESULT_OK);
         return app_nav_supervisor_debug.state;
     }
 }

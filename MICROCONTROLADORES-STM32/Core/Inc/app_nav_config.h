@@ -86,7 +86,6 @@ static inline AppNavConfig App_Nav_DefaultConfig(void)
     cfg.pivot_turn_pid_kd_q16 = APP_NAV_DEFAULT_PIVOT_TURN_PID_KD_Q16;
     cfg.pivot_turn_pid_output_limit_pwm = APP_NAV_DEFAULT_PIVOT_TURN_PID_OUTPUT_LIMIT_PWM;
 
-
     return cfg;
 }
 
