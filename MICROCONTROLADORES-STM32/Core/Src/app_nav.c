@@ -37,8 +37,8 @@ typedef enum
 
 typedef enum
 {
-    APP_NAV_ADVANCE_REAR_TAPE_GATE_COMPUTE_WAIT_LEAVE_ENTRY = 0,
-    APP_NAV_ADVANCE_REAR_TAPE_GATE_COMPUTE_RUNNING,
+    APP_NAV_ADVANCE_REAR_TAPE_GATE_CONTINUE_WAIT_LEAVE_ENTRY = 0,
+    APP_NAV_ADVANCE_REAR_TAPE_GATE_CONTINUE_RUNNING,
     APP_NAV_ADVANCE_REAR_TAPE_GATE_EXIT_DETECTED,
     APP_NAV_ADVANCE_REAR_TAPE_GATE_ERROR
 } AppNavAdvanceRearTapeGateResult;
@@ -446,10 +446,10 @@ static AppNavAdvanceRearTapeGateResult App_Nav_UpdateAdvanceRearTapeGate(bool cu
             if (app_nav_advance_rear_tape_profile == APP_NAV_REAR_TAPE_PROFILE_SPECIAL_CELL_AFTER_PIVOT)
             {
                 app_nav_advance_rear_tape_gate_state = APP_NAV_REAR_TAPE_GATE_WAIT_LEAVE_SPECIAL_PATCH;
-                return APP_NAV_ADVANCE_REAR_TAPE_GATE_COMPUTE_RUNNING;
+                return APP_NAV_ADVANCE_REAR_TAPE_GATE_CONTINUE_RUNNING;
             }
 
-            return APP_NAV_ADVANCE_REAR_TAPE_GATE_COMPUTE_WAIT_LEAVE_ENTRY;
+            return APP_NAV_ADVANCE_REAR_TAPE_GATE_CONTINUE_WAIT_LEAVE_ENTRY;
         }
 
         app_nav_advance_was_rear_tape_detected = 0U;
@@ -464,7 +464,7 @@ static AppNavAdvanceRearTapeGateResult App_Nav_UpdateAdvanceRearTapeGate(bool cu
             app_nav_advance_rear_tape_gate_state = APP_NAV_REAR_TAPE_GATE_ARMED_FOR_EXIT_TAPE;
         }
 
-        return APP_NAV_ADVANCE_REAR_TAPE_GATE_COMPUTE_RUNNING;
+        return APP_NAV_ADVANCE_REAR_TAPE_GATE_CONTINUE_RUNNING;
 
     case APP_NAV_REAR_TAPE_GATE_WAIT_SPECIAL_PATCH_BLACK:
         if (current_rear_tape)
@@ -477,7 +477,7 @@ static AppNavAdvanceRearTapeGateResult App_Nav_UpdateAdvanceRearTapeGate(bool cu
             app_nav_advance_was_rear_tape_detected = 0U;
         }
 
-        return APP_NAV_ADVANCE_REAR_TAPE_GATE_COMPUTE_RUNNING;
+        return APP_NAV_ADVANCE_REAR_TAPE_GATE_CONTINUE_RUNNING;
 
     case APP_NAV_REAR_TAPE_GATE_WAIT_LEAVE_SPECIAL_PATCH:
         if (current_rear_tape)
@@ -490,7 +490,7 @@ static AppNavAdvanceRearTapeGateResult App_Nav_UpdateAdvanceRearTapeGate(bool cu
             app_nav_advance_rear_tape_gate_state = APP_NAV_REAR_TAPE_GATE_ARMED_FOR_EXIT_TAPE;
         }
 
-        return APP_NAV_ADVANCE_REAR_TAPE_GATE_COMPUTE_RUNNING;
+        return APP_NAV_ADVANCE_REAR_TAPE_GATE_CONTINUE_RUNNING;
 
     case APP_NAV_REAR_TAPE_GATE_ARMED_FOR_EXIT_TAPE:
         if (current_rear_tape)
@@ -507,7 +507,7 @@ static AppNavAdvanceRearTapeGateResult App_Nav_UpdateAdvanceRearTapeGate(bool cu
             app_nav_advance_was_rear_tape_detected = 0U;
         }
 
-        return APP_NAV_ADVANCE_REAR_TAPE_GATE_COMPUTE_RUNNING;
+        return APP_NAV_ADVANCE_REAR_TAPE_GATE_CONTINUE_RUNNING;
 
     default:
         return APP_NAV_ADVANCE_REAR_TAPE_GATE_ERROR;
@@ -1668,24 +1668,20 @@ AppNavAdvanceActionState App_Nav_TickAdvanceAction(const AppNavInput *input,
         return app_nav_advance_action_state;
     }
 
-    if (rear_tape_gate_result == APP_NAV_ADVANCE_REAR_TAPE_GATE_COMPUTE_WAIT_LEAVE_ENTRY)
+    if (rear_tape_gate_result != APP_NAV_ADVANCE_REAR_TAPE_GATE_CONTINUE_WAIT_LEAVE_ENTRY)
     {
-        if (!App_Nav_ComputeAdvanceActionPwm(input, perception, output))
-        {
-            App_Nav_SetAdvanceActionTerminal(APP_NAV_ADVANCE_ACTION_ERROR);
-            return app_nav_advance_action_state;
-        }
-
-        app_nav_advance_action_state = APP_NAV_ADVANCE_ACTION_WAIT_LEAVE_REAR_TAPE;
-        return app_nav_advance_action_state;
+        App_Nav_SetAdvanceActionRunningState();
     }
-
-    App_Nav_SetAdvanceActionRunningState();
 
     if (!App_Nav_ComputeAdvanceActionPwm(input, perception, output))
     {
         App_Nav_SetAdvanceActionTerminal(APP_NAV_ADVANCE_ACTION_ERROR);
         return app_nav_advance_action_state;
+    }
+
+    if (rear_tape_gate_result == APP_NAV_ADVANCE_REAR_TAPE_GATE_CONTINUE_WAIT_LEAVE_ENTRY)
+    {
+        app_nav_advance_action_state = APP_NAV_ADVANCE_ACTION_WAIT_LEAVE_REAR_TAPE;
     }
 
     return app_nav_advance_action_state;
