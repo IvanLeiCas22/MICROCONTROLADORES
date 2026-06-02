@@ -1,8 +1,7 @@
 #include "unerbusparser.h"
 #include <QDebug>
 
-UnerbusParser::UnerbusParser(QObject *parent)
-    : QObject(parent)
+UnerbusParser::UnerbusParser(QObject *parent) : QObject(parent)
 {
     reset();
 }
@@ -50,8 +49,8 @@ void UnerbusParser::processData(const QByteArray &data)
                 {
                     // Error de checksum.
                     emit parsingError(QString("Error de Checksum. Calculado: 0x%1, Recibido: 0x%2")
-                                          .arg(calculatedChecksum, 2, 16, QChar('0'))
-                                          .arg(receivedChecksum, 2, 16, QChar('0')));
+                            .arg(calculatedChecksum, 2, 16, QChar('0'))
+                            .arg(receivedChecksum, 2, 16, QChar('0')));
                 }
 
                 // Reiniciamos la máquina de estados para buscar el siguiente paquete.

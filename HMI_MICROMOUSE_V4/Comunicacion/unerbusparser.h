@@ -9,15 +9,15 @@ class UnerbusParser : public QObject
 {
     Q_OBJECT
 
-public:
+  public:
     explicit UnerbusParser(QObject *parent = nullptr);
     void processData(const QByteArray &data);
 
-signals:
+  signals:
     void packetReceived(quint8 command, const QByteArray &payload);
     void parsingError(const QString &error);
 
-private:
+  private:
     enum class State
     {
         WaitingForU,

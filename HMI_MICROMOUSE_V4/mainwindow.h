@@ -25,232 +25,233 @@
 #define CELL_VISITED 0x10
 #define CELL_SPECIAL 0x20
 
-enum Heading { HEADING_NORTH = 0, HEADING_EAST, HEADING_SOUTH, HEADING_WEST };
+enum Heading
+{
+    HEADING_NORTH = 0,
+    HEADING_EAST,
+    HEADING_SOUTH,
+    HEADING_WEST
+};
 
 QT_BEGIN_NAMESPACE
-namespace Ui {
+namespace Ui
+{
 class MainWindow;
 }
 QT_END_NAMESPACE
 
-class MainWindow : public QMainWindow {
-  Q_OBJECT
+class MainWindow : public QMainWindow
+{
+    Q_OBJECT
 
-public:
-  MainWindow(QWidget *parent = nullptr);
-  ~MainWindow();
+  public:
+    MainWindow(QWidget *parent = nullptr);
+    ~MainWindow();
 
-private slots:
-  void on_navigationButtonClicked(
-      QAbstractButton
-          *button); // Nuevo slot para manejar clics de botones de navegación
+  private slots:
+    void on_navigationButtonClicked(QAbstractButton *button); // Nuevo slot para manejar clics de botones de navegación
 
-  // --- Slots para la comunicación serie ---
-  void on_btnConnectSerie_clicked();
-  void on_btnDisconnectSerie_clicked();
-  void on_btnRefreshPorts_clicked();
-  void onSerialPort_ReadyRead();
-  void handleSerialError(QSerialPort::SerialPortError error);
-  void on_btnConnectUDP_clicked();
-  void on_btnDisconnectUDP_clicked();
-  void onUDPReadyRead();
+    // --- Slots para la comunicación serie ---
+    void on_btnConnectSerie_clicked();
+    void on_btnDisconnectSerie_clicked();
+    void on_btnRefreshPorts_clicked();
+    void onSerialPort_ReadyRead();
+    void handleSerialError(QSerialPort::SerialPortError error);
+    void on_btnConnectUDP_clicked();
+    void on_btnDisconnectUDP_clicked();
+    void onUDPReadyRead();
 
-  // --- Slot para procesar paquetes del micromouse ---
-  void onPacketReceived(quint8 command, const QByteArray &payload);
+    // --- Slot para procesar paquetes del micromouse ---
+    void onPacketReceived(quint8 command, const QByteArray &payload);
 
-  // --- Slots para enviar comandos ---
-  void on_btnSendCMD_clicked();
+    // --- Slots para enviar comandos ---
+    void on_btnSendCMD_clicked();
 
-  // --- Slots para la página de sensores ---
-  void on_btnRefreshSensorsValues_clicked();
-  void on_chkBoxAutoRefreshSensorsValues_toggled(bool checked);
-  void requestSensorData();
+    // --- Slots para la página de sensores ---
+    void on_btnRefreshSensorsValues_clicked();
+    void on_chkBoxAutoRefreshSensorsValues_toggled(bool checked);
+    void requestSensorData();
 
-  // --- Slots para calibración y configuración ---
-  void on_btnCalibrateMPU_clicked();
+    // --- Slots para calibración y configuración ---
+    void on_btnCalibrateMPU_clicked();
 
-  // --- Slots para la página de control de motores ---
-  void on_btnApplyPWM_clicked();
-  void on_btnStopMotor_clicked();
-  void on_btnGetPWM_clicked();
-  void on_chkAutoGetPWM_toggled(bool checked);
-  void on_chkRealTimeSetPWM_toggled(bool checked);
-  void on_control_widget_valueChanged(); // Slot para seteo en tiempo real del
-                                         // PWM de los motores
-  void on_btnConfigurePeriod_clicked();
-  void on_btnSendTurnAngle_clicked();
+    // --- Slots para la página de control de motores ---
+    void on_btnApplyPWM_clicked();
+    void on_btnStopMotor_clicked();
+    void on_btnGetPWM_clicked();
+    void on_chkAutoGetPWM_toggled(bool checked);
+    void on_chkRealTimeSetPWM_toggled(bool checked);
+    void on_control_widget_valueChanged(); // Slot para seteo en tiempo real del
+                                           // PWM de los motores
+    void on_btnConfigurePeriod_clicked();
+    void on_btnSendTurnAngle_clicked();
 
-  // --- Slots para la página de configuración ---
-  void on_btnGetBaseMotorsSpeeds_clicked();
-  void on_btnSetBaseMotorsSpeeds_clicked();
-  void on_btnGetPidNavConfig_clicked();
-  void on_btnSetPidNavConfig_clicked();
-  void on_btnGetPidTurnConfig_clicked();
-  void on_btnSetPidTurnConfig_clicked();
-  void on_btnGetMpuConfig_clicked();
-  void on_btnSetMpuConfig_clicked();
-  void on_btnGetRobotStatus_clicked();
-  void on_btnSetRobotStatus_clicked();
-  void on_btnGetApproachFrontWallTarget_clicked();
-  void on_btnSetApproachFrontWallTarget_clicked();
+    // --- Slots para la página de configuración ---
+    void on_btnGetBaseMotorsSpeeds_clicked();
+    void on_btnSetBaseMotorsSpeeds_clicked();
+    void on_btnGetPidNavConfig_clicked();
+    void on_btnSetPidNavConfig_clicked();
+    void on_btnGetPidTurnConfig_clicked();
+    void on_btnSetPidTurnConfig_clicked();
+    void on_btnGetMpuConfig_clicked();
+    void on_btnSetMpuConfig_clicked();
+    void on_btnGetRobotStatus_clicked();
+    void on_btnSetRobotStatus_clicked();
+    void on_btnGetApproachFrontWallTarget_clicked();
+    void on_btnSetApproachFrontWallTarget_clicked();
 
-  // --- Slots para la página del laberinto ---
-  void on_btnSimReset_clicked();
+    // --- Slots para la página del laberinto ---
+    void on_btnSimReset_clicked();
 
-  void on_btnRotMapL_clicked();
+    void on_btnRotMapL_clicked();
 
-  void on_btnRotMapR_clicked();
+    void on_btnRotMapR_clicked();
 
-  void on_btnSyncMaze_clicked();
+    void on_btnSyncMaze_clicked();
 
-  void on_btnSetSupervisorInitialPose_clicked();
+    void on_btnSetSupervisorInitialPose_clicked();
 
-  void on_btnGetSupervisorInitialPose_clicked();
+    void on_btnGetSupervisorInitialPose_clicked();
 
-  void on_btnSetSupervisorGoalCell_clicked();
+    void on_btnSetSupervisorGoalCell_clicked();
 
-  void on_btnGetSupervisorGoalCell_clicked();
+    void on_btnGetSupervisorGoalCell_clicked();
 
-  void on_btnStartSupervisorRun_clicked();
+    void on_btnStartSupervisorRun_clicked();
 
-  void on_btnStopSupervisorRun_clicked();
+    void on_btnStopSupervisorRun_clicked();
 
-  void on_btnPrimitiveStart_clicked();
+    void on_btnPrimitiveStart_clicked();
 
-  void on_btnPrimitiveStop_clicked();
+    void on_btnPrimitiveStop_clicked();
 
-  void on_btnPrimitiveApplyConfig_clicked();
+    void on_btnPrimitiveApplyConfig_clicked();
 
-  void on_btnPrimitiveUpdateStatus_clicked();
+    void on_btnPrimitiveUpdateStatus_clicked();
 
-  void on_chkPrimitiveAutoUpdate_toggled(bool checked);
+    void on_chkPrimitiveAutoUpdate_toggled(bool checked);
 
-  void on_comboPrimitiveTest_currentIndexChanged(int index);
+    void on_comboPrimitiveTest_currentIndexChanged(int index);
 
   private:
-  Ui::MainWindow *ui;
-  QButtonGroup *navigationButtonGroup; // Nuevo miembro para agrupar los botones
-                                       // de navegación
-  QSerialPort *serialPort;             // Miembro para manejar el puerto serie
-  UnerbusParser *m_parser;             // Nuevo miembro para manejar el parser
+    Ui::MainWindow *ui;
+    QButtonGroup *navigationButtonGroup; // Nuevo miembro para agrupar los botones
+                                         // de navegación
+    QSerialPort *serialPort;             // Miembro para manejar el puerto serie
+    UnerbusParser *m_parser;             // Nuevo miembro para manejar el parser
 
-  QUdpSocket *udpSocket;
-  QString remoteIp;
-  quint16 remotePort;
-  quint16 localPort;
+    QUdpSocket *udpSocket;
+    QString remoteIp;
+    quint16 remotePort;
+    quint16 localPort;
 
-  QTimer *sensorUpdateTimer; // Temporizador para actualizaciones automáticas
-  QTimer *pwmUpdateTimer;    // Temporizador para actualizaciones de PWM
-  QTimer *primitiveTestUpdateTimer_;
+    QTimer *sensorUpdateTimer; // Temporizador para actualizaciones automáticas
+    QTimer *pwmUpdateTimer;    // Temporizador para actualizaciones de PWM
+    QTimer *primitiveTestUpdateTimer_;
 
-  QSpinBox *spinPrimSmoothKp = nullptr;
-  QSpinBox *spinPrimSmoothKi = nullptr;
-  QSpinBox *spinPrimSmoothKd = nullptr;
-  QSpinBox *spinPrimSmoothOutputLimit = nullptr;
-  QSpinBox *spinPrimSmoothFasterPwm = nullptr;
-  QSpinBox *spinPrimSmoothSlowerPwm = nullptr;
-  QSpinBox *spinPrimSmoothTargetDps = nullptr;
+    QSpinBox *spinPrimSmoothKp = nullptr;
+    QSpinBox *spinPrimSmoothKi = nullptr;
+    QSpinBox *spinPrimSmoothKd = nullptr;
+    QSpinBox *spinPrimSmoothOutputLimit = nullptr;
+    QSpinBox *spinPrimSmoothFasterPwm = nullptr;
+    QSpinBox *spinPrimSmoothSlowerPwm = nullptr;
+    QSpinBox *spinPrimSmoothTargetDps = nullptr;
 
-  QLabel *lblPrimTestActive = nullptr;
-  QLabel *lblPrimTestState = nullptr;
-  QLabel *lblPrimTestElapsed = nullptr;
-  QLabel *lblPrimTestYaw = nullptr;
-  QLabel *lblPrimTestYawRate = nullptr;
-  QLabel *lblPrimTestTargetDps = nullptr;
-  QLabel *lblPrimTestLeftPwm = nullptr;
-  QLabel *lblPrimTestRightPwm = nullptr;
-  QLabel *lblPrimTestResult = nullptr;
-  QLabel *lblSupervisorActive = nullptr;
-  QLabel *lblSupervisorState = nullptr;
-  QLabel *lblSupervisorAction = nullptr;
-  QLabel *lblSupervisorResult = nullptr;
-  QLabel *lblSupervisorPose = nullptr;
-  QLabel *lblSupervisorCell = nullptr;
-  QLabel *lblSupervisorSpecials = nullptr;
+    QLabel *lblPrimTestActive = nullptr;
+    QLabel *lblPrimTestState = nullptr;
+    QLabel *lblPrimTestElapsed = nullptr;
+    QLabel *lblPrimTestYaw = nullptr;
+    QLabel *lblPrimTestYawRate = nullptr;
+    QLabel *lblPrimTestTargetDps = nullptr;
+    QLabel *lblPrimTestLeftPwm = nullptr;
+    QLabel *lblPrimTestRightPwm = nullptr;
+    QLabel *lblPrimTestResult = nullptr;
+    QLabel *lblSupervisorActive = nullptr;
+    QLabel *lblSupervisorState = nullptr;
+    QLabel *lblSupervisorAction = nullptr;
+    QLabel *lblSupervisorResult = nullptr;
+    QLabel *lblSupervisorPose = nullptr;
+    QLabel *lblSupervisorCell = nullptr;
+    QLabel *lblSupervisorSpecials = nullptr;
 
-  quint16 m_pwmPeriod = 1000; // Almacena el período máximo de PWM para escalar
-                              // los valores de la UI.
+    quint16 m_pwmPeriod = 1000; // Almacena el período máximo de PWM para escalar
+                                // los valores de la UI.
 
-  // --- Constantes para configuración ---
-  static const int SENSOR_UPDATE_INTERVAL_MS = 200;
-  static const int PWM_UPDATE_INTERVAL_MS =
-      200; // Intervalo para pedir PWM (5 Hz)
-  static const int MAX_LOG_LINES = 200;
+    // --- Constantes para configuración ---
+    static const int SENSOR_UPDATE_INTERVAL_MS = 200;
+    static const int PWM_UPDATE_INTERVAL_MS = 200; // Intervalo para pedir PWM (5 Hz)
+    static const int MAX_LOG_LINES = 200;
 
-  // --- Variables LABERINTO ---
-  // Puntero maestro del lienzo
-  QGraphicsScene *mazeScene;
-  // Memoria del mapa sincronizada desde STM32.
-  uint8_t robot_maze_map[MAZE_WIDTH][MAZE_HEIGHT];
-  // Coordenadas
-  uint8_t current_x;
-  uint8_t current_y;
-  Heading current_heading;
+    // --- Variables LABERINTO ---
+    // Puntero maestro del lienzo
+    QGraphicsScene *mazeScene;
+    // Memoria del mapa sincronizada desde STM32.
+    uint8_t robot_maze_map[MAZE_WIDTH][MAZE_HEIGHT];
+    // Coordenadas
+    uint8_t current_x;
+    uint8_t current_y;
+    Heading current_heading;
 
-  // --- Funciones de ayuda ---
-  void updateSerialPortList();
-  void updateUIState(bool serialConnected, bool udpConnected);
-  void populateCMDComboBox();
-  void sendUnerbusCommand(
-      Unerbus::CommandId cmd,
-      const QByteArray &payload = QByteArray()); // Helper para enviar comandos
-  void updateIrSensorsUI(const QByteArray &payload);
-  void updateMpuSensorsUI(const QByteArray &payload);
-  void updateConnectionStatus(
-      const QString &text,
-      const QString &colorName); // Helper para actualizar el estado de conexión
-  void setupControlPage();       // Función de configuración del control
-  void requestPwmData();         // Nueva función para pedir datos de PWM
-  void updatePwmUI(
-      const QByteArray &payload); // Nueva función para actualizar la UI de PWM
-  void updatePwmControlRanges(quint16 new_period);
+    // --- Funciones de ayuda ---
+    void updateSerialPortList();
+    void updateUIState(bool serialConnected, bool udpConnected);
+    void populateCMDComboBox();
+    void sendUnerbusCommand(Unerbus::CommandId cmd,
+        const QByteArray &payload = QByteArray()); // Helper para enviar comandos
+    void updateIrSensorsUI(const QByteArray &payload);
+    void updateMpuSensorsUI(const QByteArray &payload);
+    void updateConnectionStatus(const QString &text,
+        const QString &colorName);               // Helper para actualizar el estado de conexión
+    void setupControlPage();                     // Función de configuración del control
+    void requestPwmData();                       // Nueva función para pedir datos de PWM
+    void updatePwmUI(const QByteArray &payload); // Nueva función para actualizar la UI de PWM
+    void updatePwmControlRanges(quint16 new_period);
 
-  // --- Funciones LABERINTO ---
-  // Función que hará toda la magia de iluminar las paredes
-  void drawMaze();
-  void requestMazeColumn(quint8 col);
-  void setupSupervisorDebugPanel();
-  void requestSupervisorDebugStatus();
-  void updateSupervisorDebugStatusUI(const QByteArray &payload);
+    // --- Funciones LABERINTO ---
+    // Función que hará toda la magia de iluminar las paredes
+    void drawMaze();
+    void requestMazeColumn(quint8 col);
+    void setupSupervisorDebugPanel();
+    void requestSupervisorDebugStatus();
+    void updateSupervisorDebugStatusUI(const QByteArray &payload);
 
-  // --- Funciones dispatch comunicaciones ---
-  void setupConfigPage();
-  void updatePidNavUI(const QByteArray &payload);
-  void updatePidTurnUI(const QByteArray &payload);
-  void updateMotorBaseSpeedsUI(const QByteArray &payload);
-  void updateTurnMaxSpeedUI(const QByteArray &payload);
-  void updatePivotTurnDpsUI(const QByteArray &payload);
-  void updateMpuConfigUI(const QByteArray &payload);
-  void populateMpuConfigComboBoxes();
-  void updateWallThresholdsUI(const QByteArray &payload);
-  void updateWallTargetAdcUI(const QByteArray &payload);
-  void updateMaxPwmCorrectionUI(const QByteArray &payload);
-  void setupActivitiesTab();
-  void populateRobotStatusComboBoxes();
-  void updateRobotStatusUI(const QByteArray &payload);
-  void updateApproachFrontWallTargetUI(const QByteArray &payload);
-  void updateYawAngleUI(const QByteArray &payload);
-  void updateSmoothTurnSpeedsUI(const QByteArray &payload);
-  void updateTurnSpeedPID(const QByteArray &payload);
-  void updateTurnTargetDps(const QByteArray &payload);
-  void sendApproachFrontWallTarget();
-  void sendSupervisorInitialPose();
-  void requestSupervisorInitialPose();
-  void updateSupervisorInitialPoseUI(const QByteArray &payload);
-  void sendSupervisorGoalCell();
-  void requestSupervisorGoalCell();
-  void updateSupervisorGoalCellUI(const QByteArray &payload);
-  void setupPrimitiveTestPage();
-  void requestPrimitiveTestStatus();
-  void requestPrimitiveTestConfig();
-  void sendPrimitiveSmoothConfig();
-  void updatePrimitiveTestResponse(const QByteArray &payload);
-  void updatePrimitiveTestStatus(const QByteArray &payload);
-  void updatePrimitiveTestConfig(const QByteArray &payload);
-  quint8 currentPrimitiveVariant() const;
+    // --- Funciones dispatch comunicaciones ---
+    void setupConfigPage();
+    void updatePidNavUI(const QByteArray &payload);
+    void updatePidTurnUI(const QByteArray &payload);
+    void updateMotorBaseSpeedsUI(const QByteArray &payload);
+    void updateTurnMaxSpeedUI(const QByteArray &payload);
+    void updatePivotTurnDpsUI(const QByteArray &payload);
+    void updateMpuConfigUI(const QByteArray &payload);
+    void populateMpuConfigComboBoxes();
+    void updateWallThresholdsUI(const QByteArray &payload);
+    void updateWallTargetAdcUI(const QByteArray &payload);
+    void updateMaxPwmCorrectionUI(const QByteArray &payload);
+    void setupActivitiesTab();
+    void populateRobotStatusComboBoxes();
+    void updateRobotStatusUI(const QByteArray &payload);
+    void updateApproachFrontWallTargetUI(const QByteArray &payload);
+    void updateYawAngleUI(const QByteArray &payload);
+    void updateSmoothTurnSpeedsUI(const QByteArray &payload);
+    void updateTurnSpeedPID(const QByteArray &payload);
+    void updateTurnTargetDps(const QByteArray &payload);
+    void sendApproachFrontWallTarget();
+    void sendSupervisorInitialPose();
+    void requestSupervisorInitialPose();
+    void updateSupervisorInitialPoseUI(const QByteArray &payload);
+    void sendSupervisorGoalCell();
+    void requestSupervisorGoalCell();
+    void updateSupervisorGoalCellUI(const QByteArray &payload);
+    void setupPrimitiveTestPage();
+    void requestPrimitiveTestStatus();
+    void requestPrimitiveTestConfig();
+    void sendPrimitiveSmoothConfig();
+    void updatePrimitiveTestResponse(const QByteArray &payload);
+    void updatePrimitiveTestStatus(const QByteArray &payload);
+    void updatePrimitiveTestConfig(const QByteArray &payload);
+    quint8 currentPrimitiveVariant() const;
 
-protected:
-
+  protected:
 };
 
 #endif // MAINWINDOW_H
