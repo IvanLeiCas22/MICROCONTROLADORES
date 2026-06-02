@@ -52,6 +52,13 @@ typedef enum
 
 typedef enum
 {
+    APP_NAV_SMOOTH_REAR_TAPE_GATE_CONTINUE = 0,
+    APP_NAV_SMOOTH_REAR_TAPE_GATE_EXIT_DETECTED,
+    APP_NAV_SMOOTH_REAR_TAPE_GATE_ERROR
+} AppNavSmoothRearTapeGateResult;
+
+typedef enum
+{
     APP_NAV_FORWARD_GUIDANCE_WALL_FOLLOW = 0,
     APP_NAV_FORWARD_GUIDANCE_YAW_HOLD
 } AppNavForwardGuidanceMode;
@@ -366,8 +373,9 @@ static void App_Nav_EnterSmoothPostYawSeek(const AppNavInput *input,
     output->left_motor_pwm = (int16_t)(app_nav_config.left_motor_base_speed);
 }
 
-static bool App_Nav_UpdateSmoothRearTapeGate(bool current_rear_tape,
-                                             bool exit_detection_enabled)
+static AppNavSmoothRearTapeGateResult App_Nav_UpdateSmoothRearTapeGate(
+    bool current_rear_tape,
+    bool exit_detection_enabled)
 {
     switch (app_nav_smooth_rear_tape_gate_state)
     {
@@ -375,7 +383,7 @@ static bool App_Nav_UpdateSmoothRearTapeGate(bool current_rear_tape,
         if (current_rear_tape)
         {
             app_nav_smooth_was_rear_tape_detected = 1U;
-            return false;
+            return APP_NAV_SMOOTH_REAR_TAPE_GATE_CONTINUE;
         }
 
         app_nav_smooth_was_rear_tape_detected = 0U;
@@ -388,7 +396,7 @@ static bool App_Nav_UpdateSmoothRearTapeGate(bool current_rear_tape,
         {
             app_nav_smooth_rear_tape_gate_state = APP_NAV_REAR_TAPE_GATE_ARMED_FOR_EXIT_TAPE;
         }
-        return false;
+        return APP_NAV_SMOOTH_REAR_TAPE_GATE_CONTINUE;
 
     case APP_NAV_REAR_TAPE_GATE_WAIT_SPECIAL_PATCH_BLACK:
         if (current_rear_tape)
@@ -400,7 +408,7 @@ static bool App_Nav_UpdateSmoothRearTapeGate(bool current_rear_tape,
         {
             app_nav_smooth_was_rear_tape_detected = 0U;
         }
-        return false;
+        return APP_NAV_SMOOTH_REAR_TAPE_GATE_CONTINUE;
 
     case APP_NAV_REAR_TAPE_GATE_WAIT_LEAVE_SPECIAL_PATCH:
         if (current_rear_tape)
@@ -412,20 +420,20 @@ static bool App_Nav_UpdateSmoothRearTapeGate(bool current_rear_tape,
             app_nav_smooth_was_rear_tape_detected = 0U;
             app_nav_smooth_rear_tape_gate_state = APP_NAV_REAR_TAPE_GATE_ARMED_FOR_EXIT_TAPE;
         }
-        return false;
+        return APP_NAV_SMOOTH_REAR_TAPE_GATE_CONTINUE;
 
     case APP_NAV_REAR_TAPE_GATE_ARMED_FOR_EXIT_TAPE:
         if (!current_rear_tape)
         {
             app_nav_smooth_was_rear_tape_detected = 0U;
-            return false;
+            return APP_NAV_SMOOTH_REAR_TAPE_GATE_CONTINUE;
         }
 
         if ((app_nav_smooth_was_rear_tape_detected == 0U) &&
             exit_detection_enabled)
         {
             app_nav_smooth_was_rear_tape_detected = 1U;
-            return true;
+            return APP_NAV_SMOOTH_REAR_TAPE_GATE_EXIT_DETECTED;
         }
 
         if (exit_detection_enabled)
@@ -433,11 +441,10 @@ static bool App_Nav_UpdateSmoothRearTapeGate(bool current_rear_tape,
             app_nav_smooth_was_rear_tape_detected = 1U;
         }
 
-        return false;
+        return APP_NAV_SMOOTH_REAR_TAPE_GATE_CONTINUE;
 
     default:
-        app_nav_smooth_action_state = APP_NAV_SMOOTH_ACTION_ERROR;
-        return false;
+        return APP_NAV_SMOOTH_REAR_TAPE_GATE_ERROR;
     }
 }
 
@@ -1007,6 +1014,7 @@ AppNavSmoothActionState App_Nav_TickSmoothAction(const AppNavInput *input,
 {
     int32_t yaw_deg;
     bool current_rear_tape;
+    AppNavSmoothRearTapeGateResult smooth_rear_tape_gate_result;
     bool rear_tape_detected = false;
     bool wall_detected = false;
     int32_t yaw_completion_threshold;
@@ -1042,9 +1050,18 @@ AppNavSmoothActionState App_Nav_TickSmoothAction(const AppNavInput *input,
     yaw_deg = FIXED_TO_INT(input->yaw_q16_deg);
     current_rear_tape = (perception->floor_rear_black != 0U);
 
-    rear_tape_detected = App_Nav_UpdateSmoothRearTapeGate(
+    smooth_rear_tape_gate_result = App_Nav_UpdateSmoothRearTapeGate(
         current_rear_tape,
         (App_Nav_AbsInt32(yaw_deg) > (int32_t)app_nav_config.smooth_rear_tape_min_yaw_deg));
+
+    if (smooth_rear_tape_gate_result == APP_NAV_SMOOTH_REAR_TAPE_GATE_ERROR)
+    {
+        App_Nav_SetSmoothActionTerminal(APP_NAV_SMOOTH_ACTION_ERROR);
+        return app_nav_smooth_action_state;
+    }
+
+    rear_tape_detected =
+        (smooth_rear_tape_gate_result == APP_NAV_SMOOTH_REAR_TAPE_GATE_EXIT_DETECTED);
 
     if (app_nav_smooth_action_type == APP_NAV_SMOOTH_ACTION_LEFT)
     {
