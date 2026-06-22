@@ -1,11 +1,15 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 #include <QBrush>
+#include <QComboBox>
 #include <QDataStream>
 #include <QDebug>
 #include <QFormLayout>
+#include <QGraphicsEllipseItem>
 #include <QGraphicsLineItem>
+#include <QGraphicsPolygonItem>
 #include <QGraphicsRectItem>
+#include <QGraphicsTextItem>
 #include <QGroupBox>
 #include <QGridLayout>
 #include <QIntValidator>
@@ -16,6 +20,9 @@
 #include <QMessageBox>
 #include <QMetaEnum>
 #include <QPen>
+#include <QPointF>
+#include <QPolygonF>
+#include <QRectF>
 #include <QTextBlock>
 
 namespace
@@ -285,6 +292,14 @@ MainWindow::MainWindow(QWidget *parent)
     // 1. Crear el escenario e insertarlo en la vista del UI
     mazeScene = new QGraphicsScene(this);
     ui->mazeView->setScene(mazeScene);
+
+    auto redrawMazeOnMarkerConfigChange = [this](int) { drawMaze(); };
+    connect(ui->spinInitialCellX, QOverload<int>::of(&QSpinBox::valueChanged), this, redrawMazeOnMarkerConfigChange);
+    connect(ui->spinInitialCellY, QOverload<int>::of(&QSpinBox::valueChanged), this, redrawMazeOnMarkerConfigChange);
+    connect(ui->spinGoalCellX, QOverload<int>::of(&QSpinBox::valueChanged), this, redrawMazeOnMarkerConfigChange);
+    connect(ui->spinGoalCellY, QOverload<int>::of(&QSpinBox::valueChanged), this, redrawMazeOnMarkerConfigChange);
+    connect(ui->comboSupervisorRunMode, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+        redrawMazeOnMarkerConfigChange);
 
     // Opcional: Le damos un fondo oscuro muy moderno al canvas
     mazeScene->setBackgroundBrush(QColor(20, 25, 30));
@@ -1261,6 +1276,77 @@ static int sceneRowToLogicalY(int sceneRow)
     return MAZE_HEIGHT - 1 - sceneRow;
 }
 
+static bool isValidLogicalCell(int logicalX, int logicalY)
+{
+    return (logicalX >= 0) && (logicalX < MAZE_WIDTH) && (logicalY >= 0) && (logicalY < MAZE_HEIGHT);
+}
+
+static QPointF logicalCellTopLeft(int logicalX, int logicalY, int cellSize)
+{
+    return QPointF(logicalX * cellSize, logicalYToSceneRow(logicalY) * cellSize);
+}
+
+static void centerTextOnPoint(QGraphicsTextItem *textItem, const QPointF &center)
+{
+    const QRectF textRect = textItem->boundingRect();
+    textItem->setPos(center.x() - textRect.width() / 2.0, center.y() - textRect.height() / 2.0);
+}
+
+static void drawStartCellMarker(QGraphicsScene *scene, int logicalX, int logicalY, int cellSize)
+{
+    if (!isValidLogicalCell(logicalX, logicalY))
+    {
+        return;
+    }
+
+    const QPointF topLeft = logicalCellTopLeft(logicalX, logicalY, cellSize);
+    const QPointF badgeCenter(topLeft.x() + cellSize * 0.50, topLeft.y() + cellSize * 0.50);
+    const qreal badgeRadius = cellSize * 0.19;
+
+    QPen badgePen(QColor(37, 99, 235), 2, Qt::SolidLine);
+    QBrush badgeBrush(QColor(37, 99, 235, 220));
+    QGraphicsEllipseItem *badge = scene->addEllipse(badgeCenter.x() - badgeRadius, badgeCenter.y() - badgeRadius,
+        badgeRadius * 2.0, badgeRadius * 2.0, badgePen, badgeBrush);
+    badge->setZValue(9.0);
+
+    QGraphicsTextItem *label = scene->addText("A", QFont("Arial", 11, QFont::Bold));
+    label->setDefaultTextColor(Qt::white);
+    centerTextOnPoint(label, badgeCenter);
+    label->setZValue(9.1);
+}
+
+static void drawGoalCellMarker(QGraphicsScene *scene, int logicalX, int logicalY, int cellSize)
+{
+    if (!isValidLogicalCell(logicalX, logicalY))
+    {
+        return;
+    }
+
+    const QPointF topLeft = logicalCellTopLeft(logicalX, logicalY, cellSize);
+    const QPointF markerCenter(topLeft.x() + cellSize * 0.50, topLeft.y() + cellSize * 0.50);
+    const qreal poleX = markerCenter.x() - cellSize * 0.10;
+    const qreal poleTop = markerCenter.y() - cellSize * 0.30;
+    const qreal poleBottom = markerCenter.y() + cellSize * 0.30;
+
+    QPen polePen(QColor(230, 230, 230), 2, Qt::SolidLine);
+    QGraphicsLineItem *pole = scene->addLine(poleX, poleTop, poleX, poleBottom, polePen);
+    pole->setZValue(9.0);
+
+    QPolygonF flag;
+    flag << QPointF(poleX, poleTop) << QPointF(poleX + cellSize * 0.30, poleTop + cellSize * 0.08)
+         << QPointF(poleX, poleTop + cellSize * 0.23);
+
+    QPen flagPen(QColor(185, 28, 28), 1, Qt::SolidLine);
+    QBrush flagBrush(QColor(220, 38, 38, 230));
+    QGraphicsPolygonItem *flagItem = scene->addPolygon(flag, flagPen, flagBrush);
+    flagItem->setZValue(9.1);
+
+    QGraphicsTextItem *label = scene->addText("B", QFont("Arial", 10, QFont::Bold));
+    label->setDefaultTextColor(QColor(255, 220, 220));
+    centerTextOnPoint(label, QPointF(poleX + cellSize * 0.12, poleTop + cellSize * 0.11));
+    label->setZValue(9.2);
+}
+
 void MainWindow::drawMaze()
 {
 
@@ -1376,6 +1462,20 @@ void MainWindow::drawMaze()
                 }
             }
         }
+    }
+
+    const int startX = ui->spinInitialCellX->value();
+    const int startY = ui->spinInitialCellY->value();
+    drawStartCellMarker(mazeScene, startX, startY, cellSize);
+
+    const bool showGoalMarker = (supervisorRunModeForComboIndex(ui->comboSupervisorRunMode->currentIndex()) ==
+                                    SUPERVISOR_RUN_MODE_GO_A_TO_B) &&
+        supervisorGoalValid_;
+    if (showGoalMarker)
+    {
+        const int goalX = ui->spinGoalCellX->value();
+        const int goalY = ui->spinGoalCellY->value();
+        drawGoalCellMarker(mazeScene, goalX, goalY, cellSize);
     }
 
     // 4. DIBUJAR AL ROBOT
@@ -2230,6 +2330,10 @@ void MainWindow::sendSupervisorGoalCell()
 
     stream << x << y;
     sendUnerbusCommand(Unerbus::CommandId::CMD_SET_SUPERVISOR_GOAL_CELL, payload);
+
+    supervisorGoalValid_ = true;
+    ui->labelSupervisorGoalStatus->setText("Destino válido");
+    drawMaze();
 }
 
 void MainWindow::requestSupervisorGoalCell()
@@ -2258,6 +2362,7 @@ void MainWindow::updateSupervisorInitialPoseUI(const QByteArray &payload)
     ui->spinInitialCellX->setValue(static_cast<int>(x));
     ui->spinInitialCellY->setValue(static_cast<int>(y));
     ui->comboInitialHeading->setCurrentIndex(comboIndexForSupervisorHeading(heading));
+    drawMaze();
 }
 
 void MainWindow::updateSupervisorGoalCellUI(const QByteArray &payload)
@@ -2281,7 +2386,9 @@ void MainWindow::updateSupervisorGoalCellUI(const QByteArray &payload)
         ui->spinGoalCellY->setValue(static_cast<int>(y));
     }
 
-    ui->labelSupervisorGoalStatus->setText(valid ? "Destino válido" : "Destino no configurado");
+    supervisorGoalValid_ = (valid != 0);
+    ui->labelSupervisorGoalStatus->setText(supervisorGoalValid_ ? "Destino válido" : "Destino no configurado");
+    drawMaze();
 }
 
 void MainWindow::updateSupervisorDebugStatusUI(const QByteArray &payload)

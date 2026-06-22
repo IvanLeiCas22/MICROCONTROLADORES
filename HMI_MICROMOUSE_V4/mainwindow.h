@@ -198,6 +198,7 @@ class MainWindow : public QMainWindow
     uint8_t current_x;
     uint8_t current_y;
     Heading current_heading;
+    bool supervisorGoalValid_ = false;
 
     // --- Funciones de ayuda ---
     void updateSerialPortList();
