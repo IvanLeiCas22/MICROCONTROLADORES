@@ -5,6 +5,7 @@
 #include <QDataStream>
 #include <QDebug>
 #include <QFormLayout>
+#include <QFrame>
 #include <QGraphicsEllipseItem>
 #include <QGraphicsLineItem>
 #include <QGraphicsPolygonItem>
@@ -292,6 +293,9 @@ MainWindow::MainWindow(QWidget *parent)
     // 1. Crear el escenario e insertarlo en la vista del UI
     mazeScene = new QGraphicsScene(this);
     ui->mazeView->setScene(mazeScene);
+    ui->mazeView->setMinimumHeight(690);
+    ui->mazeView->setMaximumHeight(720);
+    ui->mazeView->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
 
     auto updateLocalPoseOnInitialPoseConfigChange = [this](int) { setLocalRobotPoseFromInitialPose(); };
     auto redrawMazeOnMarkerConfigChange = [this](int) { drawMaze(); };
@@ -1376,8 +1380,8 @@ void MainWindow::drawMaze()
 
     mazeScene->clear();
 
-    const int cellSize = 80;
-    const int labelMargin = 35;
+    const int cellSize = 78;
+    const int labelMargin = 32;
     const int mazePixelWidth = MAZE_WIDTH * cellSize;
     const int mazePixelHeight = MAZE_HEIGHT * cellSize;
 
@@ -2247,25 +2251,73 @@ void MainWindow::on_btnSyncMaze_clicked()
 void MainWindow::setupSupervisorDebugPanel()
 {
     QGroupBox *group = new QGroupBox("Estado supervisor", ui->pageLaberinth);
-    QGridLayout *layout = new QGridLayout(group);
+    QHBoxLayout *layout = new QHBoxLayout(group);
 
-    layout->setHorizontalSpacing(12);
-    layout->setVerticalSpacing(6);
+    group->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
+    group->setMaximumHeight(175);
 
-    auto createValueLabel = [group]()
+    layout->setContentsMargins(8, 7, 8, 7);
+    layout->setSpacing(8);
+
+    const QString sectionTextStyle =
+        "font-weight: 700; font-size: 10pt; color: #34495e; border: none; background: transparent;";
+    const QString nameTextStyle = "font-weight: 600; font-size: 10pt; border: none; background: transparent;";
+    const QString valueTextStyle = "font-size: 10pt; border: none; background: transparent;";
+
+    auto createValueLabel = [group, valueTextStyle]()
     {
         QLabel *label = new QLabel("-", group);
         label->setTextInteractionFlags(Qt::TextSelectableByMouse);
-        label->setMinimumWidth(90);
+        label->setMinimumWidth(105);
+        label->setStyleSheet(valueTextStyle);
         return label;
     };
 
-    auto addField = [group, layout](int row, int column, const QString &name, QLabel *value)
+    auto createRowFrame = [group, sectionTextStyle](const QString &title)
     {
-        QLabel *nameLabel = new QLabel(name, group);
-        nameLabel->setStyleSheet("font-weight: 600;");
-        layout->addWidget(nameLabel, row, column * 2);
-        layout->addWidget(value, row, (column * 2) + 1);
+        QFrame *frame = new QFrame(group);
+        frame->setFrameShape(QFrame::StyledPanel);
+        frame->setStyleSheet(
+            "QFrame { border: 1px solid #c8d0d8; border-radius: 4px; background: #f7f8fa; }"
+            "QLabel { border: none; background: transparent; }");
+
+        QHBoxLayout *rowLayout = new QHBoxLayout(frame);
+        rowLayout->setContentsMargins(10, 5, 10, 5);
+        rowLayout->setSpacing(8);
+
+        QLabel *sectionLabel = new QLabel(title, frame);
+        sectionLabel->setMinimumWidth(92);
+        sectionLabel->setStyleSheet(sectionTextStyle);
+        rowLayout->addWidget(sectionLabel);
+
+        return rowLayout;
+    };
+
+    auto addSeparator = []()
+    {
+        QWidget *separator = new QWidget();
+        separator->setFixedWidth(1);
+        separator->setMinimumHeight(20);
+        separator->setStyleSheet("background: #d0d7de;");
+        return separator;
+    };
+
+    auto addField = [nameTextStyle](QHBoxLayout *rowLayout, const QString &name, QLabel *value)
+    {
+        QWidget *field = new QWidget();
+        field->setStyleSheet("border: none; background: transparent;");
+        QHBoxLayout *fieldLayout = new QHBoxLayout(field);
+        fieldLayout->setContentsMargins(0, 0, 0, 0);
+        fieldLayout->setSpacing(8);
+
+        QLabel *nameLabel = new QLabel(name + ":", field);
+        nameLabel->setMinimumWidth(82);
+        nameLabel->setStyleSheet(nameTextStyle);
+        fieldLayout->addWidget(nameLabel);
+        fieldLayout->addWidget(value);
+        fieldLayout->addStretch(1);
+
+        rowLayout->addWidget(field, 1);
     };
 
     lblSupervisorActive = createValueLabel();
@@ -2281,28 +2333,59 @@ void MainWindow::setupSupervisorDebugPanel()
     lblSupervisorGoToBCost = createValueLabel();
     lblSupervisorGoToBImprovement = createValueLabel();
 
-    addField(0, 0, "Activo", lblSupervisorActive);
-    addField(0, 1, "Estado", lblSupervisorState);
-    addField(0, 2, "Acción", lblSupervisorAction);
-    addField(0, 3, "Resultado", lblSupervisorResult);
-    addField(1, 0, "Pose", lblSupervisorPose);
-    addField(1, 1, "Celda", lblSupervisorCell);
-    addField(1, 2, "Especiales", lblSupervisorSpecials);
-    addField(1, 3, "Misión", lblSupervisorMission);
-    addField(2, 0, "Fase A/B", lblSupervisorGoToBPhase);
-    addField(2, 1, "Pasos ida", lblSupervisorGoToBSteps);
-    addField(2, 2, "Costo opt.", lblSupervisorGoToBCost);
-    addField(2, 3, "Mejora", lblSupervisorGoToBImprovement);
+    QWidget *rowColumn = new QWidget(group);
+    QVBoxLayout *rowColumnLayout = new QVBoxLayout(rowColumn);
+    rowColumnLayout->setContentsMargins(0, 0, 0, 0);
+    rowColumnLayout->setSpacing(4);
+
+    QHBoxLayout *stateRow = createRowFrame("Estado");
+    stateRow->addWidget(addSeparator());
+    addField(stateRow, "Activo", lblSupervisorActive);
+    stateRow->addWidget(addSeparator());
+    addField(stateRow, "Estado", lblSupervisorState);
+    stateRow->addWidget(addSeparator());
+    addField(stateRow, "Acción", lblSupervisorAction);
+    stateRow->addWidget(addSeparator());
+    addField(stateRow, "Resultado", lblSupervisorResult);
+    rowColumnLayout->addWidget(stateRow->parentWidget());
+
+    QHBoxLayout *poseRow = createRowFrame("Pose / mapa");
+    poseRow->addWidget(addSeparator());
+    addField(poseRow, "Pose", lblSupervisorPose);
+    poseRow->addWidget(addSeparator());
+    addField(poseRow, "Celda", lblSupervisorCell);
+    poseRow->addWidget(addSeparator());
+    addField(poseRow, "Especiales", lblSupervisorSpecials);
+    poseRow->addWidget(addSeparator());
+    addField(poseRow, "Misión", lblSupervisorMission);
+    rowColumnLayout->addWidget(poseRow->parentWidget());
+
+    QHBoxLayout *goToBRow = createRowFrame("A -> B");
+    goToBRow->addWidget(addSeparator());
+    addField(goToBRow, "Fase", lblSupervisorGoToBPhase);
+    goToBRow->addWidget(addSeparator());
+    addField(goToBRow, "Pasos ida", lblSupervisorGoToBSteps);
+    goToBRow->addWidget(addSeparator());
+    addField(goToBRow, "Costo opt.", lblSupervisorGoToBCost);
+    goToBRow->addWidget(addSeparator());
+    addField(goToBRow, "Mejora", lblSupervisorGoToBImprovement);
+    rowColumnLayout->addWidget(goToBRow->parentWidget());
+
+    layout->addWidget(rowColumn, 1);
 
     QPushButton *btnRefreshSupervisor = new QPushButton("Actualizar estado", group);
     QPushButton *btnClearSupervisorMap = new QPushButton("Limpiar mapa aprendido", group);
+    btnRefreshSupervisor->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    btnClearSupervisorMap->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+
     QWidget *buttonColumn = new QWidget(group);
+    buttonColumn->setFixedWidth(185);
     QVBoxLayout *buttonLayout = new QVBoxLayout(buttonColumn);
     buttonLayout->setContentsMargins(0, 0, 0, 0);
-    buttonLayout->addWidget(btnRefreshSupervisor);
-    buttonLayout->addWidget(btnClearSupervisorMap);
-    buttonLayout->addStretch(1);
-    layout->addWidget(buttonColumn, 0, 8, 3, 1);
+    buttonLayout->setSpacing(4);
+    buttonLayout->addWidget(btnRefreshSupervisor, 1);
+    buttonLayout->addWidget(btnClearSupervisorMap, 1);
+    layout->addWidget(buttonColumn);
 
     connect(btnRefreshSupervisor, &QPushButton::clicked, this, &MainWindow::requestSupervisorDebugStatus);
     connect(btnClearSupervisorMap, &QPushButton::clicked, this, &MainWindow::on_btnClearSupervisorLearnedMap_clicked);

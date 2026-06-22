@@ -345,7 +345,7 @@ QPushButton:checked {
     <item>
      <widget class="QStackedWidget" name="stackedScreens">
       <property name="currentIndex">
-       <number>5</number>
+       <number>2</number>
       </property>
       <widget class="QWidget" name="pageHome">
        <layout class="QVBoxLayout" name="verticalLayout_2">
@@ -1780,13 +1780,6 @@ QPushButton:checked {
                </property>
               </widget>
              </item>
-             <item row="5" column="1">
-              <widget class="QLineEdit" name="editMaxPwmOffsetNav">
-               <property name="text">
-                <string>5000</string>
-               </property>
-              </widget>
-             </item>
              <item row="0" column="1">
               <widget class="QLineEdit" name="editKpNav">
                <property name="text">
@@ -1812,13 +1805,6 @@ QPushButton:checked {
               <widget class="QLineEdit" name="editSetpointDiagonal">
                <property name="text">
                 <string>110</string>
-               </property>
-              </widget>
-             </item>
-             <item row="5" column="0">
-              <widget class="QLabel" name="label_23">
-               <property name="text">
-                <string>Max. PWM offset:</string>
                </property>
               </widget>
              </item>
@@ -1889,6 +1875,20 @@ QPushButton:checked {
               <widget class="QLineEdit" name="editSetpointTapeDetection">
                <property name="text">
                 <string>2000</string>
+               </property>
+              </widget>
+             </item>
+             <item row="3" column="0">
+              <widget class="QLabel" name="label_23">
+               <property name="text">
+                <string>Max. PWM offset:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="3" column="1">
+              <widget class="QLineEdit" name="editMaxPwmOffsetNav">
+               <property name="text">
+                <string>5000</string>
                </property>
               </widget>
              </item>
