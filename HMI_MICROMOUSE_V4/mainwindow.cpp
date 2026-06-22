@@ -293,9 +293,14 @@ MainWindow::MainWindow(QWidget *parent)
     mazeScene = new QGraphicsScene(this);
     ui->mazeView->setScene(mazeScene);
 
+    auto resetLocalMazeOnInitialPoseConfigChange = [this](int) { resetLocalMazeViewToInitialPose(); };
     auto redrawMazeOnMarkerConfigChange = [this](int) { drawMaze(); };
-    connect(ui->spinInitialCellX, QOverload<int>::of(&QSpinBox::valueChanged), this, redrawMazeOnMarkerConfigChange);
-    connect(ui->spinInitialCellY, QOverload<int>::of(&QSpinBox::valueChanged), this, redrawMazeOnMarkerConfigChange);
+    connect(ui->spinInitialCellX, QOverload<int>::of(&QSpinBox::valueChanged), this,
+        resetLocalMazeOnInitialPoseConfigChange);
+    connect(ui->spinInitialCellY, QOverload<int>::of(&QSpinBox::valueChanged), this,
+        resetLocalMazeOnInitialPoseConfigChange);
+    connect(ui->comboInitialHeading, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+        resetLocalMazeOnInitialPoseConfigChange);
     connect(ui->spinGoalCellX, QOverload<int>::of(&QSpinBox::valueChanged), this, redrawMazeOnMarkerConfigChange);
     connect(ui->spinGoalCellY, QOverload<int>::of(&QSpinBox::valueChanged), this, redrawMazeOnMarkerConfigChange);
     connect(ui->comboSupervisorRunMode, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
@@ -303,19 +308,8 @@ MainWindow::MainWindow(QWidget *parent)
 
     // Opcional: Le damos un fondo oscuro muy moderno al canvas
     mazeScene->setBackgroundBrush(QColor(20, 25, 30));
-    // 2. Limpiar todos los mapas lógicos (llenarlos de 0)
-    memset(robot_maze_map, 0, sizeof(robot_maze_map));
 
-    // 3. El robot usa la pose inicial por defecto del laberinto físico 8x8.
-    current_x = MAZE_DEFAULT_START_X;
-    current_y = MAZE_DEFAULT_START_Y;
-    current_heading = HEADING_NORTH;
-
-    // 4. Marcamos la celda en la que empezamos como "Visitada"
-    robot_maze_map[current_x][current_y] |= CELL_VISITED;
-
-    // 6. Ordenamos pintar el mapa por primera vez
-    drawMaze();
+    resetLocalMazeViewToInitialPose();
 }
 
 MainWindow::~MainWindow()
@@ -2186,17 +2180,8 @@ void MainWindow::updateTurnTargetDps(const QByteArray &payload)
 
 void MainWindow::on_btnSimReset_clicked()
 {
-    memset(robot_maze_map, 0, sizeof(robot_maze_map));
-
-    current_x = MAZE_DEFAULT_START_X;
-    current_y = MAZE_DEFAULT_START_Y;
-    current_heading = HEADING_NORTH;
-
-    robot_maze_map[current_x][current_y] |= CELL_VISITED;
-
     ui->mazeView->resetTransform();
-
-    drawMaze();
+    resetLocalMazeViewToInitialPose();
 }
 
 void MainWindow::on_btnRotMapL_clicked()
@@ -2292,6 +2277,32 @@ void MainWindow::setupSupervisorDebugPanel()
     }
 }
 
+void MainWindow::resetLocalMazeViewToPose(quint8 x, quint8 y, Heading heading)
+{
+    if ((x >= MAZE_WIDTH) || (y >= MAZE_HEIGHT) || (heading > HEADING_WEST))
+    {
+        return;
+    }
+
+    memset(robot_maze_map, 0, sizeof(robot_maze_map));
+
+    current_x = x;
+    current_y = y;
+    current_heading = heading;
+
+    robot_maze_map[current_x][current_y] |= CELL_VISITED;
+    drawMaze();
+}
+
+void MainWindow::resetLocalMazeViewToInitialPose()
+{
+    const quint8 x = static_cast<quint8>(ui->spinInitialCellX->value());
+    const quint8 y = static_cast<quint8>(ui->spinInitialCellY->value());
+    const quint8 heading = supervisorHeadingForComboIndex(ui->comboInitialHeading->currentIndex());
+
+    resetLocalMazeViewToPose(x, y, static_cast<Heading>(heading));
+}
+
 void MainWindow::requestMazeColumn(quint8 col)
 {
     QByteArray payload;
@@ -2313,6 +2324,7 @@ void MainWindow::sendSupervisorInitialPose()
 
     stream << x << y << heading;
     sendUnerbusCommand(Unerbus::CommandId::CMD_SET_SUPERVISOR_INITIAL_POSE, payload);
+    resetLocalMazeViewToPose(x, y, static_cast<Heading>(heading));
 }
 
 void MainWindow::requestSupervisorInitialPose()
@@ -2365,10 +2377,19 @@ void MainWindow::updateSupervisorInitialPoseUI(const QByteArray &payload)
         return;
     }
 
+    const bool blockInitialX = ui->spinInitialCellX->blockSignals(true);
+    const bool blockInitialY = ui->spinInitialCellY->blockSignals(true);
+    const bool blockInitialHeading = ui->comboInitialHeading->blockSignals(true);
+
     ui->spinInitialCellX->setValue(static_cast<int>(x));
     ui->spinInitialCellY->setValue(static_cast<int>(y));
     ui->comboInitialHeading->setCurrentIndex(comboIndexForSupervisorHeading(heading));
-    drawMaze();
+
+    ui->spinInitialCellX->blockSignals(blockInitialX);
+    ui->spinInitialCellY->blockSignals(blockInitialY);
+    ui->comboInitialHeading->blockSignals(blockInitialHeading);
+
+    resetLocalMazeViewToPose(x, y, static_cast<Heading>(heading));
 }
 
 void MainWindow::updateSupervisorGoalCellUI(const QByteArray &payload)
@@ -2509,12 +2530,18 @@ void MainWindow::on_btnStartSupervisorRun_clicked()
     QDataStream stream(&payload, QIODevice::WriteOnly);
     stream.setByteOrder(QDataStream::LittleEndian);
 
-    if (ui->comboSupervisorRunMode->currentIndex() == 1)
+    const quint8 runMode = supervisorRunModeForComboIndex(ui->comboSupervisorRunMode->currentIndex());
+
+    if (runMode == SUPERVISOR_RUN_MODE_FIND_CELLS)
+    {
+        resetLocalMazeViewToInitialPose();
+    }
+    else if (runMode == SUPERVISOR_RUN_MODE_GO_A_TO_B)
     {
         sendSupervisorGoalCell();
     }
 
-    stream << supervisorRunModeForComboIndex(ui->comboSupervisorRunMode->currentIndex());
+    stream << runMode;
     sendUnerbusCommand(Unerbus::CommandId::CMD_START_SUPERVISOR_RUN, payload);
     requestSupervisorDebugStatus();
 }
