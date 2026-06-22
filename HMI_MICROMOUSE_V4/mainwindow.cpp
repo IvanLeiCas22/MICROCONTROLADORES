@@ -1352,7 +1352,13 @@ void MainWindow::drawMaze()
 
     mazeScene->clear();
 
-    int cellSize = 50; // Cada celda medirá 50x50 píxeles
+    const int cellSize = 80;
+    const int labelMargin = 35;
+    const int mazePixelWidth = MAZE_WIDTH * cellSize;
+    const int mazePixelHeight = MAZE_HEIGHT * cellSize;
+
+    mazeScene->setSceneRect(-labelMargin, -labelMargin, mazePixelWidth + (labelMargin * 2),
+        mazePixelHeight + (labelMargin * 2));
 
     // 1. Configuramos los "Lápices" (Pens)
     // Lápiz tenue para celdas no visitadas o estructura básica
@@ -1371,17 +1377,17 @@ void MainWindow::drawMaze()
 
     for (int i = 0; i < MAZE_WIDTH; i++)
     {
-        // Coordenadas X en el techo del mapa
-        QGraphicsRectItem *topAnchor = mazeScene->addRect(0, 0, 0, 0, Qt::NoPen, Qt::NoBrush);
-        topAnchor->setPos(i * cellSize + (cellSize / 2.0), -15);
-        topAnchor->setFlag(QGraphicsItem::ItemIgnoresTransformations);
+        // Coordenadas X debajo del mapa.
+        QGraphicsRectItem *bottomAnchor = mazeScene->addRect(0, 0, 0, 0, Qt::NoPen, Qt::NoBrush);
+        bottomAnchor->setPos(i * cellSize + (cellSize / 2.0), mazePixelHeight + 18);
+        bottomAnchor->setFlag(QGraphicsItem::ItemIgnoresTransformations);
 
-        QGraphicsTextItem *topText = new QGraphicsTextItem(QString::number(i), topAnchor);
-        topText->setFont(numberFont);
-        topText->setDefaultTextColor(textPen.color());
-        topText->setPos(-topText->boundingRect().width() / 2.0, -topText->boundingRect().height() / 2.0);
+        QGraphicsTextItem *bottomText = new QGraphicsTextItem(QString::number(i), bottomAnchor);
+        bottomText->setFont(numberFont);
+        bottomText->setDefaultTextColor(textPen.color());
+        bottomText->setPos(-bottomText->boundingRect().width() / 2.0, -bottomText->boundingRect().height() / 2.0);
 
-        // Coordenadas Y al costado izquierdo del mapa
+        // Coordenadas Y al costado izquierdo del mapa.
         QGraphicsRectItem *leftAnchor = mazeScene->addRect(0, 0, 0, 0, Qt::NoPen, Qt::NoBrush);
         leftAnchor->setPos(-15, i * cellSize + (cellSize / 2.0));
         leftAnchor->setFlag(QGraphicsItem::ItemIgnoresTransformations);
