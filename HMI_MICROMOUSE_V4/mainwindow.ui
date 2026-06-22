@@ -2907,42 +2907,13 @@ QPushButton:checked {
                </sizepolicy>
               </property>
               <property name="title">
-               <string>Operación STM32</string>
+               <string>Control de misión</string>
               </property>
               <layout class="QVBoxLayout" name="verticalLayout_23">
                <item>
-                <widget class="QGroupBox" name="groupBox_10">
-                 <property name="sizePolicy">
-                  <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
-                   <horstretch>0</horstretch>
-                   <verstretch>0</verstretch>
-                  </sizepolicy>
-                 </property>
-                 <property name="title">
-                  <string>Utilidades</string>
-                 </property>
-                 <layout class="QVBoxLayout" name="verticalLayout_25">
-                  <item>
-                   <widget class="QPushButton" name="btnSimReset">
-                    <property name="text">
-                     <string>Reset vista local</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item>
-                   <widget class="QPushButton" name="btnSyncMaze">
-                    <property name="text">
-                     <string>Sincronizar mapa con STM32</string>
-                    </property>
-                   </widget>
-                  </item>
-                 </layout>
-                </widget>
-               </item>
-               <item>
                 <widget class="QGroupBox" name="groupSupervisorInitialPose">
                  <property name="title">
-                  <string>Pose inicial del robot</string>
+                  <string>Pose inicial A</string>
                  </property>
                  <layout class="QVBoxLayout" name="verticalLayoutSupervisorInitialPose">
                   <item>
@@ -3019,14 +2990,14 @@ QPushButton:checked {
                     <item>
                      <widget class="QPushButton" name="btnSetSupervisorInitialPose">
                       <property name="text">
-                       <string>Enviar pose inicial</string>
+                       <string>Aplicar pose A</string>
                       </property>
                      </widget>
                     </item>
                     <item>
                      <widget class="QPushButton" name="btnGetSupervisorInitialPose">
                       <property name="text">
-                       <string>Obtener pose inicial</string>
+                       <string>Leer pose A</string>
                       </property>
                      </widget>
                     </item>
@@ -3038,7 +3009,7 @@ QPushButton:checked {
                <item>
                 <widget class="QGroupBox" name="groupSupervisorGoalCell">
                  <property name="title">
-                  <string>Destino B para Ir A-&gt;B</string>
+                  <string>Destino B</string>
                  </property>
                  <layout class="QVBoxLayout" name="verticalLayoutSupervisorGoalCell">
                   <item>
@@ -3084,14 +3055,14 @@ QPushButton:checked {
                     <item>
                      <widget class="QPushButton" name="btnSetSupervisorGoalCell">
                       <property name="text">
-                       <string>Enviar destino B</string>
+                       <string>Aplicar destino B</string>
                       </property>
                      </widget>
                     </item>
                     <item>
                      <widget class="QPushButton" name="btnGetSupervisorGoalCell">
                       <property name="text">
-                       <string>Obtener destino B</string>
+                       <string>Leer destino B</string>
                       </property>
                      </widget>
                     </item>
@@ -3110,7 +3081,7 @@ QPushButton:checked {
                <item>
                 <widget class="QGroupBox" name="groupSupervisorRun">
                  <property name="title">
-                  <string>Run del laberinto</string>
+                  <string>Misión</string>
                  </property>
                  <layout class="QVBoxLayout" name="verticalLayoutSupervisorRun">
                   <item>
@@ -3132,14 +3103,14 @@ QPushButton:checked {
                     <item>
                      <widget class="QPushButton" name="btnStartSupervisorRun">
                       <property name="text">
-                       <string>Iniciar run</string>
+                       <string>Iniciar</string>
                       </property>
                      </widget>
                     </item>
                     <item>
                      <widget class="QPushButton" name="btnStopSupervisorRun">
                       <property name="text">
-                       <string>Detener run</string>
+                       <string>Detener</string>
                       </property>
                      </widget>
                     </item>
@@ -3149,9 +3120,38 @@ QPushButton:checked {
                 </widget>
                </item>
                <item>
+                <widget class="QGroupBox" name="groupBox_10">
+                 <property name="sizePolicy">
+                  <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+                   <horstretch>0</horstretch>
+                   <verstretch>0</verstretch>
+                  </sizepolicy>
+                 </property>
+                 <property name="title">
+                  <string>Vista y sincronización</string>
+                 </property>
+                 <layout class="QVBoxLayout" name="verticalLayout_25">
+                  <item>
+                   <widget class="QPushButton" name="btnSimReset">
+                    <property name="text">
+                     <string>Reset vista</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item>
+                   <widget class="QPushButton" name="btnSyncMaze">
+                    <property name="text">
+                     <string>Sincronizar mapa</string>
+                    </property>
+                   </widget>
+                  </item>
+                 </layout>
+                </widget>
+               </item>
+               <item>
                 <widget class="QGroupBox" name="groupBox_11">
                  <property name="title">
-                  <string>Rotar mapa</string>
+                  <string>Rotar vista</string>
                  </property>
                  <layout class="QHBoxLayout" name="horizontalLayout_26">
                   <item>
