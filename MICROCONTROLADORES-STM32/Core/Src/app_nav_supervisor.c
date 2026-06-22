@@ -245,20 +245,35 @@ static AppNavSupervisorState App_NavSupervisor_FinishFindCells(AppNavOutput *out
 
 static bool App_NavSupervisor_EvaluateGoToBImprovement(void)
 {
-    uint8_t optimistic_cost = APP_NAV_SUPERVISOR_GO_TO_B_COST_INVALID;
+    uint8_t first_step_x = 0U;
+    uint8_t first_step_y = 0U;
+    uint8_t optimistic_cost_after_initial_advance = APP_NAV_SUPERVISOR_GO_TO_B_COST_INVALID;
+    uint16_t optimistic_cost = APP_NAV_SUPERVISOR_GO_TO_B_COST_INVALID;
     uint16_t required_total = 0U;
 
     app_nav_supervisor_go_to_b_improvement_detected = 0U;
     app_nav_supervisor_go_to_b_optimistic_cost = APP_NAV_SUPERVISOR_GO_TO_B_COST_INVALID;
 
-    if (!App_GoToBPolicy_GetOptimisticCost(app_nav_supervisor_initial_x, app_nav_supervisor_initial_y,
-            app_nav_supervisor_goal_x, app_nav_supervisor_goal_y, &optimistic_cost))
+    if (!App_Maze_GetNeighbor(app_nav_supervisor_initial_x, app_nav_supervisor_initial_y,
+            app_nav_supervisor_initial_heading, &first_step_x, &first_step_y))
     {
         return false;
     }
 
-    app_nav_supervisor_go_to_b_optimistic_cost = optimistic_cost;
-    required_total = (uint16_t)optimistic_cost + (uint16_t)APP_NAV_SUPERVISOR_GO_TO_B_REQUIRED_IMPROVEMENT;
+    if (!App_GoToBPolicy_GetOptimisticCost(first_step_x, first_step_y, app_nav_supervisor_goal_x,
+            app_nav_supervisor_goal_y, &optimistic_cost_after_initial_advance))
+    {
+        return false;
+    }
+
+    optimistic_cost = (uint16_t)optimistic_cost_after_initial_advance + 1U;
+    if (optimistic_cost > APP_NAV_SUPERVISOR_GO_TO_B_COST_INVALID)
+    {
+        return false;
+    }
+
+    app_nav_supervisor_go_to_b_optimistic_cost = (uint8_t)optimistic_cost;
+    required_total = optimistic_cost + (uint16_t)APP_NAV_SUPERVISOR_GO_TO_B_REQUIRED_IMPROVEMENT;
 
     if (required_total <= app_nav_supervisor_go_to_b_outbound_steps)
     {
