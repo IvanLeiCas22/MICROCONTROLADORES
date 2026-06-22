@@ -220,6 +220,8 @@ class MainWindow : public QMainWindow
     // --- Funciones LABERINTO ---
     // Función que hará toda la magia de iluminar las paredes
     void drawMaze();
+    void setLocalRobotPose(quint8 x, quint8 y, Heading heading);
+    void setLocalRobotPoseFromInitialPose();
     void resetLocalMazeViewToPose(quint8 x, quint8 y, Heading heading);
     void resetLocalMazeViewToInitialPose();
     void requestMazeColumn(quint8 col);

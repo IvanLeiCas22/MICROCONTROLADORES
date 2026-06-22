@@ -293,14 +293,14 @@ MainWindow::MainWindow(QWidget *parent)
     mazeScene = new QGraphicsScene(this);
     ui->mazeView->setScene(mazeScene);
 
-    auto resetLocalMazeOnInitialPoseConfigChange = [this](int) { resetLocalMazeViewToInitialPose(); };
+    auto updateLocalPoseOnInitialPoseConfigChange = [this](int) { setLocalRobotPoseFromInitialPose(); };
     auto redrawMazeOnMarkerConfigChange = [this](int) { drawMaze(); };
     connect(ui->spinInitialCellX, QOverload<int>::of(&QSpinBox::valueChanged), this,
-        resetLocalMazeOnInitialPoseConfigChange);
+        updateLocalPoseOnInitialPoseConfigChange);
     connect(ui->spinInitialCellY, QOverload<int>::of(&QSpinBox::valueChanged), this,
-        resetLocalMazeOnInitialPoseConfigChange);
+        updateLocalPoseOnInitialPoseConfigChange);
     connect(ui->comboInitialHeading, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-        resetLocalMazeOnInitialPoseConfigChange);
+        updateLocalPoseOnInitialPoseConfigChange);
     connect(ui->spinGoalCellX, QOverload<int>::of(&QSpinBox::valueChanged), this, redrawMazeOnMarkerConfigChange);
     connect(ui->spinGoalCellY, QOverload<int>::of(&QSpinBox::valueChanged), this, redrawMazeOnMarkerConfigChange);
     connect(ui->comboSupervisorRunMode, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
@@ -1286,6 +1286,24 @@ static void centerTextOnPoint(QGraphicsTextItem *textItem, const QPointF &center
     textItem->setPos(center.x() - textRect.width() / 2.0, center.y() - textRect.height() / 2.0);
 }
 
+static bool isLocalMazeViewOnlyCurrentPose(
+    const uint8_t mazeMap[MAZE_WIDTH][MAZE_HEIGHT], uint8_t currentX, uint8_t currentY)
+{
+    for (uint8_t x = 0U; x < MAZE_WIDTH; x++)
+    {
+        for (uint8_t y = 0U; y < MAZE_HEIGHT; y++)
+        {
+            const uint8_t expected = ((x == currentX) && (y == currentY)) ? CELL_VISITED : 0U;
+            if (mazeMap[x][y] != expected)
+            {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
 static void drawStartCellMarker(QGraphicsScene *scene, int logicalX, int logicalY, int cellSize)
 {
     if (!isValidLogicalCell(logicalX, logicalY))
@@ -1297,16 +1315,22 @@ static void drawStartCellMarker(QGraphicsScene *scene, int logicalX, int logical
     const QPointF badgeCenter(topLeft.x() + cellSize * 0.50, topLeft.y() + cellSize * 0.50);
     const qreal badgeRadius = cellSize * 0.19;
 
+    QGraphicsRectItem *anchor = scene->addRect(0, 0, 0, 0, Qt::NoPen, Qt::NoBrush);
+    anchor->setPos(badgeCenter);
+    anchor->setFlag(QGraphicsItem::ItemIgnoresTransformations);
+    anchor->setZValue(9.0);
+
     QPen badgePen(QColor(37, 99, 235), 2, Qt::SolidLine);
     QBrush badgeBrush(QColor(37, 99, 235, 220));
-    QGraphicsEllipseItem *badge = scene->addEllipse(badgeCenter.x() - badgeRadius, badgeCenter.y() - badgeRadius,
-        badgeRadius * 2.0, badgeRadius * 2.0, badgePen, badgeBrush);
-    badge->setZValue(9.0);
+    QGraphicsEllipseItem *badge = new QGraphicsEllipseItem(
+        -badgeRadius, -badgeRadius, badgeRadius * 2.0, badgeRadius * 2.0, anchor);
+    badge->setPen(badgePen);
+    badge->setBrush(badgeBrush);
 
-    QGraphicsTextItem *label = scene->addText("A", QFont("Arial", 11, QFont::Bold));
+    QGraphicsTextItem *label = new QGraphicsTextItem("A", anchor);
+    label->setFont(QFont("Arial", 11, QFont::Bold));
     label->setDefaultTextColor(Qt::white);
-    centerTextOnPoint(label, badgeCenter);
-    label->setZValue(9.1);
+    centerTextOnPoint(label, QPointF(0.0, 0.0));
 }
 
 static void drawGoalCellMarker(QGraphicsScene *scene, int logicalX, int logicalY, int cellSize)
@@ -1318,13 +1342,18 @@ static void drawGoalCellMarker(QGraphicsScene *scene, int logicalX, int logicalY
 
     const QPointF topLeft = logicalCellTopLeft(logicalX, logicalY, cellSize);
     const QPointF markerCenter(topLeft.x() + cellSize * 0.50, topLeft.y() + cellSize * 0.50);
-    const qreal poleX = markerCenter.x() - cellSize * 0.10;
-    const qreal poleTop = markerCenter.y() - cellSize * 0.30;
-    const qreal poleBottom = markerCenter.y() + cellSize * 0.30;
+    const qreal poleX = -cellSize * 0.10;
+    const qreal poleTop = -cellSize * 0.30;
+    const qreal poleBottom = cellSize * 0.30;
+
+    QGraphicsRectItem *anchor = scene->addRect(0, 0, 0, 0, Qt::NoPen, Qt::NoBrush);
+    anchor->setPos(markerCenter);
+    anchor->setFlag(QGraphicsItem::ItemIgnoresTransformations);
+    anchor->setZValue(9.0);
 
     QPen polePen(QColor(230, 230, 230), 2, Qt::SolidLine);
-    QGraphicsLineItem *pole = scene->addLine(poleX, poleTop, poleX, poleBottom, polePen);
-    pole->setZValue(9.0);
+    QGraphicsLineItem *pole = new QGraphicsLineItem(poleX, poleTop, poleX, poleBottom, anchor);
+    pole->setPen(polePen);
 
     QPolygonF flag;
     flag << QPointF(poleX, poleTop) << QPointF(poleX + cellSize * 0.30, poleTop + cellSize * 0.08)
@@ -1332,13 +1361,14 @@ static void drawGoalCellMarker(QGraphicsScene *scene, int logicalX, int logicalY
 
     QPen flagPen(QColor(185, 28, 28), 1, Qt::SolidLine);
     QBrush flagBrush(QColor(220, 38, 38, 230));
-    QGraphicsPolygonItem *flagItem = scene->addPolygon(flag, flagPen, flagBrush);
-    flagItem->setZValue(9.1);
+    QGraphicsPolygonItem *flagItem = new QGraphicsPolygonItem(flag, anchor);
+    flagItem->setPen(flagPen);
+    flagItem->setBrush(flagBrush);
 
-    QGraphicsTextItem *label = scene->addText("B", QFont("Arial", 10, QFont::Bold));
+    QGraphicsTextItem *label = new QGraphicsTextItem("B", anchor);
+    label->setFont(QFont("Arial", 10, QFont::Bold));
     label->setDefaultTextColor(QColor(255, 220, 220));
     centerTextOnPoint(label, QPointF(poleX + cellSize * 0.12, poleTop + cellSize * 0.11));
-    label->setZValue(9.2);
 }
 
 void MainWindow::drawMaze()
@@ -1354,26 +1384,30 @@ void MainWindow::drawMaze()
     mazeScene->setSceneRect(-labelMargin, -labelMargin, mazePixelWidth + (labelMargin * 2),
         mazePixelHeight + (labelMargin * 2));
 
-    // 1. Configuramos los "Lápices" (Pens)
-    // Lápiz tenue para celdas no visitadas o estructura básica
-    QPen faintPen(QColor(50, 60, 70), 1, Qt::DotLine);
+    // 1. Configuramos los elementos visuales del mapa.
+    QBrush boardBrush(QColor(14, 20, 26));
+    QPen gridPen(QColor(58, 73, 88, 160), 1, Qt::DotLine);
+    QPen boardPen(QColor(88, 110, 132), 4, Qt::SolidLine);
+    QPen wallPen(QColor(0, 210, 225), 4, Qt::SolidLine);
+    QPen currentCellPen(QColor(132, 245, 150), 2, Qt::SolidLine);
+    QBrush robotBrush(QColor(105, 225, 120, 235));
+    QPen robotPen(QColor(190, 255, 195), 2);
+    QPen textPen(QColor(170, 180, 190));
 
-    // Lápiz brillante (Cian/Neón) para las paredes reales que detectó el robot
-    QPen wallPen(QColor(0, 255, 255), 3, Qt::SolidLine);
+    wallPen.setCapStyle(Qt::SquareCap);
+    currentCellPen.setJoinStyle(Qt::MiterJoin);
 
-    // Lápiz del Robot (Violeta Claro Sólido) para que resalte sobre todo
-    QBrush robotBrush(QColor(125, 217, 111));
-    QPen robotPen(QColor(142, 255, 127), 2);
-    QPen textPen(QColor(150, 150, 150)); // Gris tenue
+    QGraphicsRectItem *boardBackground = mazeScene->addRect(0, 0, mazePixelWidth, mazePixelHeight,
+        QPen(Qt::NoPen), boardBrush);
+    boardBackground->setZValue(-2.0);
 
-    // Etiquetas de Coordenadas ===
-    QFont numberFont("Arial", 10, QFont::Bold);
+    QFont numberFont("Arial", 9, QFont::Bold);
 
     for (int i = 0; i < MAZE_WIDTH; i++)
     {
         // Coordenadas X debajo del mapa.
         QGraphicsRectItem *bottomAnchor = mazeScene->addRect(0, 0, 0, 0, Qt::NoPen, Qt::NoBrush);
-        bottomAnchor->setPos(i * cellSize + (cellSize / 2.0), mazePixelHeight + 18);
+        bottomAnchor->setPos(i * cellSize + (cellSize / 2.0), mazePixelHeight + 22);
         bottomAnchor->setFlag(QGraphicsItem::ItemIgnoresTransformations);
 
         QGraphicsTextItem *bottomText = new QGraphicsTextItem(QString::number(i), bottomAnchor);
@@ -1383,7 +1417,7 @@ void MainWindow::drawMaze()
 
         // Coordenadas Y al costado izquierdo del mapa.
         QGraphicsRectItem *leftAnchor = mazeScene->addRect(0, 0, 0, 0, Qt::NoPen, Qt::NoBrush);
-        leftAnchor->setPos(-15, i * cellSize + (cellSize / 2.0));
+        leftAnchor->setPos(-22, i * cellSize + (cellSize / 2.0));
         leftAnchor->setFlag(QGraphicsItem::ItemIgnoresTransformations);
 
         const int logical_y_label = sceneRowToLogicalY(i);
@@ -1408,31 +1442,24 @@ void MainWindow::drawMaze()
 
             current_map_cell = robot_maze_map[logical_x][logical_y];
 
-            // === Colores Especiales de Baldosa ===
-            QColor cellBgColor = Qt::transparent; // Vacío por defecto
+            QColor cellBgColor = Qt::transparent;
 
             if (current_map_cell & CELL_SPECIAL)
             {
-                cellBgColor = QColor(255, 215, 0);
+                cellBgColor = QColor(210, 170, 32, 210);
             }
-            // ¿Al menos está visitada?
             else if (current_map_cell & CELL_VISITED)
             {
-                cellBgColor = QColor(255, 255, 255, 10); // Blancuzco tenue
+                cellBgColor = QColor(78, 96, 112, 95);
             }
 
-            // Dibujamos el cuadrado base y guardamos el puntero
-            QGraphicsRectItem *cellRect = mazeScene->addRect(px, py, cellSize, cellSize, faintPen, cellBgColor);
+            QGraphicsRectItem *cellRect = mazeScene->addRect(px, py, cellSize, cellSize, gridPen, cellBgColor);
+            cellRect->setZValue(0.0);
 
-            // Si el robot visitó esta celda, dibujamos sus paredes reales
             uint8_t cellData = current_map_cell;
 
             if (cellData & CELL_VISITED)
             {
-                // Rellenamos ligeramente el fondo para indicar que esta celda es
-                // "conocida"
-                mazeScene->addRect(px, py, cellSize, cellSize, QPen(Qt::NoPen), QBrush(QColor(255, 255, 255, 10)));
-
                 // --- Pared Norte ---
                 if (cellData & WALL_NORTH)
                 {
@@ -1464,6 +1491,18 @@ void MainWindow::drawMaze()
         }
     }
 
+    QGraphicsRectItem *boardBorder = mazeScene->addRect(0, 0, mazePixelWidth, mazePixelHeight, boardPen,
+        QBrush(Qt::NoBrush));
+    boardBorder->setZValue(7.5);
+
+    if (isValidLogicalCell(current_x, current_y))
+    {
+        const QPointF currentTopLeft = logicalCellTopLeft(current_x, current_y, cellSize);
+        QGraphicsRectItem *currentCellOutline = mazeScene->addRect(currentTopLeft.x() + 3.0, currentTopLeft.y() + 3.0,
+            cellSize - 6.0, cellSize - 6.0, currentCellPen, QBrush(Qt::NoBrush));
+        currentCellOutline->setZValue(6.5);
+    }
+
     const int startX = ui->spinInitialCellX->value();
     const int startY = ui->spinInitialCellY->value();
     drawStartCellMarker(mazeScene, startX, startY, cellSize);
@@ -1479,35 +1518,33 @@ void MainWindow::drawMaze()
     }
 
     // 4. DIBUJAR AL ROBOT
-    // El robot debe estar en la coordenada (current_x, current_y).
-    // Para que se vea centrado y más chico que la celda:
-    int robotSize = cellSize / 2; // Por ej: 25x25 pixeles
-    int rx = (current_x * cellSize) + (cellSize / 4);
-    int ry = (logicalYToSceneRow(current_y) * cellSize) + (cellSize / 4);
+    const int robotSize = static_cast<int>(cellSize * 0.46);
+    const int rx = (current_x * cellSize) + ((cellSize - robotSize) / 2);
+    const int ry = (logicalYToSceneRow(current_y) * cellSize) + ((cellSize - robotSize) / 2);
 
-    // Dibujar el cuerpo blindado con Z-Index Máximo (10)
     QGraphicsRectItem *robotBody = mazeScene->addRect(rx, ry, robotSize, robotSize, robotPen, robotBrush);
-    robotBody->setZValue(10); // Sobre el suelo y sobre todo lo demás
+    robotBody->setZValue(10.0);
 
-    // Dibujar un indicador de "Hacia donde mira" (Línea Fucsia Brillante)
-    QPen dirPen(QColor(255, 0, 0), 5, Qt::SolidLine);
-    int centerX = rx + (robotSize / 2);
-    int centerY = ry + (robotSize / 2);
+    QPen dirPen(QColor(245, 50, 50), 5, Qt::SolidLine);
+    dirPen.setCapStyle(Qt::RoundCap);
+
+    const int centerX = rx + (robotSize / 2);
+    const int centerY = ry + (robotSize / 2);
+    const int headingReach = static_cast<int>(cellSize * 0.32);
 
     QGraphicsLineItem *dirLine = nullptr;
 
-    // Calculamos a dónde apunta la línea según current_heading
     if (current_heading == HEADING_NORTH)
-        dirLine = mazeScene->addLine(centerX, centerY, centerX, ry, dirPen);
+        dirLine = mazeScene->addLine(centerX, centerY, centerX, centerY - headingReach, dirPen);
     else if (current_heading == HEADING_SOUTH)
-        dirLine = mazeScene->addLine(centerX, centerY, centerX, ry + robotSize, dirPen);
+        dirLine = mazeScene->addLine(centerX, centerY, centerX, centerY + headingReach, dirPen);
     else if (current_heading == HEADING_EAST)
-        dirLine = mazeScene->addLine(centerX, centerY, rx + robotSize, centerY, dirPen);
+        dirLine = mazeScene->addLine(centerX, centerY, centerX + headingReach, centerY, dirPen);
     else if (current_heading == HEADING_WEST)
-        dirLine = mazeScene->addLine(centerX, centerY, rx, centerY, dirPen);
+        dirLine = mazeScene->addLine(centerX, centerY, centerX - headingReach, centerY, dirPen);
 
     if (dirLine)
-        dirLine->setZValue(10); // Flechita roja también a nivel nubes
+        dirLine->setZValue(10.5);
 }
 
 /**
@@ -2277,6 +2314,36 @@ void MainWindow::setupSupervisorDebugPanel()
     }
 }
 
+void MainWindow::setLocalRobotPose(quint8 x, quint8 y, Heading heading)
+{
+    if ((x >= MAZE_WIDTH) || (y >= MAZE_HEIGHT) || (heading > HEADING_WEST))
+    {
+        return;
+    }
+
+    current_x = x;
+    current_y = y;
+    current_heading = heading;
+
+    robot_maze_map[current_x][current_y] |= CELL_VISITED;
+    drawMaze();
+}
+
+void MainWindow::setLocalRobotPoseFromInitialPose()
+{
+    const quint8 x = static_cast<quint8>(ui->spinInitialCellX->value());
+    const quint8 y = static_cast<quint8>(ui->spinInitialCellY->value());
+    const quint8 heading = supervisorHeadingForComboIndex(ui->comboInitialHeading->currentIndex());
+
+    if (isLocalMazeViewOnlyCurrentPose(robot_maze_map, current_x, current_y))
+    {
+        resetLocalMazeViewToPose(x, y, static_cast<Heading>(heading));
+        return;
+    }
+
+    setLocalRobotPose(x, y, static_cast<Heading>(heading));
+}
+
 void MainWindow::resetLocalMazeViewToPose(quint8 x, quint8 y, Heading heading)
 {
     if ((x >= MAZE_WIDTH) || (y >= MAZE_HEIGHT) || (heading > HEADING_WEST))
@@ -2285,13 +2352,7 @@ void MainWindow::resetLocalMazeViewToPose(quint8 x, quint8 y, Heading heading)
     }
 
     memset(robot_maze_map, 0, sizeof(robot_maze_map));
-
-    current_x = x;
-    current_y = y;
-    current_heading = heading;
-
-    robot_maze_map[current_x][current_y] |= CELL_VISITED;
-    drawMaze();
+    setLocalRobotPose(x, y, heading);
 }
 
 void MainWindow::resetLocalMazeViewToInitialPose()
@@ -2324,7 +2385,7 @@ void MainWindow::sendSupervisorInitialPose()
 
     stream << x << y << heading;
     sendUnerbusCommand(Unerbus::CommandId::CMD_SET_SUPERVISOR_INITIAL_POSE, payload);
-    resetLocalMazeViewToPose(x, y, static_cast<Heading>(heading));
+    setLocalRobotPoseFromInitialPose();
 }
 
 void MainWindow::requestSupervisorInitialPose()
@@ -2389,7 +2450,7 @@ void MainWindow::updateSupervisorInitialPoseUI(const QByteArray &payload)
     ui->spinInitialCellY->blockSignals(blockInitialY);
     ui->comboInitialHeading->blockSignals(blockInitialHeading);
 
-    resetLocalMazeViewToPose(x, y, static_cast<Heading>(heading));
+    setLocalRobotPoseFromInitialPose();
 }
 
 void MainWindow::updateSupervisorGoalCellUI(const QByteArray &payload)
