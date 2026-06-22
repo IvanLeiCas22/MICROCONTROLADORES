@@ -99,6 +99,7 @@ typedef enum
     CMD_GET_PWM_PERIOD = 0x51,
     CMD_SET_MPU_CONFIG = 0xA7,
     CMD_GET_MPU_CONFIG = 0xA8,
+    CMD_CLEAR_SUPERVISOR_LEARNED_MAP = 0xA9,
     CMD_SET_PIVOT_TURN_DPS = 0x4C,          // Para configurar la velocidad de giro en pivote
     CMD_GET_PIVOT_TURN_DPS = 0x4D,          // Para leer la velocidad de giro en pivote
     CMD_SET_WALL_THRESHOLDS = 0x60,         // Configurar el umbral de pared
@@ -233,7 +234,7 @@ extern uint16_t pwm_max_value;
 #define UNERBUS_APPROACH_FRONT_WALL_TARGET_SIZE (sizeof(uint16_t))
 #define UNERBUS_SUPERVISOR_INITIAL_POSE_SIZE (sizeof(uint8_t) * 3)
 #define UNERBUS_SUPERVISOR_GOAL_CELL_SIZE (sizeof(uint8_t) * 3)
-#define UNERBUS_SUPERVISOR_DEBUG_STATUS_SIZE 9U
+#define UNERBUS_SUPERVISOR_DEBUG_STATUS_SIZE 15U
 #define SUPERVISOR_STATUS_UPDATE_PERIOD_100MS_TICKS 2U
 
 #define APPROACH_FRONT_WALL_TARGET_MIN_MM 10U

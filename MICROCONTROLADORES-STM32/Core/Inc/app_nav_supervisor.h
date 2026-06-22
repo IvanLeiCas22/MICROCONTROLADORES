@@ -23,6 +23,9 @@
 #define APP_NAV_SUPERVISOR_RESULT_GO_TO_B_COMPLETE 7U
 #define APP_NAV_SUPERVISOR_RESULT_GO_TO_B_INVALID_TARGET 8U
 #define APP_NAV_SUPERVISOR_RESULT_GO_TO_B_NO_PATH 9U
+#define APP_NAV_SUPERVISOR_RESULT_GO_TO_B_COMPLETE_RETURNED_TO_A 10U
+
+#define APP_NAV_SUPERVISOR_GO_TO_B_COST_INVALID 0xFFU
 
 /*
  * Mission-level supervisor state.
@@ -100,6 +103,15 @@ typedef enum
     APP_NAV_SUPERVISOR_MISSION_GO_A_TO_B
 } AppNavSupervisorMission;
 
+typedef enum
+{
+    APP_NAV_SUPERVISOR_GO_TO_B_PHASE_IDLE = 0,
+    APP_NAV_SUPERVISOR_GO_TO_B_PHASE_OUTBOUND_TO_B,
+    APP_NAV_SUPERVISOR_GO_TO_B_PHASE_RETURN_TO_A,
+    APP_NAV_SUPERVISOR_GO_TO_B_PHASE_COMPLETE_AT_B,
+    APP_NAV_SUPERVISOR_GO_TO_B_PHASE_COMPLETE_AT_A
+} AppNavSupervisorGoToBPhase;
+
 typedef struct
 {
     AppNavSupervisorState state;
@@ -133,12 +145,25 @@ typedef struct
      * Number of unique CELL_SPECIAL cells detected during FIND_CELLS.
      */
     uint8_t special_found_count;
+
+    /*
+     * Extended GO_A_TO_B learning telemetry. The compact STM32/Qt payload keeps
+     * the original first 9 bytes and appends these fields.
+     */
+    AppNavSupervisorMission mission;
+    AppNavSupervisorGoToBPhase go_to_b_phase;
+    uint8_t go_to_b_outbound_steps;
+    uint8_t go_to_b_optimistic_cost;
+    uint8_t go_to_b_required_improvement;
+    uint8_t go_to_b_improvement_detected;
 } AppNavSupervisorDebug;
 
 void App_NavSupervisor_Init(void);
 void App_NavSupervisor_Reset(void);
 bool App_NavSupervisor_SetInitialPose(uint8_t x, uint8_t y, HeadingTypeDef heading);
 bool App_NavSupervisor_ResetWithInitialPose(uint8_t x, uint8_t y, HeadingTypeDef heading);
+bool App_NavSupervisor_ResetRunPreservingMapWithInitialPose(uint8_t x, uint8_t y, HeadingTypeDef heading);
+void App_NavSupervisor_ClearLearnedMap(void);
 bool App_NavSupervisor_SetGoalCell(uint8_t x, uint8_t y);
 bool App_NavSupervisor_GetGoalCell(uint8_t *x, uint8_t *y, bool *valid);
 bool App_NavSupervisor_SetMission(AppNavSupervisorMission mission);

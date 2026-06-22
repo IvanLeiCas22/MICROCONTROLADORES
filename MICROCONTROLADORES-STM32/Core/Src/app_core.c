@@ -854,6 +854,12 @@ static void Write_Supervisor_Debug_Status_To_Buffer(uint8_t *buffer)
     buffer[6] = debug.maze_heading;
     buffer[7] = debug.maze_cell;
     buffer[8] = debug.special_found_count;
+    buffer[9] = (uint8_t)debug.mission;
+    buffer[10] = (uint8_t)debug.go_to_b_phase;
+    buffer[11] = debug.go_to_b_outbound_steps;
+    buffer[12] = debug.go_to_b_optimistic_cost;
+    buffer[13] = debug.go_to_b_required_improvement;
+    buffer[14] = debug.go_to_b_improvement_detected;
 }
 
 void ESP01_SetChipEnable(uint8_t value)
@@ -902,7 +908,8 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
     uint8_t idx = 0;
 
     id = UNERBUS_GetUInt8(aBus);
-    if ((id >= (uint8_t)CMD_SET_SUPERVISOR_INITIAL_POSE) && (id <= (uint8_t)CMD_GET_SUPERVISOR_GOAL_CELL))
+    if (((id >= (uint8_t)CMD_SET_SUPERVISOR_INITIAL_POSE) && (id <= (uint8_t)CMD_GET_SUPERVISOR_GOAL_CELL)) ||
+        (id == (uint8_t)CMD_CLEAR_SUPERVISOR_LEARNED_MAP))
     {
         Select_Supervisor_Status_Update_Bus(aBus);
     }
@@ -1240,6 +1247,13 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
         Write_Supervisor_Debug_Status_To_Buffer(supervisor_debug_buffer);
         UNERBUS_Write(aBus, supervisor_debug_buffer, UNERBUS_SUPERVISOR_DEBUG_STATUS_SIZE);
         length = UNERBUS_CMD_ID_SIZE + UNERBUS_SUPERVISOR_DEBUG_STATUS_SIZE;
+        break;
+    }
+    case CMD_CLEAR_SUPERVISOR_LEARNED_MAP:
+    {
+        App_NavSupervisor_ClearLearnedMap();
+        UNERBUS_WriteByte(aBus, CMD_ACK);
+        length = UNERBUS_CMD_ID_SIZE + UNERBUS_ACK_SIZE;
         break;
     }
     case CMD_START_SUPERVISOR_RUN:
@@ -2307,7 +2321,7 @@ static bool Start_Supervisor_Run(MenuModeTypeDef requested_mode)
             return false;
         }
 
-        if (!App_NavSupervisor_ResetWithInitialPose(
+        if (!App_NavSupervisor_ResetRunPreservingMapWithInitialPose(
                 supervisor_initial_x, supervisor_initial_y, supervisor_initial_heading))
         {
             Set_Motor_Speeds(0, 0);

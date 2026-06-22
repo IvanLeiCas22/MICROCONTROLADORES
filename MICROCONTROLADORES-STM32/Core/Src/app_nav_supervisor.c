@@ -27,6 +27,7 @@
  */
 
 #define APP_NAV_SUPERVISOR_SPECIAL_TARGET_COUNT 3U
+#define APP_NAV_SUPERVISOR_GO_TO_B_REQUIRED_IMPROVEMENT 1U
 
 #define APP_NAV_SUPERVISOR_YAW_180_Q16 ((int64_t)180 << 16)
 #define APP_NAV_SUPERVISOR_YAW_360_Q16 ((int64_t)360 << 16)
@@ -44,6 +45,10 @@ static uint8_t app_nav_supervisor_goal_x;
 static uint8_t app_nav_supervisor_goal_y;
 static uint8_t app_nav_supervisor_goal_valid;
 static AppNavSupervisorMission app_nav_supervisor_mission = APP_NAV_SUPERVISOR_MISSION_FIND_CELLS;
+static AppNavSupervisorGoToBPhase app_nav_supervisor_go_to_b_phase = APP_NAV_SUPERVISOR_GO_TO_B_PHASE_IDLE;
+static uint8_t app_nav_supervisor_go_to_b_outbound_steps;
+static uint8_t app_nav_supervisor_go_to_b_optimistic_cost = APP_NAV_SUPERVISOR_GO_TO_B_COST_INVALID;
+static uint8_t app_nav_supervisor_go_to_b_improvement_detected;
 
 /* -------------------------------------------------------------------------- */
 /* State, output and shared utility helpers                                    */
@@ -91,6 +96,34 @@ static void App_NavSupervisor_ClearActionYawReference(void)
 static void App_NavSupervisor_ClearPivotExitLatch(void)
 {
     app_nav_supervisor_pivot_180_exit_requires_advance = 0U;
+}
+
+static void App_NavSupervisor_ResetGoToBTelemetry(void)
+{
+    app_nav_supervisor_go_to_b_phase = APP_NAV_SUPERVISOR_GO_TO_B_PHASE_IDLE;
+    app_nav_supervisor_go_to_b_outbound_steps = 0U;
+    app_nav_supervisor_go_to_b_optimistic_cost = APP_NAV_SUPERVISOR_GO_TO_B_COST_INVALID;
+    app_nav_supervisor_go_to_b_improvement_detected = 0U;
+}
+
+static void App_NavSupervisor_UpdateGoToBDebug(void)
+{
+    app_nav_supervisor_debug.mission = app_nav_supervisor_mission;
+    app_nav_supervisor_debug.go_to_b_phase = app_nav_supervisor_go_to_b_phase;
+    app_nav_supervisor_debug.go_to_b_outbound_steps = app_nav_supervisor_go_to_b_outbound_steps;
+    app_nav_supervisor_debug.go_to_b_optimistic_cost = app_nav_supervisor_go_to_b_optimistic_cost;
+    app_nav_supervisor_debug.go_to_b_required_improvement = APP_NAV_SUPERVISOR_GO_TO_B_REQUIRED_IMPROVEMENT;
+    app_nav_supervisor_debug.go_to_b_improvement_detected = app_nav_supervisor_go_to_b_improvement_detected;
+}
+
+static void App_NavSupervisor_CountGoToBOutboundStepIfNeeded(void)
+{
+    if ((app_nav_supervisor_mission == APP_NAV_SUPERVISOR_MISSION_GO_A_TO_B) &&
+        (app_nav_supervisor_go_to_b_phase == APP_NAV_SUPERVISOR_GO_TO_B_PHASE_OUTBOUND_TO_B) &&
+        (app_nav_supervisor_go_to_b_outbound_steps < 255U))
+    {
+        app_nav_supervisor_go_to_b_outbound_steps++;
+    }
 }
 
 static int32_t App_NavSupervisor_NormalizeYawDeltaQ16(int64_t delta_q16_deg)
@@ -146,6 +179,7 @@ static void App_NavSupervisor_UpdateMazeDebug(void)
         app_nav_supervisor_debug.maze_cell = 0U;
         app_nav_supervisor_debug.maze_heading = 0U;
         app_nav_supervisor_debug.special_found_count = app_nav_supervisor_special_found_count;
+        App_NavSupervisor_UpdateGoToBDebug();
         return;
     }
 
@@ -154,6 +188,7 @@ static void App_NavSupervisor_UpdateMazeDebug(void)
     app_nav_supervisor_debug.maze_cell = payload[2];
     app_nav_supervisor_debug.maze_heading = payload[3];
     app_nav_supervisor_debug.special_found_count = app_nav_supervisor_special_found_count;
+    App_NavSupervisor_UpdateGoToBDebug();
 }
 
 static void App_NavSupervisor_MapCurrentCellFromPerception(const AppNavPerception *perception)
@@ -206,6 +241,32 @@ static AppNavSupervisorState App_NavSupervisor_FinishMissionWithResult(AppNavOut
 static AppNavSupervisorState App_NavSupervisor_FinishFindCells(AppNavOutput *output)
 {
     return App_NavSupervisor_FinishMissionWithResult(output, APP_NAV_SUPERVISOR_RESULT_FIND_CELLS_COMPLETE);
+}
+
+static bool App_NavSupervisor_EvaluateGoToBImprovement(void)
+{
+    uint8_t optimistic_cost = APP_NAV_SUPERVISOR_GO_TO_B_COST_INVALID;
+    uint16_t required_total = 0U;
+
+    app_nav_supervisor_go_to_b_improvement_detected = 0U;
+    app_nav_supervisor_go_to_b_optimistic_cost = APP_NAV_SUPERVISOR_GO_TO_B_COST_INVALID;
+
+    if (!App_GoToBPolicy_GetOptimisticCost(app_nav_supervisor_initial_x, app_nav_supervisor_initial_y,
+            app_nav_supervisor_goal_x, app_nav_supervisor_goal_y, &optimistic_cost))
+    {
+        return false;
+    }
+
+    app_nav_supervisor_go_to_b_optimistic_cost = optimistic_cost;
+    required_total = (uint16_t)optimistic_cost + (uint16_t)APP_NAV_SUPERVISOR_GO_TO_B_REQUIRED_IMPROVEMENT;
+
+    if (required_total <= app_nav_supervisor_go_to_b_outbound_steps)
+    {
+        app_nav_supervisor_go_to_b_improvement_detected = 1U;
+        return true;
+    }
+
+    return false;
 }
 
 static bool App_NavSupervisor_CheckSpecialAtConfirmedCellEntry(const AppNavPerception *perception)
@@ -512,8 +573,20 @@ static AppNavSupervisorState App_NavSupervisor_HandleFindCellsDecide(
 static AppNavSupervisorState App_NavSupervisor_HandleGoToBDecide(const AppNavInput *input, AppNavOutput *output)
 {
     AppGoToBDecision go_to_b_decision = {0};
+    uint8_t active_goal_x = app_nav_supervisor_goal_x;
+    uint8_t active_goal_y = app_nav_supervisor_goal_y;
 
-    if (!App_GoToBPolicy_Evaluate(app_nav_supervisor_goal_x, app_nav_supervisor_goal_y, &go_to_b_decision))
+    if (app_nav_supervisor_go_to_b_phase == APP_NAV_SUPERVISOR_GO_TO_B_PHASE_RETURN_TO_A)
+    {
+        active_goal_x = app_nav_supervisor_initial_x;
+        active_goal_y = app_nav_supervisor_initial_y;
+    }
+    else if (app_nav_supervisor_go_to_b_phase != APP_NAV_SUPERVISOR_GO_TO_B_PHASE_OUTBOUND_TO_B)
+    {
+        app_nav_supervisor_go_to_b_phase = APP_NAV_SUPERVISOR_GO_TO_B_PHASE_OUTBOUND_TO_B;
+    }
+
+    if (!App_GoToBPolicy_Evaluate(active_goal_x, active_goal_y, &go_to_b_decision))
     {
         if (go_to_b_decision.reason == APP_GO_TO_B_DECISION_REASON_NO_PATH)
         {
@@ -530,6 +603,26 @@ static AppNavSupervisorState App_NavSupervisor_HandleGoToBDecide(const AppNavInp
 
     if (go_to_b_decision.reason == APP_GO_TO_B_DECISION_REASON_GOAL_REACHED)
     {
+        if (app_nav_supervisor_go_to_b_phase == APP_NAV_SUPERVISOR_GO_TO_B_PHASE_RETURN_TO_A)
+        {
+            app_nav_supervisor_go_to_b_phase = APP_NAV_SUPERVISOR_GO_TO_B_PHASE_COMPLETE_AT_A;
+            App_NavSupervisor_UpdateMazeDebug();
+            return App_NavSupervisor_FinishMissionWithResult(
+                output, APP_NAV_SUPERVISOR_RESULT_GO_TO_B_COMPLETE_RETURNED_TO_A);
+        }
+
+        if (App_NavSupervisor_EvaluateGoToBImprovement())
+        {
+            app_nav_supervisor_go_to_b_phase = APP_NAV_SUPERVISOR_GO_TO_B_PHASE_RETURN_TO_A;
+            App_NavSupervisor_ClearOutput(output);
+            App_NavSupervisor_UpdateMazeDebug();
+            App_NavSupervisor_SetState(
+                APP_NAV_SUPERVISOR_DECIDE, APP_NAV_SUPERVISOR_ACTION_NONE, APP_NAV_SUPERVISOR_RESULT_OK);
+            return app_nav_supervisor_debug.state;
+        }
+
+        app_nav_supervisor_go_to_b_phase = APP_NAV_SUPERVISOR_GO_TO_B_PHASE_COMPLETE_AT_B;
+        App_NavSupervisor_UpdateMazeDebug();
         return App_NavSupervisor_FinishMissionWithResult(output, APP_NAV_SUPERVISOR_RESULT_GO_TO_B_COMPLETE);
     }
 
@@ -605,6 +698,7 @@ static AppNavSupervisorState App_NavSupervisor_HandleAdvanceWithState(const AppN
     case APP_NAV_ADVANCE_ACTION_DONE_REAR_TAPE:
         App_NavSupervisor_ClearOutput(output);
         App_Maze_AdvanceRobotPosition();
+        App_NavSupervisor_CountGoToBOutboundStepIfNeeded();
 
         if (App_NavSupervisor_CheckSpecialAtConfirmedCellEntry(perception))
         {
@@ -742,6 +836,7 @@ static AppNavSupervisorState App_NavSupervisor_HandleSmooth(
         App_NavSupervisor_ClearOutput(output);
         App_Maze_UpdateRobotHeading(turn);
         App_Maze_AdvanceRobotPosition();
+        App_NavSupervisor_CountGoToBOutboundStepIfNeeded();
 
         if (App_NavSupervisor_CheckSpecialAtConfirmedCellEntry(perception))
         {
@@ -837,6 +932,7 @@ void App_NavSupervisor_Reset(void)
     App_NavSupervisor_ClearPivotExitLatch();
     app_nav_supervisor_special_found_count = 0U;
     app_nav_supervisor_debug.special_found_count = 0U;
+    App_NavSupervisor_ResetGoToBTelemetry();
 
     if (app_nav_supervisor_initial_pose_valid != 0U)
     {
@@ -886,6 +982,45 @@ bool App_NavSupervisor_ResetWithInitialPose(uint8_t x, uint8_t y, HeadingTypeDef
     return true;
 }
 
+bool App_NavSupervisor_ResetRunPreservingMapWithInitialPose(uint8_t x, uint8_t y, HeadingTypeDef heading)
+{
+    bool pose_valid = App_NavSupervisor_SetInitialPose(x, y, heading);
+
+    if (!pose_valid)
+    {
+        App_NavSupervisor_SetDefaultInitialPose();
+    }
+
+    App_NavSupervisor_StopActions();
+    App_NavSupervisor_ClearActionYawReference();
+    App_NavSupervisor_ClearPivotExitLatch();
+    app_nav_supervisor_special_found_count = 0U;
+    app_nav_supervisor_debug.special_found_count = 0U;
+    App_NavSupervisor_ResetGoToBTelemetry();
+
+    if (!App_Maze_SetRobotPose(app_nav_supervisor_initial_x, app_nav_supervisor_initial_y,
+            app_nav_supervisor_initial_heading))
+    {
+        App_NavSupervisor_SetDefaultInitialPose();
+        (void)App_Maze_SetRobotPose(
+            app_nav_supervisor_initial_x, app_nav_supervisor_initial_y, app_nav_supervisor_initial_heading);
+        return false;
+    }
+
+    app_nav_supervisor_debug.active = 0U;
+    App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_IDLE, APP_NAV_SUPERVISOR_ACTION_NONE, APP_NAV_SUPERVISOR_RESULT_OK);
+    App_NavSupervisor_UpdateMazeDebug();
+    return pose_valid;
+}
+
+void App_NavSupervisor_ClearLearnedMap(void)
+{
+    App_Maze_ClearLearnedMap();
+    app_nav_supervisor_special_found_count = 0U;
+    app_nav_supervisor_debug.special_found_count = 0U;
+    App_NavSupervisor_UpdateMazeDebug();
+}
+
 bool App_NavSupervisor_SetGoalCell(uint8_t x, uint8_t y)
 {
     if (!App_Maze_IsValidCell(x, y))
@@ -923,6 +1058,11 @@ bool App_NavSupervisor_SetMission(AppNavSupervisorMission mission)
     case APP_NAV_SUPERVISOR_MISSION_FIND_CELLS:
     case APP_NAV_SUPERVISOR_MISSION_GO_A_TO_B:
         app_nav_supervisor_mission = mission;
+        if (mission != APP_NAV_SUPERVISOR_MISSION_GO_A_TO_B)
+        {
+            App_NavSupervisor_ResetGoToBTelemetry();
+        }
+        App_NavSupervisor_UpdateMazeDebug();
         return true;
 
     default:
@@ -947,9 +1087,13 @@ bool App_NavSupervisor_Start(void)
 
     if (app_nav_supervisor_mission == APP_NAV_SUPERVISOR_MISSION_GO_A_TO_B)
     {
+        App_NavSupervisor_ResetGoToBTelemetry();
+        app_nav_supervisor_go_to_b_phase = APP_NAV_SUPERVISOR_GO_TO_B_PHASE_OUTBOUND_TO_B;
+
         if (app_nav_supervisor_goal_valid == 0U)
         {
             app_nav_supervisor_debug.active = 0U;
+            app_nav_supervisor_go_to_b_phase = APP_NAV_SUPERVISOR_GO_TO_B_PHASE_IDLE;
             App_NavSupervisor_SetState(APP_NAV_SUPERVISOR_IDLE, APP_NAV_SUPERVISOR_ACTION_NONE,
                 APP_NAV_SUPERVISOR_RESULT_GO_TO_B_INVALID_TARGET);
             App_NavSupervisor_UpdateMazeDebug();
@@ -960,6 +1104,7 @@ bool App_NavSupervisor_Start(void)
             (current_x == app_nav_supervisor_goal_x) && (current_y == app_nav_supervisor_goal_y))
         {
             app_nav_supervisor_debug.active = 0U;
+            app_nav_supervisor_go_to_b_phase = APP_NAV_SUPERVISOR_GO_TO_B_PHASE_COMPLETE_AT_B;
             App_NavSupervisor_SetState(
                 APP_NAV_SUPERVISOR_IDLE, APP_NAV_SUPERVISOR_ACTION_NONE, APP_NAV_SUPERVISOR_RESULT_GO_TO_B_COMPLETE);
             App_NavSupervisor_UpdateMazeDebug();

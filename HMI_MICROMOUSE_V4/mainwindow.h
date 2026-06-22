@@ -121,6 +121,8 @@ class MainWindow : public QMainWindow
 
     void on_btnStopSupervisorRun_clicked();
 
+    void on_btnClearSupervisorLearnedMap_clicked();
+
     void on_btnPrimitiveStart_clicked();
 
     void on_btnPrimitiveStop_clicked();
@@ -173,6 +175,11 @@ class MainWindow : public QMainWindow
     QLabel *lblSupervisorPose = nullptr;
     QLabel *lblSupervisorCell = nullptr;
     QLabel *lblSupervisorSpecials = nullptr;
+    QLabel *lblSupervisorMission = nullptr;
+    QLabel *lblSupervisorGoToBPhase = nullptr;
+    QLabel *lblSupervisorGoToBSteps = nullptr;
+    QLabel *lblSupervisorGoToBCost = nullptr;
+    QLabel *lblSupervisorGoToBImprovement = nullptr;
 
     quint16 m_pwmPeriod = 1000; // Almacena el período máximo de PWM para escalar
                                 // los valores de la UI.

@@ -112,22 +112,37 @@ Además de los comandos generales, el proyecto usa un conjunto de comandos UNERB
 | `CMD_SET_SUPERVISOR_GOAL_CELL` (`0x9D`) | Qt -> STM32 | Configura celda objetivo `B` para `GO_A_TO_B`. |
 | `CMD_GET_SUPERVISOR_GOAL_CELL` (`0x9E`) | Qt -> STM32 | Solicita celda objetivo `B` y flag de validez. |
 | `CMD_SUPERVISOR_STATUS_UPDATE` (`0x9F`) | STM32 -> Qt | Publica estado compacto del supervisor de forma autónoma. |
+| `CMD_CLEAR_SUPERVISOR_LEARNED_MAP` (`0xA9`) | Qt -> STM32 | Borra explícitamente el mapa aprendido del supervisor. |
 
 ### Payload de estado supervisor
 
-`CMD_GET_SUPERVISOR_DEBUG_STATUS` y `CMD_SUPERVISOR_STATUS_UPDATE` usan el mismo payload compacto de 9 bytes:
+`CMD_GET_SUPERVISOR_DEBUG_STATUS` y `CMD_SUPERVISOR_STATUS_UPDATE` usan el mismo payload compacto extendido de 15 bytes. Los primeros 9 bytes se mantienen compatibles con el formato anterior:
 
 ```text
-[0] state
-[1] current_action
-[2] active
-[3] last_result
-[4] maze_x
-[5] maze_y
-[6] maze_heading
-[7] maze_cell
-[8] special_found_count
+[0]  state
+[1]  current_action
+[2]  active
+[3]  last_result
+[4]  maze_x
+[5]  maze_y
+[6]  maze_heading
+[7]  maze_cell
+[8]  special_found_count
+[9]  mission
+[10] go_to_b_phase
+[11] go_to_b_outbound_steps
+[12] go_to_b_optimistic_cost
+[13] go_to_b_required_improvement
+[14] go_to_b_improvement_detected
 ```
+
+Campos `GO_A_TO_B`:
+
+- `go_to_b_phase`: `0=IDLE`, `1=OUTBOUND_TO_B`, `2=RETURN_TO_A`, `3=COMPLETE_AT_B`, `4=COMPLETE_AT_A`.
+- `go_to_b_outbound_steps`: transiciones reales de celda durante la ida `A -> B`.
+- `go_to_b_optimistic_cost`: costo optimista recalculado `A -> B`; `0xFF` indica no disponible.
+- `go_to_b_required_improvement`: margen mínimo para considerar una posible mejora.
+- `go_to_b_improvement_detected`: `1` si al llegar a `B` se detectó posible mejora y se inició retorno `B -> A`.
 
 `CMD_GET_SUPERVISOR_DEBUG_STATUS` es una consulta manual desde la HMI.
 

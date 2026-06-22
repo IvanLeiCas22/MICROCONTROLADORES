@@ -104,6 +104,37 @@ static bool App_GoToBPolicy_SelectRouteStep(
     return true;
 }
 
+bool App_GoToBPolicy_GetOptimisticCost(uint8_t start_x, uint8_t start_y, uint8_t goal_x, uint8_t goal_y,
+    uint8_t *cost_out)
+{
+    if (cost_out == NULL)
+    {
+        return false;
+    }
+
+    *cost_out = APP_ROUTE_DISTANCE_INF;
+
+    if (!App_Maze_IsValidCell(start_x, start_y) || !App_Maze_IsValidCell(goal_x, goal_y))
+    {
+        return false;
+    }
+
+    App_RoutePlanner_Reset();
+
+    if (!App_RoutePlanner_AddSeed(goal_x, goal_y))
+    {
+        return false;
+    }
+
+    if (!App_RoutePlanner_Run(APP_ROUTE_TRAVERSAL_OPTIMISTIC_UNKNOWN_ALLOWED))
+    {
+        return false;
+    }
+
+    *cost_out = App_RoutePlanner_GetDistance(start_x, start_y);
+    return (*cost_out != APP_ROUTE_DISTANCE_INF);
+}
+
 bool App_GoToBPolicy_Evaluate(uint8_t goal_x, uint8_t goal_y, AppGoToBDecision *decision_out)
 {
     uint8_t x = 0U;

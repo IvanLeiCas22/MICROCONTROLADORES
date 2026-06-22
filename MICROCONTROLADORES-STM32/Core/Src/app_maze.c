@@ -272,8 +272,7 @@ void App_Maze_ResetState(void)
 
 bool App_Maze_ResetStateWithPose(uint8_t x, uint8_t y, HeadingTypeDef heading)
 {
-    memset(maze_map, 0, sizeof(maze_map));
-    memset(maze_known_edges, 0, sizeof(maze_known_edges));
+    App_Maze_ClearLearnedMap();
 
     if (!App_Maze_SetRobotPose(x, y, heading))
     {
@@ -282,6 +281,12 @@ bool App_Maze_ResetStateWithPose(uint8_t x, uint8_t y, HeadingTypeDef heading)
     }
 
     return true;
+}
+
+void App_Maze_ClearLearnedMap(void)
+{
+    memset(maze_map, 0, sizeof(maze_map));
+    memset(maze_known_edges, 0, sizeof(maze_known_edges));
 }
 
 /* -------------------------------------------------------------------------- */

@@ -39,5 +39,7 @@ typedef struct
 } AppGoToBDecision;
 
 bool App_GoToBPolicy_Evaluate(uint8_t goal_x, uint8_t goal_y, AppGoToBDecision *decision_out);
+bool App_GoToBPolicy_GetOptimisticCost(uint8_t start_x, uint8_t start_y, uint8_t goal_x, uint8_t goal_y,
+    uint8_t *cost_out);
 
 #endif /* INC_APP_GO_TO_B_POLICY_H_ */

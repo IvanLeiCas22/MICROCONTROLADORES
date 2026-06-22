@@ -32,6 +32,7 @@ void App_Maze_ResetRobotPosition(void);
 void App_Maze_ResetState(void);
 
 bool App_Maze_ResetStateWithPose(uint8_t x, uint8_t y, HeadingTypeDef heading);
+void App_Maze_ClearLearnedMap(void);
 
 /* -------------------------------------------------------------------------- */
 /* Logical movement                                                            */

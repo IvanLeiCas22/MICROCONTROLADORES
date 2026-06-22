@@ -41,7 +41,8 @@ constexpr int PRIM_TEST_STATUS_SIZE = 26;
 constexpr int PRIM_TEST_CONFIG_SIZE = 16;
 constexpr quint8 SUPERVISOR_RUN_MODE_FIND_CELLS = 0x01;
 constexpr quint8 SUPERVISOR_RUN_MODE_GO_A_TO_B = 0x02;
-constexpr int SUPERVISOR_DEBUG_STATUS_SIZE = 9;
+constexpr int SUPERVISOR_DEBUG_STATUS_BASE_SIZE = 9;
+constexpr int SUPERVISOR_DEBUG_STATUS_EXTENDED_SIZE = 15;
 constexpr int SUPERVISOR_GOAL_CELL_SIZE = 3;
 
 quint8 supervisorHeadingForComboIndex(int index)
@@ -161,8 +162,42 @@ QString supervisorResultToText(quint8 result)
         return "GO_TO_B_INVALID_TARGET";
     case 9:
         return "GO_TO_B_NO_PATH";
+    case 10:
+        return "GO_TO_B_COMPLETE_RETURNED_TO_A";
     default:
         return QString("UNKNOWN(%1)").arg(result);
+    }
+}
+
+QString supervisorMissionToText(quint8 mission)
+{
+    switch (mission)
+    {
+    case 0:
+        return "FIND_CELLS";
+    case 1:
+        return "GO_A_TO_B";
+    default:
+        return QString("UNKNOWN(%1)").arg(mission);
+    }
+}
+
+QString supervisorGoToBPhaseToText(quint8 phase)
+{
+    switch (phase)
+    {
+    case 0:
+        return "IDLE";
+    case 1:
+        return "OUTBOUND_TO_B";
+    case 2:
+        return "RETURN_TO_A";
+    case 3:
+        return "COMPLETE_AT_B";
+    case 4:
+        return "COMPLETE_AT_A";
+    default:
+        return QString("UNKNOWN(%1)").arg(phase);
     }
 }
 
@@ -690,6 +725,8 @@ void MainWindow::populateCMDComboBox()
         "GET_WALL_TARGET_ADC (0x63)", static_cast<quint8>(Unerbus::CommandId::CMD_GET_WALL_TARGET_ADC));
     ui->CMDComboBox->addItem(
         "GET_SUPERVISOR_DEBUG_STATUS (0x9C)", static_cast<quint8>(Unerbus::CommandId::CMD_GET_SUPERVISOR_DEBUG_STATUS));
+    ui->CMDComboBox->addItem("CLEAR_SUPERVISOR_LEARNED_MAP (0xA9)",
+        static_cast<quint8>(Unerbus::CommandId::CMD_CLEAR_SUPERVISOR_LEARNED_MAP));
 }
 
 void MainWindow::on_btnSendCMD_clicked()
@@ -2098,6 +2135,11 @@ void MainWindow::setupSupervisorDebugPanel()
     lblSupervisorPose = createValueLabel();
     lblSupervisorCell = createValueLabel();
     lblSupervisorSpecials = createValueLabel();
+    lblSupervisorMission = createValueLabel();
+    lblSupervisorGoToBPhase = createValueLabel();
+    lblSupervisorGoToBSteps = createValueLabel();
+    lblSupervisorGoToBCost = createValueLabel();
+    lblSupervisorGoToBImprovement = createValueLabel();
 
     layout->addRow("Activo:", lblSupervisorActive);
     layout->addRow("Estado:", lblSupervisorState);
@@ -2106,11 +2148,19 @@ void MainWindow::setupSupervisorDebugPanel()
     layout->addRow("Pose:", lblSupervisorPose);
     layout->addRow("Celda:", lblSupervisorCell);
     layout->addRow("Especiales:", lblSupervisorSpecials);
+    layout->addRow("Misión:", lblSupervisorMission);
+    layout->addRow("Fase A/B:", lblSupervisorGoToBPhase);
+    layout->addRow("Pasos ida:", lblSupervisorGoToBSteps);
+    layout->addRow("Costo optimista:", lblSupervisorGoToBCost);
+    layout->addRow("Mejora detectada:", lblSupervisorGoToBImprovement);
 
     QPushButton *btnRefreshSupervisor = new QPushButton("Actualizar estado", group);
+    QPushButton *btnClearSupervisorMap = new QPushButton("Limpiar mapa aprendido", group);
     layout->addRow(btnRefreshSupervisor);
+    layout->addRow(btnClearSupervisorMap);
 
     connect(btnRefreshSupervisor, &QPushButton::clicked, this, &MainWindow::requestSupervisorDebugStatus);
+    connect(btnClearSupervisorMap, &QPushButton::clicked, this, &MainWindow::on_btnClearSupervisorLearnedMap_clicked);
 
     QVBoxLayout *panelLayout = qobject_cast<QVBoxLayout *>(ui->manualControls->layout());
 
@@ -2228,7 +2278,7 @@ void MainWindow::updateSupervisorGoalCellUI(const QByteArray &payload)
 
 void MainWindow::updateSupervisorDebugStatusUI(const QByteArray &payload)
 {
-    if (payload.size() < SUPERVISOR_DEBUG_STATUS_SIZE)
+    if (payload.size() < SUPERVISOR_DEBUG_STATUS_BASE_SIZE)
     {
         return;
     }
@@ -2245,9 +2295,21 @@ void MainWindow::updateSupervisorDebugStatusUI(const QByteArray &payload)
     quint8 maze_heading;
     quint8 maze_cell;
     quint8 special_found_count;
+    quint8 mission = 0xFF;
+    quint8 go_to_b_phase = 0;
+    quint8 go_to_b_outbound_steps = 0;
+    quint8 go_to_b_optimistic_cost = 0xFF;
+    quint8 go_to_b_required_improvement = 0;
+    quint8 go_to_b_improvement_detected = 0;
 
     stream >> state >> action >> active >> result >> maze_x >> maze_y >> maze_heading >> maze_cell >>
         special_found_count;
+
+    if (payload.size() >= SUPERVISOR_DEBUG_STATUS_EXTENDED_SIZE)
+    {
+        stream >> mission >> go_to_b_phase >> go_to_b_outbound_steps >> go_to_b_optimistic_cost >>
+            go_to_b_required_improvement >> go_to_b_improvement_detected;
+    }
 
     if (lblSupervisorActive == nullptr)
     {
@@ -2261,6 +2323,16 @@ void MainWindow::updateSupervisorDebugStatusUI(const QByteArray &payload)
     lblSupervisorPose->setText(QString("(%1, %2), %3").arg(maze_x).arg(maze_y).arg(mazeHeadingToText(maze_heading)));
     lblSupervisorCell->setText(QString("0x%1").arg(maze_cell, 2, 16, QChar('0')).toUpper());
     lblSupervisorSpecials->setText(QString("%1/3").arg(special_found_count));
+
+    if (lblSupervisorMission != nullptr)
+    {
+        lblSupervisorMission->setText((mission == 0xFF) ? "-" : QString("%1 (%2)").arg(supervisorMissionToText(mission)).arg(mission));
+        lblSupervisorGoToBPhase->setText(QString("%1 (%2)").arg(supervisorGoToBPhaseToText(go_to_b_phase)).arg(go_to_b_phase));
+        lblSupervisorGoToBSteps->setText(QString::number(go_to_b_outbound_steps));
+        lblSupervisorGoToBCost->setText((go_to_b_optimistic_cost == 0xFF) ? "-" : QString::number(go_to_b_optimistic_cost));
+        lblSupervisorGoToBImprovement->setText(
+            QString("%1 (min %2)").arg(go_to_b_improvement_detected ? "Sí" : "No").arg(go_to_b_required_improvement));
+    }
 
     if ((maze_x < MAZE_WIDTH) && (maze_y < MAZE_HEIGHT) && (maze_heading <= static_cast<quint8>(HEADING_WEST)))
     {
@@ -2330,6 +2402,21 @@ void MainWindow::on_btnStopSupervisorRun_clicked()
 {
     sendUnerbusCommand(Unerbus::CommandId::CMD_STOP_SUPERVISOR_RUN);
     requestSupervisorDebugStatus();
+}
+
+void MainWindow::on_btnClearSupervisorLearnedMap_clicked()
+{
+    if (!serialPort->isOpen() && !udpSocket)
+    {
+        QMessageBox::warning(this, "Error", "Debe estar conectado para limpiar el mapa aprendido.");
+        return;
+    }
+
+    sendUnerbusCommand(Unerbus::CommandId::CMD_CLEAR_SUPERVISOR_LEARNED_MAP);
+    memset(robot_maze_map, 0, sizeof(robot_maze_map));
+    drawMaze();
+    requestSupervisorDebugStatus();
+    ui->commsLog->appendPlainText("Solicitud enviada: limpiar mapa aprendido del supervisor.");
 }
 
 void MainWindow::setupPrimitiveTestPage()
