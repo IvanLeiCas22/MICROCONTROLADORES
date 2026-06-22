@@ -2882,7 +2882,7 @@ QPushButton:checked {
          </widget>
         </item>
         <item>
-         <layout class="QHBoxLayout" name="horizontalLayout_3" stretch="8,1">
+         <layout class="QHBoxLayout" name="horizontalLayout_3" stretch="7,2">
           <property name="sizeConstraint">
            <enum>QLayout::SizeConstraint::SetDefaultConstraint</enum>
           </property>
@@ -2901,13 +2901,13 @@ QPushButton:checked {
             <item>
              <widget class="QGroupBox" name="manualControls">
               <property name="sizePolicy">
-               <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+               <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
                 <horstretch>0</horstretch>
                 <verstretch>0</verstretch>
                </sizepolicy>
               </property>
               <property name="title">
-               <string>Panel STM32</string>
+               <string>Operación STM32</string>
               </property>
               <layout class="QVBoxLayout" name="verticalLayout_23">
                <item>

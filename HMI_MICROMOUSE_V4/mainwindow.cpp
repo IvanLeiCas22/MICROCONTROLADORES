@@ -7,6 +7,7 @@
 #include <QGraphicsLineItem>
 #include <QGraphicsRectItem>
 #include <QGroupBox>
+#include <QGridLayout>
 #include <QIntValidator>
 #include <QLabel>
 #include <QPushButton>
@@ -2117,15 +2118,26 @@ void MainWindow::on_btnSyncMaze_clicked()
 
 void MainWindow::setupSupervisorDebugPanel()
 {
-    QGroupBox *group = new QGroupBox("Estado supervisor", ui->manualControls);
-    QFormLayout *layout = new QFormLayout(group);
+    QGroupBox *group = new QGroupBox("Estado supervisor", ui->pageLaberinth);
+    QGridLayout *layout = new QGridLayout(group);
+
+    layout->setHorizontalSpacing(12);
+    layout->setVerticalSpacing(6);
 
     auto createValueLabel = [group]()
     {
         QLabel *label = new QLabel("-", group);
         label->setTextInteractionFlags(Qt::TextSelectableByMouse);
-        label->setMinimumWidth(120);
+        label->setMinimumWidth(90);
         return label;
+    };
+
+    auto addField = [group, layout](int row, int column, const QString &name, QLabel *value)
+    {
+        QLabel *nameLabel = new QLabel(name, group);
+        nameLabel->setStyleSheet("font-weight: 600;");
+        layout->addWidget(nameLabel, row, column * 2);
+        layout->addWidget(value, row, (column * 2) + 1);
     };
 
     lblSupervisorActive = createValueLabel();
@@ -2141,40 +2153,36 @@ void MainWindow::setupSupervisorDebugPanel()
     lblSupervisorGoToBCost = createValueLabel();
     lblSupervisorGoToBImprovement = createValueLabel();
 
-    layout->addRow("Activo:", lblSupervisorActive);
-    layout->addRow("Estado:", lblSupervisorState);
-    layout->addRow("Acción:", lblSupervisorAction);
-    layout->addRow("Resultado:", lblSupervisorResult);
-    layout->addRow("Pose:", lblSupervisorPose);
-    layout->addRow("Celda:", lblSupervisorCell);
-    layout->addRow("Especiales:", lblSupervisorSpecials);
-    layout->addRow("Misión:", lblSupervisorMission);
-    layout->addRow("Fase A/B:", lblSupervisorGoToBPhase);
-    layout->addRow("Pasos ida:", lblSupervisorGoToBSteps);
-    layout->addRow("Costo optimista:", lblSupervisorGoToBCost);
-    layout->addRow("Mejora detectada:", lblSupervisorGoToBImprovement);
+    addField(0, 0, "Activo", lblSupervisorActive);
+    addField(0, 1, "Estado", lblSupervisorState);
+    addField(0, 2, "Acción", lblSupervisorAction);
+    addField(0, 3, "Resultado", lblSupervisorResult);
+    addField(1, 0, "Pose", lblSupervisorPose);
+    addField(1, 1, "Celda", lblSupervisorCell);
+    addField(1, 2, "Especiales", lblSupervisorSpecials);
+    addField(1, 3, "Misión", lblSupervisorMission);
+    addField(2, 0, "Fase A/B", lblSupervisorGoToBPhase);
+    addField(2, 1, "Pasos ida", lblSupervisorGoToBSteps);
+    addField(2, 2, "Costo opt.", lblSupervisorGoToBCost);
+    addField(2, 3, "Mejora", lblSupervisorGoToBImprovement);
 
     QPushButton *btnRefreshSupervisor = new QPushButton("Actualizar estado", group);
     QPushButton *btnClearSupervisorMap = new QPushButton("Limpiar mapa aprendido", group);
-    layout->addRow(btnRefreshSupervisor);
-    layout->addRow(btnClearSupervisorMap);
+    QWidget *buttonColumn = new QWidget(group);
+    QVBoxLayout *buttonLayout = new QVBoxLayout(buttonColumn);
+    buttonLayout->setContentsMargins(0, 0, 0, 0);
+    buttonLayout->addWidget(btnRefreshSupervisor);
+    buttonLayout->addWidget(btnClearSupervisorMap);
+    buttonLayout->addStretch(1);
+    layout->addWidget(buttonColumn, 0, 8, 3, 1);
 
     connect(btnRefreshSupervisor, &QPushButton::clicked, this, &MainWindow::requestSupervisorDebugStatus);
     connect(btnClearSupervisorMap, &QPushButton::clicked, this, &MainWindow::on_btnClearSupervisorLearnedMap_clicked);
 
-    QVBoxLayout *panelLayout = qobject_cast<QVBoxLayout *>(ui->manualControls->layout());
-
-    if (panelLayout != nullptr)
+    QVBoxLayout *pageLayout = qobject_cast<QVBoxLayout *>(ui->pageLaberinth->layout());
+    if (pageLayout != nullptr)
     {
-        const int rotateIndex = panelLayout->indexOf(ui->groupBox_11);
-        if (rotateIndex >= 0)
-        {
-            panelLayout->insertWidget(rotateIndex, group);
-        }
-        else
-        {
-            panelLayout->addWidget(group);
-        }
+        pageLayout->addWidget(group);
     }
 }
 
