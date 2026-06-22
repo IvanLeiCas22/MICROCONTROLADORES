@@ -164,6 +164,8 @@ Regla de coordenadas:
 STM32 envía coordenadas lógicas.
 Qt guarda coordenadas lógicas.
 Qt invierte Y solo al dibujar.
+Mapa lógico: 8x8, x/y válidos = 0..7.
+CMD_SYNC_MAZE_COLUMN: 1(col) + 8(celdas) + 1(x) + 1(y) + 1(heading) = 12 bytes de payload.
 ```
 
 ## 7. Extensibilidad y Recomendaciones

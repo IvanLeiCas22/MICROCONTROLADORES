@@ -16,8 +16,10 @@
 #include <QMessageBox>
 
 // --- CONSTANTES DEL LABERINTO ---
-#define MAZE_WIDTH 15
-#define MAZE_HEIGHT 15
+#define MAZE_WIDTH 8
+#define MAZE_HEIGHT 8
+#define MAZE_DEFAULT_START_X 0
+#define MAZE_DEFAULT_START_Y 0
 #define WALL_NORTH 0x01
 #define WALL_SOUTH 0x02
 #define WALL_EAST 0x04

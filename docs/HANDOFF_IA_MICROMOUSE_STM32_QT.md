@@ -340,6 +340,17 @@ HMI_MICROMOUSE_V4/mainwindow.ui
 
 Si cambia un comando, payload o enum compartido, debe actualizarse firmware + HMI + documentación.
 
+El mapa lógico actual representa el laberinto físico real 8x8:
+
+```text
+MAZE_WIDTH  = 8
+MAZE_HEIGHT = 8
+coordenadas válidas: x/y = 0..7
+pose inicial por defecto: (0, 0), HEADING_NORTH
+```
+
+La HMI configura pose inicial A y destino B dentro de ese rango. No reintroducir una matriz 15x15 ni un arranque artificial en el centro salvo decisión explícita.
+
 No reutilizar IDs de comandos eliminados sin decisión explícita.
 
 ---

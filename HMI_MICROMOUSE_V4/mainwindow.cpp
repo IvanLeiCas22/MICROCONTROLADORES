@@ -306,9 +306,9 @@ MainWindow::MainWindow(QWidget *parent)
     // 2. Limpiar todos los mapas lógicos (llenarlos de 0)
     memset(robot_maze_map, 0, sizeof(robot_maze_map));
 
-    // 3. El robot nace en el centro lógico de la matriz de 15x15
-    current_x = 7;
-    current_y = 7;
+    // 3. El robot usa la pose inicial por defecto del laberinto físico 8x8.
+    current_x = MAZE_DEFAULT_START_X;
+    current_y = MAZE_DEFAULT_START_Y;
     current_heading = HEADING_NORTH;
 
     // 4. Marcamos la celda en la que empezamos como "Visitada"
@@ -659,13 +659,13 @@ void MainWindow::onPacketReceived(quint8 command, const QByteArray &payload)
     }
     case Unerbus::CommandId::CMD_SYNC_MAZE_COLUMN:
     {
-        // Necesitamos 1(col) + 15(datos) + 1(x) + 1(y) + 1(heading) = 19 bytes
+        // Necesitamos 1(col) + MAZE_HEIGHT(datos) + 1(x) + 1(y) + 1(heading) bytes.
         if (payload.size() >= (MAZE_HEIGHT + 4))
         {
             quint8 col;
             stream >> col;
 
-            // 1. Extraemos y guardamos las 15 celdas de esta columna.
+            // 1. Extraemos y guardamos las celdas de esta columna.
             // IMPORTANTE: robot_maze_map usa coordenadas lógicas STM32.
             // La inversión Y se aplica solo al dibujar.
             for (int logical_y = 0; logical_y < MAZE_HEIGHT; logical_y++)
@@ -2182,8 +2182,8 @@ void MainWindow::on_btnSimReset_clicked()
 {
     memset(robot_maze_map, 0, sizeof(robot_maze_map));
 
-    current_x = 7;
-    current_y = 7;
+    current_x = MAZE_DEFAULT_START_X;
+    current_y = MAZE_DEFAULT_START_Y;
     current_heading = HEADING_NORTH;
 
     robot_maze_map[current_x][current_y] |= CELL_VISITED;

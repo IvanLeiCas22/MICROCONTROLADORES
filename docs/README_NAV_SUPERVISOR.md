@@ -229,6 +229,17 @@ current_x/current_y  = coordenadas lógicas STM32
 conversión visual Y  = solo al dibujar
 ```
 
+Dimensiones actuales del mapa lógico:
+
+```text
+MAZE_WIDTH  = 8
+MAZE_HEIGHT = 8
+coordenadas válidas: x/y = 0..7
+pose inicial por defecto: (0, 0), HEADING_NORTH
+```
+
+La HMI permite configurar pose inicial A y destino B con coordenadas reales del laberinto físico 8x8. Ya no se usa una matriz 15x15 con arranque artificial en el centro para evitar desbordamientos.
+
 ---
 
 ## Mapa lógico: byte de celda
@@ -1419,7 +1430,7 @@ CMD_GET_SUPERVISOR_GOAL_CELL         = 0x9E
 CMD_SUPERVISOR_STATUS_UPDATE         = 0x9F
 ```
 
-La HMI no debe reinterpretar coordenadas lógicas internamente como visuales. La conversión de Y se hace solo al dibujar.
+La HMI no debe reinterpretar coordenadas lógicas internamente como visuales. La conversión de Y se hace solo al dibujar. El rango operativo de coordenadas es `0..7` para X e Y.
 
 `pageLaberinth` se entiende como panel operativo del STM32:
 
@@ -1437,6 +1448,7 @@ Regla de coordenadas:
 
 ```text
 HMI envía y recibe x/y lógicos STM32.
+X/Y válidos: 0..7.
 La inversión de Y solo ocurre al dibujar.
 ```
 
