@@ -245,11 +245,13 @@ class MainWindow : public QMainWindow
     void populateRobotStatusComboBoxes();
     void updateRobotStatusUI(const QByteArray &payload);
     void updateApproachFrontWallTargetUI(const QByteArray &payload);
+    void updatePivotPrepSpeedPercentUI(const QByteArray &payload);
     void updateYawAngleUI(const QByteArray &payload);
     void updateSmoothTurnSpeedsUI(const QByteArray &payload);
     void updateTurnSpeedPID(const QByteArray &payload);
     void updateTurnTargetDps(const QByteArray &payload);
     void sendApproachFrontWallTarget();
+    void sendPivotPrepSpeedPercent();
     void sendSupervisorInitialPose();
     void requestSupervisorInitialPose();
     void updateSupervisorInitialPoseUI(const QByteArray &payload);

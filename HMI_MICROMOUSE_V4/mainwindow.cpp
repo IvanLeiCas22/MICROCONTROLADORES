@@ -629,6 +629,11 @@ void MainWindow::onPacketReceived(quint8 command, const QByteArray &payload)
         updateApproachFrontWallTargetUI(payload);
         break;
     }
+    case Unerbus::CommandId::CMD_GET_PIVOT_PREP_SPEED_PERCENT:
+    {
+        updatePivotPrepSpeedPercentUI(payload);
+        break;
+    }
     case Unerbus::CommandId::CMD_GET_SUPERVISOR_INITIAL_POSE:
     {
         updateSupervisorInitialPoseUI(payload);
@@ -737,6 +742,8 @@ void MainWindow::populateCMDComboBox()
         "GET_WALL_THRESHOLDS (0x61)", static_cast<quint8>(Unerbus::CommandId::CMD_GET_WALL_THRESHOLDS));
     ui->CMDComboBox->addItem(
         "GET_WALL_TARGET_ADC (0x63)", static_cast<quint8>(Unerbus::CommandId::CMD_GET_WALL_TARGET_ADC));
+    ui->CMDComboBox->addItem("GET_PIVOT_PREP_SPEED_PERCENT (0xAB)",
+        static_cast<quint8>(Unerbus::CommandId::CMD_GET_PIVOT_PREP_SPEED_PERCENT));
     ui->CMDComboBox->addItem(
         "GET_SUPERVISOR_DEBUG_STATUS (0x9C)", static_cast<quint8>(Unerbus::CommandId::CMD_GET_SUPERVISOR_DEBUG_STATUS));
     ui->CMDComboBox->addItem("CLEAR_SUPERVISOR_LEARNED_MAP (0xA9)",
@@ -1575,6 +1582,7 @@ void MainWindow::setupConfigPage()
         &MainWindow::on_btnSetApproachFrontWallTarget_clicked);
 
     ui->editApproachFrontWallTargetMm->setValidator(new QIntValidator(10, 150, this));
+    ui->editPivotPrepSpeedPercent->setValidator(new QIntValidator(10, 100, this));
 
     populateMpuConfigComboBoxes();
 }
@@ -2119,6 +2127,8 @@ void MainWindow::updateRobotStatusUI(const QByteArray &payload)
 void MainWindow::on_btnGetApproachFrontWallTarget_clicked()
 {
     sendUnerbusCommand(Unerbus::CommandId::CMD_GET_APPROACH_FRONT_WALL_TARGET);
+    QTimer::singleShot(
+        100, this, [this]() { sendUnerbusCommand(Unerbus::CommandId::CMD_GET_PIVOT_PREP_SPEED_PERCENT); });
 }
 
 /**
@@ -2127,6 +2137,7 @@ void MainWindow::on_btnGetApproachFrontWallTarget_clicked()
 void MainWindow::on_btnSetApproachFrontWallTarget_clicked()
 {
     sendApproachFrontWallTarget();
+    sendPivotPrepSpeedPercent();
 }
 
 void MainWindow::sendApproachFrontWallTarget()
@@ -2158,6 +2169,37 @@ void MainWindow::updateApproachFrontWallTargetUI(const QByteArray &payload)
     stream >> target_mm;
 
     ui->editApproachFrontWallTargetMm->setText(QString::number(target_mm));
+}
+
+void MainWindow::sendPivotPrepSpeedPercent()
+{
+    quint16 percent = ui->editPivotPrepSpeedPercent->text().toUShort();
+    if (percent < 10U)
+        percent = 10U;
+    else if (percent > 100U)
+        percent = 100U;
+
+    ui->editPivotPrepSpeedPercent->setText(QString::number(percent));
+
+    QByteArray payload;
+    QDataStream stream(&payload, QIODevice::WriteOnly);
+    stream.setByteOrder(QDataStream::LittleEndian);
+    stream << percent;
+    sendUnerbusCommand(Unerbus::CommandId::CMD_SET_PIVOT_PREP_SPEED_PERCENT, payload);
+}
+
+void MainWindow::updatePivotPrepSpeedPercentUI(const QByteArray &payload)
+{
+    if (payload.size() < 2)
+        return;
+
+    QDataStream stream(payload);
+    stream.setByteOrder(QDataStream::LittleEndian);
+
+    quint16 percent;
+    stream >> percent;
+
+    ui->editPivotPrepSpeedPercent->setText(QString::number(percent));
 }
 
 void MainWindow::updateYawAngleUI(const QByteArray &payload)

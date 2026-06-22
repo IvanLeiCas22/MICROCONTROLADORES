@@ -104,6 +104,8 @@ Además de los comandos generales, el proyecto usa un conjunto de comandos UNERB
 |---|---:|---|
 | `CMD_UPDATE_MAZE_CELL` (`0x92`) | STM32 -> Qt | Actualiza una celda individual del mapa. |
 | `CMD_SYNC_MAZE_COLUMN` (`0x93`) | STM32 -> Qt | Sincroniza una columna completa del mapa lógico. |
+| `CMD_SET_PIVOT_PREP_SPEED_PERCENT` (`0xAA`) | Qt -> STM32 | Configura el porcentaje de velocidad base usado solo en preparación frontal de pivot. |
+| `CMD_GET_PIVOT_PREP_SPEED_PERCENT` (`0xAB`) | Qt -> STM32 | Solicita el porcentaje de velocidad base usado solo en preparación frontal de pivot. |
 | `CMD_SET_SUPERVISOR_INITIAL_POSE` (`0x98`) | Qt -> STM32 | Configura pose inicial `A`: `x`, `y`, `heading`. |
 | `CMD_GET_SUPERVISOR_INITIAL_POSE` (`0x99`) | Qt -> STM32 | Solicita pose inicial guardada. |
 | `CMD_START_SUPERVISOR_RUN` (`0x9A`) | Qt -> STM32 | Inicia corrida del supervisor: `FIND_CELLS` o `GO_A_TO_B`. |

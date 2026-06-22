@@ -202,6 +202,18 @@ CMD_GET_APPROACH_FRONT_WALL_TARGET = 0x97
 approach_front_wall_target_mm
 ```
 
+La preparación frontal de pivot también tiene una reducción de velocidad dedicada:
+
+```text
+CMD_SET_PIVOT_PREP_SPEED_PERCENT = 0xAA
+CMD_GET_PIVOT_PREP_SPEED_PERCENT = 0xAB
+pivot_prep_speed_percent
+default = 80
+rango HMI/firmware = 10..100
+```
+
+Esta reducción solo debe afectar `ApproachFrontWallAction` y `CenterByFrontTapeForPivotAction`. No debe modificar `AdvanceAction` normal, smooth turns, pivots ni las velocidades base globales.
+
 ---
 
 ## 5. Reglas de comportamiento de la IA

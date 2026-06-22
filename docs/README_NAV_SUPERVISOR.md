@@ -793,6 +793,8 @@ si el frente está abierto:
     -> RUN_ADVANCE
 ```
 
+Ambas preparaciones usan una velocidad frontal reducida configurable por HMI mediante `pivot_prep_speed_percent`. El valor es un porcentaje de `right_motor_base_speed` / `left_motor_base_speed`, con default `80%`, y solo aplica a `ApproachFrontWallAction` y `CenterByFrontTapeForPivotAction`.
+
 La selección se hace en el supervisor, no en la policy.
 
 Motivo:
@@ -1420,6 +1422,8 @@ CMD_SYNC_MAZE_COLUMN                 = 0x93
 CMD_PRIMITIVE_TEST                   = 0x95
 CMD_SET_APPROACH_FRONT_WALL_TARGET   = 0x96
 CMD_GET_APPROACH_FRONT_WALL_TARGET   = 0x97
+CMD_SET_PIVOT_PREP_SPEED_PERCENT     = 0xAA
+CMD_GET_PIVOT_PREP_SPEED_PERCENT     = 0xAB
 CMD_SET_SUPERVISOR_INITIAL_POSE      = 0x98
 CMD_GET_SUPERVISOR_INITIAL_POSE      = 0x99
 CMD_START_SUPERVISOR_RUN             = 0x9A

@@ -167,6 +167,7 @@ typedef struct
     uint16_t left_motor_base_speed;
     uint16_t faster_motor_smooth_turn_speed;
     uint16_t slower_motor_smooth_turn_speed;
+    uint16_t pivot_prep_speed_percent;
 
     uint16_t wall_threshold_mm_front;
     uint16_t wall_threshold_mm_diagonal;

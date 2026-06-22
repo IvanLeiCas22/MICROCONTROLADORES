@@ -1323,8 +1323,38 @@ static bool App_Nav_ComputeWallFollowPwm(const AppNavInput *input, const AppNavP
     return true;
 }
 
+static uint16_t App_Nav_ScaleBasePwmByPercent(uint16_t base_pwm, uint16_t percent)
+{
+    if (percent < APP_NAV_PIVOT_PREP_SPEED_PERCENT_MIN)
+    {
+        percent = APP_NAV_PIVOT_PREP_SPEED_PERCENT_MIN;
+    }
+    else if (percent > APP_NAV_PIVOT_PREP_SPEED_PERCENT_MAX)
+    {
+        percent = APP_NAV_PIVOT_PREP_SPEED_PERCENT_MAX;
+    }
+
+    return (uint16_t)(((uint32_t)base_pwm * (uint32_t)percent) / 100U);
+}
+
+static void App_Nav_GetPivotPrepBaseSpeeds(uint16_t *right_base_pwm_out, uint16_t *left_base_pwm_out)
+{
+    uint16_t percent = app_nav_config.pivot_prep_speed_percent;
+
+    if (right_base_pwm_out != NULL)
+    {
+        *right_base_pwm_out = App_Nav_ScaleBasePwmByPercent(app_nav_config.right_motor_base_speed, percent);
+    }
+
+    if (left_base_pwm_out != NULL)
+    {
+        *left_base_pwm_out = App_Nav_ScaleBasePwmByPercent(app_nav_config.left_motor_base_speed, percent);
+    }
+}
+
 static bool App_Nav_ComputeForwardGuidedPwm(const AppNavInput *input, const AppNavPerception *perception,
-    AppNavOutput *output, uint8_t force_yaw_hold, uint8_t *yaw_hold_started, AppNavForwardGuidanceMode *guidance_mode)
+    uint16_t right_base_pwm, uint16_t left_base_pwm, AppNavOutput *output, uint8_t force_yaw_hold,
+    uint8_t *yaw_hold_started, AppNavForwardGuidanceMode *guidance_mode)
 {
     if ((input == NULL) || (perception == NULL) || (output == NULL) || (yaw_hold_started == NULL) ||
         (guidance_mode == NULL))
@@ -1340,8 +1370,7 @@ static bool App_Nav_ComputeForwardGuidedPwm(const AppNavInput *input, const AppN
             *yaw_hold_started = 1U;
         }
 
-        if (!App_Nav_ComputeYawHoldAdvancePwm(
-                input, app_nav_config.right_motor_base_speed, app_nav_config.left_motor_base_speed, output))
+        if (!App_Nav_ComputeYawHoldAdvancePwm(input, right_base_pwm, left_base_pwm, output))
         {
             return false;
         }
@@ -1350,8 +1379,7 @@ static bool App_Nav_ComputeForwardGuidedPwm(const AppNavInput *input, const AppN
         return true;
     }
 
-    if (App_Nav_ComputeWallFollowPwm(
-            input, perception, app_nav_config.right_motor_base_speed, app_nav_config.left_motor_base_speed, output))
+    if (App_Nav_ComputeWallFollowPwm(input, perception, right_base_pwm, left_base_pwm, output))
     {
         *guidance_mode = APP_NAV_FORWARD_GUIDANCE_WALL_FOLLOW;
         return true;
@@ -1360,8 +1388,7 @@ static bool App_Nav_ComputeForwardGuidedPwm(const AppNavInput *input, const AppN
     (void)App_Nav_StartYawHoldAdvanceInternal(input->yaw_q16_deg, 0U);
     *yaw_hold_started = 1U;
 
-    if (!App_Nav_ComputeYawHoldAdvancePwm(
-            input, app_nav_config.right_motor_base_speed, app_nav_config.left_motor_base_speed, output))
+    if (!App_Nav_ComputeYawHoldAdvancePwm(input, right_base_pwm, left_base_pwm, output))
     {
         return false;
     }
@@ -1378,8 +1405,9 @@ static bool App_Nav_ComputeAdvanceActionPwm(
 
     force_yaw_hold = (app_nav_advance_action_state == APP_NAV_ADVANCE_ACTION_RUNNING_YAW_HOLD) ? 1U : 0U;
 
-    if (!App_Nav_ComputeForwardGuidedPwm(
-            input, perception, output, force_yaw_hold, &app_nav_advance_yaw_hold_started, &guidance_mode))
+    if (!App_Nav_ComputeForwardGuidedPwm(input, perception, app_nav_config.right_motor_base_speed,
+            app_nav_config.left_motor_base_speed, output, force_yaw_hold, &app_nav_advance_yaw_hold_started,
+            &guidance_mode))
     {
         return false;
     }
@@ -1659,6 +1687,8 @@ AppNavApproachFrontWallActionState App_Nav_TickApproachFrontWallAction(
 {
     AppNavForwardGuidanceMode guidance_mode;
     uint16_t front_avg_mm;
+    uint16_t right_base_pwm;
+    uint16_t left_base_pwm;
     uint8_t force_yaw_hold;
 
     if ((input == NULL) || (perception == NULL) || (output == NULL))
@@ -1697,9 +1727,10 @@ AppNavApproachFrontWallActionState App_Nav_TickApproachFrontWallAction(
 
     force_yaw_hold =
         (app_nav_approach_front_wall_action_state == APP_NAV_APPROACH_FRONT_WALL_ACTION_RUNNING_YAW_HOLD) ? 1U : 0U;
+    App_Nav_GetPivotPrepBaseSpeeds(&right_base_pwm, &left_base_pwm);
 
-    if (!App_Nav_ComputeForwardGuidedPwm(
-            input, perception, output, force_yaw_hold, &app_nav_approach_front_wall_yaw_hold_started, &guidance_mode))
+    if (!App_Nav_ComputeForwardGuidedPwm(input, perception, right_base_pwm, left_base_pwm, output, force_yaw_hold,
+            &app_nav_approach_front_wall_yaw_hold_started, &guidance_mode))
     {
         App_Nav_SetApproachFrontWallActionTerminal(APP_NAV_APPROACH_FRONT_WALL_ACTION_ERROR);
         return app_nav_approach_front_wall_action_state;
@@ -1817,6 +1848,8 @@ AppNavCenterFrontTapeActionState App_Nav_TickCenterByFrontTapeForPivotAction(
     AppNavForwardGuidanceMode guidance_mode;
     AppNavCenterFrontTapeGateResult front_tape_gate_result;
     bool current_front_tape;
+    uint16_t right_base_pwm;
+    uint16_t left_base_pwm;
     uint8_t force_yaw_hold;
 
     if ((input == NULL) || (perception == NULL) || (output == NULL))
@@ -1867,9 +1900,10 @@ AppNavCenterFrontTapeActionState App_Nav_TickCenterByFrontTapeForPivotAction(
 
     force_yaw_hold =
         (app_nav_center_front_tape_action_state == APP_NAV_CENTER_FRONT_TAPE_ACTION_RUNNING_YAW_HOLD) ? 1U : 0U;
+    App_Nav_GetPivotPrepBaseSpeeds(&right_base_pwm, &left_base_pwm);
 
-    if (!App_Nav_ComputeForwardGuidedPwm(
-            input, perception, output, force_yaw_hold, &app_nav_center_front_tape_yaw_hold_started, &guidance_mode))
+    if (!App_Nav_ComputeForwardGuidedPwm(input, perception, right_base_pwm, left_base_pwm, output, force_yaw_hold,
+            &app_nav_center_front_tape_yaw_hold_started, &guidance_mode))
     {
         App_Nav_SetCenterFrontTapeActionTerminal(APP_NAV_CENTER_FRONT_TAPE_ACTION_ERROR);
         return app_nav_center_front_tape_action_state;

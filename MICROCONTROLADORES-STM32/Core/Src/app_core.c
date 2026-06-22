@@ -644,6 +644,33 @@ static void NavRuntimeConfig_WriteApproachFrontWallTargetToBuffer(uint8_t *buffe
     NavRuntimeConfig_WriteUInt16LE(buffer, cfg.approach_front_wall_target_mm);
 }
 
+static void NavRuntimeConfig_SetPivotPrepSpeedPercentFromPayload(struct UNERBUSHandle *aBus)
+{
+    AppNavConfig cfg;
+    uint16_t percent = UNERBUS_GetUInt16(aBus);
+
+    if (percent < APP_NAV_PIVOT_PREP_SPEED_PERCENT_MIN)
+    {
+        percent = APP_NAV_PIVOT_PREP_SPEED_PERCENT_MIN;
+    }
+    else if (percent > APP_NAV_PIVOT_PREP_SPEED_PERCENT_MAX)
+    {
+        percent = APP_NAV_PIVOT_PREP_SPEED_PERCENT_MAX;
+    }
+
+    App_Nav_GetConfig(&cfg);
+    cfg.pivot_prep_speed_percent = percent;
+    App_Nav_SetConfig(&cfg);
+}
+
+static void NavRuntimeConfig_WritePivotPrepSpeedPercentToBuffer(uint8_t *buffer)
+{
+    AppNavConfig cfg;
+
+    App_Nav_GetConfig(&cfg);
+    NavRuntimeConfig_WriteUInt16LE(buffer, cfg.pivot_prep_speed_percent);
+}
+
 static void NavRuntimeConfig_SetSmoothSpeedsFromPayload(struct UNERBUSHandle *aBus)
 {
     AppNavConfig cfg;
@@ -1190,6 +1217,15 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
         NavRuntimeConfig_WriteApproachFrontWallTargetToBuffer(approach_target_buffer);
         UNERBUS_Write(aBus, approach_target_buffer, UNERBUS_APPROACH_FRONT_WALL_TARGET_SIZE);
         length = UNERBUS_CMD_ID_SIZE + UNERBUS_APPROACH_FRONT_WALL_TARGET_SIZE;
+        break;
+    case CMD_SET_PIVOT_PREP_SPEED_PERCENT:
+        NavRuntimeConfig_SetPivotPrepSpeedPercentFromPayload(aBus);
+        break;
+    case CMD_GET_PIVOT_PREP_SPEED_PERCENT:
+        uint8_t pivot_prep_speed_buffer[UNERBUS_PIVOT_PREP_SPEED_PERCENT_SIZE];
+        NavRuntimeConfig_WritePivotPrepSpeedPercentToBuffer(pivot_prep_speed_buffer);
+        UNERBUS_Write(aBus, pivot_prep_speed_buffer, UNERBUS_PIVOT_PREP_SPEED_PERCENT_SIZE);
+        length = UNERBUS_CMD_ID_SIZE + UNERBUS_PIVOT_PREP_SPEED_PERCENT_SIZE;
         break;
     case CMD_SET_SUPERVISOR_INITIAL_POSE:
     {
