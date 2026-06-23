@@ -2303,8 +2303,8 @@ void MainWindow::setupSupervisorDebugPanel()
 
     const QString sectionTextStyle =
         "font-weight: 700; font-size: 10pt; color: #34495e; border: none; background: transparent;";
-    const QString nameTextStyle = "font-weight: 600; font-size: 10pt; border: none; background: transparent;";
-    const QString valueTextStyle = "font-size: 10pt; border: none; background: transparent;";
+    const QString nameTextStyle = "font-weight: 600; font-size: 10pt; color: #34495e; border: none; background: transparent;";
+    const QString valueTextStyle = "font-size: 10pt; color: #34495e; border: none; background: transparent;";
 
     auto createValueLabel = [group, valueTextStyle]()
     {
