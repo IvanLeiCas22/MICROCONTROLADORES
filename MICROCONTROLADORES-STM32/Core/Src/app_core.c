@@ -1486,6 +1486,7 @@ static void Do1ms(void)
 static void Do10ms(void)
 {
     Button_Tick(&h_user_button);
+    ManageButtonEvents();
 
     ESP01_Timeout10ms();
     UNERBUS_Timeout(&unerbus_esp01_handle);
@@ -2537,14 +2538,11 @@ static void Run_Control_Step(uint32_t dt_ms)
 
 void App_Core_Loop(void)
 {
-    ManageButtonEvents();
-
     Service_UdpAliveRequest();
 
     Service_Timebase_1ms();
 	Service_Timebase_10ms();
 	Service_Timebase_100ms();
-
 	Service_Control_Tick();
 
     ManageI2CTransactions();
