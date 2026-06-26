@@ -213,6 +213,9 @@ static void Service_Timebase_1ms(void);
 static void Service_Timebase_10ms(void);
 static void Service_Timebase_100ms(void);
 static void Service_Control_Tick(void);
+static uint32_t Select_HeartbeatPattern(void);
+static void Service_Heartbeat_100ms(void);
+static void Service_UdpAliveCountdown_100ms(void);
 static void ManageTransmission(void);
 static int8_t I2C_WriteBlocking(uint8_t device_addr, uint8_t reg_addr, uint8_t *data, uint16_t data_len, void *context);
 static int8_t I2C_WriteDMA(uint8_t device_addr, uint8_t reg_addr, uint8_t *data, uint16_t data_len, void *context);
@@ -278,7 +281,7 @@ static void NavRuntimeConfig_WriteSmoothTargetDpsToBuffer(uint8_t *buffer);
 static void Write_Supervisor_Debug_Status_To_Buffer(uint8_t *buffer);
 static void Select_Supervisor_Status_Update_Bus(_sUNERBUSHandle *aBus);
 static void Send_Supervisor_Status_Update(void);
-static void Tick_Supervisor_Status_Update_100ms(void);
+static void Service_SupervisorStatusUpdate_100ms(void);
 static int32_t Gain_Hundredths_To_Fixed(uint16_t gain_x100);
 static uint16_t Fixed_To_Gain_Hundredths(int32_t gain_fixed);
 static void Build_AppNavInput_From_SensorSnapshot(uint32_t dt_ms, AppNavInput *input);
@@ -851,7 +854,7 @@ static void Send_Supervisor_Status_Update(void)
     UNERBUS_Send(target_bus, CMD_SUPERVISOR_STATUS_UPDATE, UNERBUS_CMD_ID_SIZE + UNERBUS_SUPERVISOR_DEBUG_STATUS_SIZE);
 }
 
-static void Tick_Supervisor_Status_Update_100ms(void)
+static void Service_SupervisorStatusUpdate_100ms(void)
 {
     if (!supervisor_run_active)
     {
@@ -1491,65 +1494,75 @@ static void Do10ms(void)
 
 static void Do100ms(void)
 {
-    // --- Lógica de Heartbeat Dinámico ---
-    if (temporary_heartbeat_ticks > 0)
+    Service_Heartbeat_100ms();
+    Service_UdpAliveCountdown_100ms();
+    Service_SupervisorStatusUpdate_100ms();
+}
+
+static uint32_t Select_HeartbeatPattern(void)
+{
+    if (app_state == APP_STATE_MENU)
+    {
+        switch (menu_mode)
+        {
+        case MENU_MODE_IDLE:
+            return HEARTBEAT_MENU_IDLE;
+        case MENU_MODE_FIND_CELLS:
+            return HEARTBEAT_MENU_FIND_CELLS;
+        case MENU_MODE_GO_TO_B:
+            return HEARTBEAT_MENU_GO_TO_B;
+        default:
+            return HEARTBEAT_IDLE;
+        }
+    }
+
+    switch (menu_mode)
+    {
+    case MENU_MODE_IDLE:
+        return HEARTBEAT_RUNNING_IDLE;
+    case MENU_MODE_FIND_CELLS:
+        return HEARTBEAT_RUNNING_FIND_CELLS;
+    case MENU_MODE_GO_TO_B:
+        return HEARTBEAT_RUNNING_GO_TO_B;
+    default:
+        return HEARTBEAT_IDLE;
+    }
+}
+
+static void Service_Heartbeat_100ms(void)
+{
+    if (temporary_heartbeat_ticks > 0U)
     {
         temporary_heartbeat_ticks--;
         heartbeat_counter = temporary_heartbeat;
     }
     else
     {
-        if (app_state == APP_STATE_MENU)
-        {
-            switch (menu_mode)
-            {
-            case MENU_MODE_IDLE:
-                heartbeat_counter = HEARTBEAT_MENU_IDLE;
-                break;
-            case MENU_MODE_FIND_CELLS:
-                heartbeat_counter = HEARTBEAT_MENU_FIND_CELLS;
-                break;
-            case MENU_MODE_GO_TO_B:
-                heartbeat_counter = HEARTBEAT_MENU_GO_TO_B;
-                break;
-            default:
-                heartbeat_counter = HEARTBEAT_IDLE;
-                break;
-            }
-        }
-        else // APP_STATE_RUNNING
-        {
-            switch (menu_mode)
-            {
-            case MENU_MODE_IDLE:
-                heartbeat_counter = HEARTBEAT_RUNNING_IDLE;
-                break;
-            case MENU_MODE_FIND_CELLS:
-                heartbeat_counter = HEARTBEAT_RUNNING_FIND_CELLS;
-                break;
-            case MENU_MODE_GO_TO_B:
-                heartbeat_counter = HEARTBEAT_RUNNING_GO_TO_B;
-                break;
-            default:
-                heartbeat_counter = HEARTBEAT_IDLE;
-                break;
-            }
-        }
+        heartbeat_counter = Select_HeartbeatPattern();
     }
 
-    if (heartbeat_mask & heartbeat_counter)
+    if ((heartbeat_mask & heartbeat_counter) != 0U)
+    {
         HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
+    }
     else
+    {
         HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
+    }
 
     heartbeat_mask >>= 1;
-    if (!heartbeat_mask)
-        heartbeat_mask = 0x80000000;
+    if (heartbeat_mask == 0U)
+    {
+        heartbeat_mask = 0x80000000U;
+    }
+}
 
-    if (timeout_alive_udp)
+static void Service_UdpAliveCountdown_100ms(void)
+{
+    if (timeout_alive_udp > 0U)
+    {
         timeout_alive_udp--;
-
-    Tick_Supervisor_Status_Update_100ms();
+    }
 }
 
 uint8_t UART_TransmitByte(uint8_t value)
@@ -1750,7 +1763,7 @@ static void Prepare_MPU_BlockingTransaction(void)
 
 uint8_t Read_User_Button(void *context)
 {
-    // We ignore context for this simple case, but it's good practice to have it.
+	// context no utilizado, pero conveniente en ciertas ocasiones
     return (uint8_t)HAL_GPIO_ReadPin(SW0_GPIO_Port, SW0_Pin);
 }
 
