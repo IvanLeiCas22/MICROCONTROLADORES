@@ -205,9 +205,14 @@ int ESP01_WriteUartByte(uint8_t value);
 void ESP01_WriteByteToRxBuffer(uint8_t value);
 void ESP01_ChangeState(_eESP01STATUS esp01State);
 void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData);
-void Do1ms(void);
-void Do10ms(void);
-void Do100ms(void);
+static void Do1ms(void);
+static void Do10ms(void);
+static void Do100ms(void);
+static void Service_UdpAliveRequest(void);
+static void Service_Timebase_1ms(void);
+static void Service_Timebase_10ms(void);
+static void Service_Timebase_100ms(void);
+static void Service_Control_Tick(void);
 static void ManageTransmission(void);
 static int8_t I2C_WriteBlocking(uint8_t device_addr, uint8_t reg_addr, uint8_t *data, uint16_t data_len, void *context);
 static int8_t I2C_WriteDMA(uint8_t device_addr, uint8_t reg_addr, uint8_t *data, uint16_t data_len, void *context);
@@ -1417,12 +1422,64 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
     UNERBUS_MoveIndexRead(aBus, iStartData);
 }
 
-void Do1ms(void)
+static void Service_Timebase_1ms(void)
+{
+    if (Consume_Timebase_Event(APP_TIMEBASE_EVENT_1MS) > 0U)
+    {
+        Do1ms();
+    }
+}
+
+static void Service_Timebase_10ms(void)
+{
+    uint8_t pending = Consume_Timebase_Event(APP_TIMEBASE_EVENT_10MS);
+
+    while (pending > 0U)
+    {
+        Do10ms();
+        pending--;
+    }
+}
+
+static void Service_Timebase_100ms(void)
+{
+    uint8_t pending = Consume_Timebase_Event(APP_TIMEBASE_EVENT_100MS);
+
+    while (pending > 0U)
+    {
+        Do100ms();
+        pending--;
+    }
+}
+
+static void Service_Control_Tick(void)
+{
+    uint8_t pending = Consume_Timebase_Event(APP_TIMEBASE_EVENT_CONTROL);
+
+    if (pending > 0U)
+    {
+        Run_Control_Step((uint32_t)pending * CONTROL_PERIOD_MS);
+    }
+}
+
+static void Service_UdpAliveRequest(void)
+{
+    if (timeout_alive_udp || UART_BYPASS)
+    {
+        return;
+    }
+
+    timeout_alive_udp = ALIVE_UDP_PERIOD_COUNT;
+    UNERBUS_WriteByte(&unerbus_esp01_handle, CMD_ACK);
+    UNERBUS_Send(&unerbus_esp01_handle, CMD_GET_ALIVE, UNERBUS_CMD_ID_SIZE + UNERBUS_ACK_SIZE);
+}
+
+static void Do1ms(void)
 {
     ADC_Filter_Task();
 }
 
-void Do10ms(void)
+static void Do10ms(void)
 {
     Button_Tick(&h_user_button);
 
@@ -1431,7 +1488,7 @@ void Do10ms(void)
     UNERBUS_Timeout(&unerbus_pc_handle);
 }
 
-void Do100ms(void)
+static void Do100ms(void)
 {
     // --- Lógica de Heartbeat Dinámico ---
     if (temporary_heartbeat_ticks > 0)
@@ -2466,46 +2523,15 @@ static void Run_Control_Step(uint32_t dt_ms)
 
 void App_Core_Loop(void)
 {
-    uint8_t pending_1ms;
-    uint8_t pending_10ms;
-    uint8_t pending_100ms;
-    uint8_t pending_control;
-
     ManageButtonEvents();
 
-    if (!timeout_alive_udp && !UART_BYPASS)
-    {
-        timeout_alive_udp = ALIVE_UDP_PERIOD_COUNT;
-        UNERBUS_WriteByte(&unerbus_esp01_handle, CMD_ACK);
-        UNERBUS_Send(&unerbus_esp01_handle, CMD_GET_ALIVE, UNERBUS_CMD_ID_SIZE + UNERBUS_ACK_SIZE);
-    }
+    Service_UdpAliveRequest();
 
-    pending_1ms = Consume_Timebase_Event(APP_TIMEBASE_EVENT_1MS);
-    while (pending_1ms > 0U)
-    {
-        Do1ms();
-        pending_1ms--;
-    }
+    Service_Timebase_1ms();
+	Service_Timebase_10ms();
+	Service_Timebase_100ms();
 
-    pending_10ms = Consume_Timebase_Event(APP_TIMEBASE_EVENT_10MS);
-    while (pending_10ms > 0U)
-    {
-        Do10ms();
-        pending_10ms--;
-    }
-
-    pending_100ms = Consume_Timebase_Event(APP_TIMEBASE_EVENT_100MS);
-    while (pending_100ms > 0U)
-    {
-        Do100ms();
-        pending_100ms--;
-    }
-
-    pending_control = Consume_Timebase_Event(APP_TIMEBASE_EVENT_CONTROL);
-    if (pending_control > 0U)
-    {
-        Run_Control_Step((uint32_t)pending_control * CONTROL_PERIOD_MS);
-    }
+	Service_Control_Tick();
 
     ManageI2CTransactions();
 
