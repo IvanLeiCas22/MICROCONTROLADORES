@@ -386,10 +386,7 @@ static uint8_t Consume_Timebase_Event(AppTimebaseEvent event)
 
     __disable_irq();
     pending_events = App_Timebase_Consume(&app_timebase, event);
-    if (primask == 0U)
-    {
-        __enable_irq();
-    }
+    __set_PRIMASK(primask);
 
     return pending_events;
 }
@@ -782,6 +779,10 @@ static void Reset_Yaw_Tracking(void)
 
 static void Integrate_Yaw_From_Gyro(int16_t gz_calibrated)
 {
+	uint32_t dt_us;
+	int32_t dps_x10;
+	int32_t dt_q16;
+	int32_t yaw_delta_q16;
     uint32_t now_cycles = Read_Cycle_Counter();
 
     if (!mpu_yaw_timing_initialized)
@@ -791,7 +792,7 @@ static void Integrate_Yaw_From_Gyro(int16_t gz_calibrated)
         return;
     }
 
-    uint32_t dt_us = App_Timing_ElapsedUs(&mpu_yaw_timing_clock, mpu_last_sample_cycle, now_cycles);
+    dt_us = App_Timing_ElapsedUs(&mpu_yaw_timing_clock, mpu_last_sample_cycle, now_cycles);
     mpu_last_sample_cycle = now_cycles;
 
     if ((dt_us == 0U) || (dt_us > 50000U))
@@ -799,14 +800,14 @@ static void Integrate_Yaw_From_Gyro(int16_t gz_calibrated)
         dt_us = MPU_SAMPLE_PERIOD_US;
     }
 
-    int32_t dps_x10 = GyroRaw_To_DpsX10(gz_calibrated);
+    dps_x10 = GyroRaw_To_DpsX10(gz_calibrated);
     if ((dps_x10 <= GYRO_YAW_DEADBAND_DPS_X10) && (dps_x10 >= -GYRO_YAW_DEADBAND_DPS_X10))
     {
         return;
     }
 
-    int32_t dt_q16 = (int32_t)(((uint32_t)dt_us << FIXED_POINT_SHIFT) / 1000000U);
-    int32_t yaw_delta_q16 = (dps_x10 * dt_q16) / 10;
+    dt_q16 = (int32_t)(((uint32_t)dt_us << FIXED_POINT_SHIFT) / 1000000U);
+    yaw_delta_q16 = (dps_x10 * dt_q16) / 10;
     current_yaw_fixed -= yaw_delta_q16;
 }
 
