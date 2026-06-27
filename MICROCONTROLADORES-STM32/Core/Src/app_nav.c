@@ -697,11 +697,12 @@ void App_Nav_Reset(void)
 
 bool App_Nav_EvaluatePerception(const AppNavInput *input, AppNavPerception *perception_out)
 {
-    if ((input == NULL) || (perception_out == NULL))
+    if (perception_out == NULL)
     {
         return false;
     }
 
+    // Existence of input is checked in App_Nav_UpdatePerception
     if (!App_Nav_UpdatePerception(input))
     {
         return false;
