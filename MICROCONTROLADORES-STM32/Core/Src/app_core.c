@@ -2503,7 +2503,7 @@ static void Run_Control_Step(uint32_t dt_ms)
     AppNavPerception perception = {0};
 
     control_step_dt_ms = dt_ms;
-    ADC_Filter_Task();
+
     Update_Navigation_Perception();
 
     Build_AppNavInput_From_SensorSnapshot(dt_ms, &input);
