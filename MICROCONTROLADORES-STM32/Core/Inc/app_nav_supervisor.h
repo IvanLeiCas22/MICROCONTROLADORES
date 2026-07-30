@@ -170,8 +170,7 @@ bool App_NavSupervisor_SetMission(AppNavSupervisorMission mission);
 AppNavSupervisorMission App_NavSupervisor_GetMission(void);
 bool App_NavSupervisor_Start(void);
 void App_NavSupervisor_Stop(void);
-AppNavSupervisorState App_NavSupervisor_Tick(
-    const AppNavInput *input, const AppNavPerception *perception, AppNavOutput *output);
+AppNavSupervisorState App_NavSupervisor_Tick(const AppNavInput *input, const AppNavPerception *perception, AppNavOutput *output);
 void App_NavSupervisor_GetDebug(AppNavSupervisorDebug *debug_out);
 bool App_NavSupervisor_IsActive(void);
 

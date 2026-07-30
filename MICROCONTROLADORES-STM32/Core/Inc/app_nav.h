@@ -88,8 +88,7 @@ typedef enum
 } AppNavPrimitiveTestState;
 
 bool App_NavPrimitiveTest_Start(AppNavPrimitiveTestType type);
-AppNavPrimitiveTestState App_NavPrimitiveTest_Tick(
-    const AppNavInput *input, const AppNavPerception *perception, AppNavOutput *output);
+AppNavPrimitiveTestState App_NavPrimitiveTest_Tick(const AppNavInput *input, const AppNavPerception *perception, AppNavOutput *output);
 void App_NavPrimitiveTest_Stop(void);
 AppNavPrimitiveTestState App_NavPrimitiveTest_GetState(void);
 
@@ -103,10 +102,8 @@ AppNavPrimitiveTestState App_NavPrimitiveTest_GetState(void);
  * Rear tape profiles distinguish normal cells from special cells, where the
  * rear sensor can see an internal black patch before the exit boundary tape.
  */
-bool App_Nav_StartAdvanceActionWithRearTapeProfile(
-    AppNavAdvanceActionMode mode, AppNavRearTapeProfile rear_tape_profile);
-AppNavAdvanceActionState App_Nav_TickAdvanceAction(
-    const AppNavInput *input, const AppNavPerception *perception, AppNavOutput *output);
+bool App_Nav_StartAdvanceActionWithRearTapeProfile(AppNavAdvanceActionMode mode, AppNavRearTapeProfile rear_tape_profile);
+AppNavAdvanceActionState App_Nav_TickAdvanceAction(const AppNavInput *input, const AppNavPerception *perception, AppNavOutput *output);
 void App_Nav_StopAdvanceAction(void);
 
 /*
@@ -116,10 +113,8 @@ void App_Nav_StopAdvanceAction(void);
  * action remains active in POST_YAW_SEEK_REAR_TAPE until rear tape confirms
  * cell entry.
  */
-bool App_Nav_StartSmoothActionWithRearTapeProfile(
-    AppNavSmoothActionType action, AppNavRearTapeProfile rear_tape_profile);
-AppNavSmoothActionState App_Nav_TickSmoothAction(
-    const AppNavInput *input, const AppNavPerception *perception, AppNavOutput *output);
+bool App_Nav_StartSmoothActionWithRearTapeProfile(AppNavSmoothActionType action, AppNavRearTapeProfile rear_tape_profile);
+AppNavSmoothActionState App_Nav_TickSmoothAction(const AppNavInput *input, const AppNavPerception *perception, AppNavOutput *output);
 void App_Nav_StopSmoothAction(void);
 
 /*
@@ -127,8 +122,7 @@ void App_Nav_StopSmoothAction(void);
  * by the supervisor according to the surrounding sequence.
  */
 bool App_Nav_StartPivotAction(AppNavPivotActionType action);
-AppNavPivotActionState App_Nav_TickPivotAction(
-    const AppNavInput *input, const AppNavPerception *perception, AppNavOutput *output);
+AppNavPivotActionState App_Nav_TickPivotAction(const AppNavInput *input, const AppNavPerception *perception, AppNavOutput *output);
 void App_Nav_StopPivotAction(void);
 
 /*
@@ -139,8 +133,7 @@ void App_Nav_StopPivotAction(void);
  * itself.
  */
 bool App_Nav_StartApproachFrontWallAction(void);
-AppNavApproachFrontWallActionState App_Nav_TickApproachFrontWallAction(
-    const AppNavInput *input, const AppNavPerception *perception, AppNavOutput *output);
+AppNavApproachFrontWallActionState App_Nav_TickApproachFrontWallAction(const AppNavInput *input, const AppNavPerception *perception, AppNavOutput *output);
 void App_Nav_StopApproachFrontWallAction(void);
 
 /*
@@ -150,9 +143,7 @@ void App_Nav_StopApproachFrontWallAction(void);
  * tape rising edge. It does not update logical pose by itself.
  */
 bool App_Nav_StartCenterByFrontTapeForPivotAction(AppNavFrontTapeProfile front_tape_profile);
-
-AppNavCenterFrontTapeActionState App_Nav_TickCenterByFrontTapeForPivotAction(
-    const AppNavInput *input, const AppNavPerception *perception, AppNavOutput *output);
+AppNavCenterFrontTapeActionState App_Nav_TickCenterByFrontTapeForPivotAction(const AppNavInput *input, const AppNavPerception *perception, AppNavOutput *output);
 void App_Nav_StopCenterByFrontTapeForPivotAction(void);
 
 #endif /* INC_APP_NAV_H_ */

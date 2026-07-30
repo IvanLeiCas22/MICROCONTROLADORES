@@ -309,8 +309,10 @@ void App_Core_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
     if (htim->Instance == TIM1)
     {
+    	// Adds a tick for the events
         App_Timebase_OnTick(&app_timebase);
 
+        // Consumes the event if it is already triggered
         if (App_Timebase_Consume(&app_timebase, APP_TIMEBASE_EVENT_IR_SAMPLE) > 0U)
         {
             HAL_ADC_Start_DMA(&hadc1, (uint32_t *)App_Sensors_GetAdcDmaWriteBuffer(), ADC_CHANNELS);
@@ -325,8 +327,10 @@ void App_Core_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
 void App_Core_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 {
-    (void)hadc;
-    App_Sensors_OnAdcDmaComplete();
+	if (hadc == &hadc1)
+	{
+	    App_Sensors_OnAdcDmaComplete();
+	}
 }
 
 void App_Core_UART_RxCpltCallback(UART_HandleTypeDef *huart)
@@ -355,22 +359,16 @@ void App_Core_I2C_MemTxCpltCallback(I2C_HandleTypeDef *hi2c)
 
 void App_Core_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c)
 {
+	// There is no conflict with the OLED because STM32 does not do reads on the display
     if (hi2c == &hi2c2)
     {
-        hmpu.raw_data.accel_x_raw =
-            (int16_t)((hmpu.dma_buffer[MPU_DMA_BUF_ACCEL_X_H] << 8) | hmpu.dma_buffer[MPU_DMA_BUF_ACCEL_X_L]);
-        hmpu.raw_data.accel_y_raw =
-            (int16_t)((hmpu.dma_buffer[MPU_DMA_BUF_ACCEL_Y_H] << 8) | hmpu.dma_buffer[MPU_DMA_BUF_ACCEL_Y_L]);
-        hmpu.raw_data.accel_z_raw =
-            (int16_t)((hmpu.dma_buffer[MPU_DMA_BUF_ACCEL_Z_H] << 8) | hmpu.dma_buffer[MPU_DMA_BUF_ACCEL_Z_L]);
-        hmpu.raw_data.temp_raw =
-            (int16_t)((hmpu.dma_buffer[MPU_DMA_BUF_TEMP_H] << 8) | hmpu.dma_buffer[MPU_DMA_BUF_TEMP_L]);
-        hmpu.raw_data.gyro_x_raw =
-            (int16_t)((hmpu.dma_buffer[MPU_DMA_BUF_GYRO_X_H] << 8) | hmpu.dma_buffer[MPU_DMA_BUF_GYRO_X_L]);
-        hmpu.raw_data.gyro_y_raw =
-            (int16_t)((hmpu.dma_buffer[MPU_DMA_BUF_GYRO_Y_H] << 8) | hmpu.dma_buffer[MPU_DMA_BUF_GYRO_Y_L]);
-        hmpu.raw_data.gyro_z_raw =
-            (int16_t)((hmpu.dma_buffer[MPU_DMA_BUF_GYRO_Z_H] << 8) | hmpu.dma_buffer[MPU_DMA_BUF_GYRO_Z_L]);
+        hmpu.raw_data.accel_x_raw = (int16_t)((hmpu.dma_buffer[MPU_DMA_BUF_ACCEL_X_H] << 8) | hmpu.dma_buffer[MPU_DMA_BUF_ACCEL_X_L]);
+        hmpu.raw_data.accel_y_raw = (int16_t)((hmpu.dma_buffer[MPU_DMA_BUF_ACCEL_Y_H] << 8) | hmpu.dma_buffer[MPU_DMA_BUF_ACCEL_Y_L]);
+        hmpu.raw_data.accel_z_raw = (int16_t)((hmpu.dma_buffer[MPU_DMA_BUF_ACCEL_Z_H] << 8) | hmpu.dma_buffer[MPU_DMA_BUF_ACCEL_Z_L]);
+        hmpu.raw_data.temp_raw = (int16_t)((hmpu.dma_buffer[MPU_DMA_BUF_TEMP_H] << 8) | hmpu.dma_buffer[MPU_DMA_BUF_TEMP_L]);
+        hmpu.raw_data.gyro_x_raw = (int16_t)((hmpu.dma_buffer[MPU_DMA_BUF_GYRO_X_H] << 8) | hmpu.dma_buffer[MPU_DMA_BUF_GYRO_X_L]);
+        hmpu.raw_data.gyro_y_raw = (int16_t)((hmpu.dma_buffer[MPU_DMA_BUF_GYRO_Y_H] << 8) | hmpu.dma_buffer[MPU_DMA_BUF_GYRO_Y_L]);
+        hmpu.raw_data.gyro_z_raw = (int16_t)((hmpu.dma_buffer[MPU_DMA_BUF_GYRO_Z_H] << 8) | hmpu.dma_buffer[MPU_DMA_BUF_GYRO_Z_L]);
 
         Integrate_Yaw_From_Gyro((int16_t)(hmpu.raw_data.gyro_z_raw - hmpu.gyro_offset_z));
         i2c_bus_state = I2C_BUS_IDLE;
@@ -477,8 +475,7 @@ static void NavRuntimeConfig_WriteAdvancePidToBuffer(uint8_t *buffer)
     AppNavConfig cfg;
 
     App_Nav_GetConfig(&cfg);
-    NavRuntimeConfig_WritePidGainsQ16ToBuffer(
-        buffer, cfg.advance_pid_kp_q16, cfg.advance_pid_ki_q16, cfg.advance_pid_kd_q16);
+    NavRuntimeConfig_WritePidGainsQ16ToBuffer(buffer, cfg.advance_pid_kp_q16, cfg.advance_pid_ki_q16, cfg.advance_pid_kd_q16);
 }
 
 static void NavRuntimeConfig_SetAdvanceOutputLimitFromPayload(struct UNERBUSHandle *aBus)
@@ -536,8 +533,7 @@ static void NavRuntimeConfig_WriteTurnPidToBuffer(uint8_t *buffer)
     AppNavConfig cfg;
 
     App_Nav_GetConfig(&cfg);
-    NavRuntimeConfig_WritePidGainsQ16ToBuffer(
-        buffer, cfg.pivot_turn_pid_kp_q16, cfg.pivot_turn_pid_ki_q16, cfg.pivot_turn_pid_kd_q16);
+    NavRuntimeConfig_WritePidGainsQ16ToBuffer(buffer, cfg.pivot_turn_pid_kp_q16, cfg.pivot_turn_pid_ki_q16, cfg.pivot_turn_pid_kd_q16);
 }
 
 static void NavRuntimeConfig_SetTurnOutputLimitFromPayload(struct UNERBUSHandle *aBus)
@@ -715,8 +711,7 @@ static void NavRuntimeConfig_WriteSmoothPidToBuffer(uint8_t *buffer)
     AppNavConfig cfg;
 
     App_Nav_GetConfig(&cfg);
-    NavRuntimeConfig_WritePidGainsQ16ToBuffer(
-        buffer, cfg.smooth_turn_pid_kp_q16, cfg.smooth_turn_pid_ki_q16, cfg.smooth_turn_pid_kd_q16);
+    NavRuntimeConfig_WritePidGainsQ16ToBuffer(buffer, cfg.smooth_turn_pid_kp_q16, cfg.smooth_turn_pid_ki_q16, cfg.smooth_turn_pid_kd_q16);
 }
 
 static void NavRuntimeConfig_SetSmoothTargetDpsFromPayload(struct UNERBUSHandle *aBus)
@@ -944,8 +939,7 @@ void DecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData)
     uint8_t idx = 0;
 
     id = UNERBUS_GetUInt8(aBus);
-    if (((id >= (uint8_t)CMD_SET_SUPERVISOR_INITIAL_POSE) && (id <= (uint8_t)CMD_GET_SUPERVISOR_GOAL_CELL)) ||
-        (id == (uint8_t)CMD_CLEAR_SUPERVISOR_LEARNED_MAP))
+    if (((id >= (uint8_t)CMD_SET_SUPERVISOR_INITIAL_POSE) && (id <= (uint8_t)CMD_GET_SUPERVISOR_GOAL_CELL)) || (id == (uint8_t)CMD_CLEAR_SUPERVISOR_LEARNED_MAP))
     {
         Select_Supervisor_Status_Update_Bus(aBus);
     }
@@ -1586,10 +1580,8 @@ static void ManageTransmission(void)
     // TRANSMISIÓN ESP01 (solo si NO está en bypass)
     if (!UART_BYPASS && (unerbus_esp01_handle.tx.iRead != unerbus_esp01_handle.tx.iWrite))
     {
-        len =
-            (unerbus_esp01_handle.tx.iWrite - unerbus_esp01_handle.tx.iRead) & unerbus_esp01_handle.tx.maxIndexRingBuf;
-        if (ESP01_Send(unerbus_esp01_handle.tx.buf, unerbus_esp01_handle.tx.iRead, len,
-                unerbus_esp01_handle.tx.maxIndexRingBuf + 1) == ESP01_SEND_READY)
+        len = (unerbus_esp01_handle.tx.iWrite - unerbus_esp01_handle.tx.iRead) & unerbus_esp01_handle.tx.maxIndexRingBuf;
+        if (ESP01_Send(unerbus_esp01_handle.tx.buf, unerbus_esp01_handle.tx.iRead, len, unerbus_esp01_handle.tx.maxIndexRingBuf + 1) == ESP01_SEND_READY)
             unerbus_esp01_handle.tx.iRead = unerbus_esp01_handle.tx.iWrite;
     }
 
@@ -1678,8 +1670,7 @@ int8_t I2C_DevicesInit(void)
 int8_t I2C_WriteBlocking(uint8_t device_addr, uint8_t reg_addr, uint8_t *data, uint16_t data_len, void *context)
 {
     I2C_HandleTypeDef *hi2c = (I2C_HandleTypeDef *)context;
-    HAL_StatusTypeDef status =
-        HAL_I2C_Mem_Write(hi2c, device_addr, reg_addr, I2C_MEMADD_SIZE_8BIT, data, data_len, I2C_DEFAULT_TIMEOUT_MS);
+    HAL_StatusTypeDef status = HAL_I2C_Mem_Write(hi2c, device_addr, reg_addr, I2C_MEMADD_SIZE_8BIT, data, data_len, I2C_DEFAULT_TIMEOUT_MS);
     if (status == HAL_OK)
         return 1;
     return -1;
@@ -1697,8 +1688,7 @@ int8_t I2C_WriteDMA(uint8_t device_addr, uint8_t reg_addr, uint8_t *data, uint16
 int8_t I2C_ReadBlocking(uint8_t device_addr, uint8_t reg_addr, uint8_t *data, uint16_t data_len, void *context)
 {
     I2C_HandleTypeDef *hi2c = (I2C_HandleTypeDef *)context;
-    HAL_StatusTypeDef status =
-        HAL_I2C_Mem_Read(hi2c, device_addr, reg_addr, I2C_MEMADD_SIZE_8BIT, data, data_len, I2C_DEFAULT_TIMEOUT_MS);
+    HAL_StatusTypeDef status = HAL_I2C_Mem_Read(hi2c, device_addr, reg_addr, I2C_MEMADD_SIZE_8BIT, data, data_len, I2C_DEFAULT_TIMEOUT_MS);
     if (status == HAL_OK)
         return 1;
     return -1;
@@ -2385,8 +2375,7 @@ static bool Start_Supervisor_Run(MenuModeTypeDef requested_mode)
             return false;
         }
 
-        if (!App_NavSupervisor_ResetWithInitialPose(
-                supervisor_initial_x, supervisor_initial_y, supervisor_initial_heading))
+        if (!App_NavSupervisor_ResetWithInitialPose(supervisor_initial_x, supervisor_initial_y, supervisor_initial_heading))
         {
             Set_Motor_Speeds(0, 0);
             return false;
@@ -2429,8 +2418,7 @@ static bool Start_Supervisor_Run(MenuModeTypeDef requested_mode)
             return false;
         }
 
-        if (!App_NavSupervisor_ResetRunPreservingMapWithInitialPose(
-                supervisor_initial_x, supervisor_initial_y, supervisor_initial_heading))
+        if (!App_NavSupervisor_ResetRunPreservingMapWithInitialPose(supervisor_initial_x, supervisor_initial_y, supervisor_initial_heading))
         {
             Set_Motor_Speeds(0, 0);
             app_state = APP_STATE_MENU;
@@ -2719,18 +2707,13 @@ static void Update_Navigation_Perception(void)
         sensor_snapshot.adc_filtered[ch] = (uint16_t)Get_Filtered_ADC_Value(ch);
     }
 
-    sensor_snapshot.dist_diagonal_left_mm =
-        (uint16_t)ADC_To_Distance_mm(sensor_snapshot.adc_filtered[SENSOR_DIAGONAL_LEFT_CH]);
-    sensor_snapshot.dist_diagonal_right_mm =
-        (uint16_t)ADC_To_Distance_mm(sensor_snapshot.adc_filtered[SENSOR_DIAGONAL_RIGHT_CH]);
-    sensor_snapshot.dist_front_left_mm =
-        (uint16_t)ADC_To_Distance_mm(sensor_snapshot.adc_filtered[SENSOR_FRONT_LEFT_CH]);
-    sensor_snapshot.dist_front_right_mm =
-        (uint16_t)ADC_To_Distance_mm(sensor_snapshot.adc_filtered[SENSOR_FRONT_RIGHT_CH]);
+    sensor_snapshot.dist_diagonal_left_mm = (uint16_t)ADC_To_Distance_mm(sensor_snapshot.adc_filtered[SENSOR_DIAGONAL_LEFT_CH]);
+    sensor_snapshot.dist_diagonal_right_mm = (uint16_t)ADC_To_Distance_mm(sensor_snapshot.adc_filtered[SENSOR_DIAGONAL_RIGHT_CH]);
+    sensor_snapshot.dist_front_left_mm = (uint16_t)ADC_To_Distance_mm(sensor_snapshot.adc_filtered[SENSOR_FRONT_LEFT_CH]);
+    sensor_snapshot.dist_front_right_mm = (uint16_t)ADC_To_Distance_mm(sensor_snapshot.adc_filtered[SENSOR_FRONT_RIGHT_CH]);
     sensor_snapshot.dist_left_lat_mm = (uint16_t)ADC_To_Distance_mm(sensor_snapshot.adc_filtered[SENSOR_LEFT_LAT_CH]);
     sensor_snapshot.dist_right_lat_mm = (uint16_t)ADC_To_Distance_mm(sensor_snapshot.adc_filtered[SENSOR_RIGHT_LAT_CH]);
 
-    MPU6050_GetCalibratedData(&hmpu, &sensor_snapshot.ax, &sensor_snapshot.ay, &sensor_snapshot.az, &sensor_snapshot.gx,
-        &sensor_snapshot.gy, &sensor_snapshot.gz);
+    MPU6050_GetCalibratedData(&hmpu, &sensor_snapshot.ax, &sensor_snapshot.ay, &sensor_snapshot.az, &sensor_snapshot.gx, &sensor_snapshot.gy, &sensor_snapshot.gz);
     sensor_snapshot.yaw_fixed = current_yaw_fixed;
 }
